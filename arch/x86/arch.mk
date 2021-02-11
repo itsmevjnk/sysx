@@ -1,0 +1,2 @@
+TARGET_OBJS=\
+$(ARCHDIR)/boot.o
