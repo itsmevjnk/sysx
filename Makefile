@@ -11,12 +11,16 @@ endif
 
 # common makefiles
 include kernel/objs.mk
+include lib/objs.mk
+include hal/objs.mk
 
 OBJS=\
 $(TARGET_OBJS) \
 $(FAMILY_OBJS) \
 $(ARCH_OBJS) \
-$(KERNEL_OBJS)
+$(KERNEL_OBJS) \
+$(LIB_OBJS) \
+$(HAL_OBJS)
 
 .PHONY: all clean
 .SUFFIXES: .o .c .s .asm
@@ -27,7 +31,7 @@ kernel.elf: $(OBJS) $(ARCHDIR)/link.ld
 	$(CC) -T $(ARCHDIR)/link.ld -o $@ $(OBJS) $(LDFLAGS)
 
 .c.o:
-	$(CC) -c $< -o $@ $(CFLAGS)
+	$(CC) -c $< -o $@ $(CFLAGS) -isystem . -isystem lib
 
 .s.o:
 	$(AS) -c $< -o $@ $(ASFLAGS)

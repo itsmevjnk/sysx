@@ -1,1 +1,2 @@
-KERNEL_OBJS=
+KERNEL_OBJS=\
+kernel/kernel.o

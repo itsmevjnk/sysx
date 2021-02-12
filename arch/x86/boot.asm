@@ -22,21 +22,12 @@ resb 4096 ; 4K of stack, probably enough to get us started
 ; kernel entry point
 section .text
 global _start
+extern kinit
 _start:
 mov esp, stack.top ; set esp to stack top
+xor ebp, ebp ; for future stack tracing
 
-; print Hello, World! (TODO: move this to C)
-mov esi, str
-mov edi, 0xb8000
-mov ah, 0x2f ; white on green
-cld ; clear direction flag
-.next:
-lodsb
-cmp al, 0
-jz .done
-stosw
-jmp .next
-.done:
+call kinit
 
 ; halt since we have nothing else to do
 cli
