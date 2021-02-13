@@ -27,10 +27,11 @@ _start:
 mov esp, stack.top ; set esp to stack top
 xor ebp, ebp ; for future stack tracing
 
+cli ; nope, not quite ready for interrupts yet
+
 call kinit
 
 ; halt since we have nothing else to do
-cli
 .end:
 hlt
 jmp .end
