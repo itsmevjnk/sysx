@@ -13,6 +13,7 @@ endif
 include kernel/objs.mk
 include lib/objs.mk
 include hal/objs.mk
+include mm/objs.mk
 
 OBJS=\
 $(TARGET_OBJS) \
@@ -20,7 +21,8 @@ $(FAMILY_OBJS) \
 $(ARCH_OBJS) \
 $(KERNEL_OBJS) \
 $(LIB_OBJS) \
-$(HAL_OBJS)
+$(HAL_OBJS) \
+$(MM_OBJS)
 
 .PHONY: all clean
 .SUFFIXES: .o .c .s .asm

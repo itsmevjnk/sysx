@@ -2,6 +2,8 @@
 #include <hal/intr.h>
 #include <kernel/log.h>
 
+//#define IDT_DEBUG // uncomment for log hell
+
 /*
  * idt_t
  *  IDT gate entry structure.
@@ -40,7 +42,9 @@ void idt_add_gate(uint8_t vector, uint16_t selector, uintptr_t offset, uint8_t t
   idt_gates[vector].storage = (type == IDT_386_TASK32) ? 1 : 0;
   idt_gates[vector].dpl = dpl;
   idt_gates[vector].present = 1;
+#ifdef IDT_DEBUG
   kdebug("vector 0x%02x: 0x%02x:0x%08x, type %u, dpl %u", vector, selector, offset, type, dpl);
+#endif
 }
 
 /* array of pointers to handler functions */
