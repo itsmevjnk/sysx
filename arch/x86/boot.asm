@@ -23,8 +23,8 @@ resb 4096 ; 4K of stack, probably enough to get us started
 %define PHYS(x)					(x - 0xC0000000)
 %define VIRT(x)					(x + 0xC0000000)
 
-%define PD(x)						(x - 0xC0000000)
-%define PT(x)						(x - 0xC0000000 + 4096)
+%define PD(x)                   (x - 0xC0000000)
+%define PT(x)                   (x - 0xC0000000 + 4096)
 
 ; kernel entry point
 section .pre.text

@@ -35,11 +35,11 @@ int kputs(const char* str);
  *  stream-like structure).
  */
 typedef struct ptstream {
-  void* buf; // buffer pointer
-  size_t sz; // buffer size (one may want to set it to -1 for unlimited streams)
-  size_t off; // offset for operations
-  uint8_t (*read)(struct ptstream*); // reads a byte from stream
-  int (*write)(struct ptstream*, uint8_t); // writes a byte into stream and returns 0 on success
+    void* buf; // buffer pointer
+    size_t sz; // buffer size (one may want to set it to -1 for unlimited streams)
+    size_t off; // offset for operations
+    uint8_t (*read)(struct ptstream*); // reads a byte from stream
+    int (*write)(struct ptstream*, uint8_t); // writes a byte into stream and returns 0 on success
 } ptstream_t;
 
 /*
