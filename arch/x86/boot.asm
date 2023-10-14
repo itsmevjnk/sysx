@@ -168,6 +168,7 @@ sub esi, (0xC0000000 - 44)
 mov ecx, [esi] ; mmap_length
 add esi, 4
 mov esi, [esi] ; mmap_addr
+sub esi, 0xC0000000
 add ecx, esi ; maximum address
 .iterate:
 mov eax, [esi + 4] ; low base
