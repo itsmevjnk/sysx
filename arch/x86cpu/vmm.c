@@ -1,5 +1,5 @@
 #include <mm/vmm.h>
-#include <mm/addr.h>
+#include <mm/pmm.h>
 #include <kernel/log.h>
 #include <stdbool.h>
 
@@ -53,38 +53,39 @@ void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, bool present, bool user, b
 	size_t pde = va >> 22, pte = (va >> 12) & 0x3ff;
 	if(cfg->pt[pde] == NULL) {
 		/* allocate page table */
-		bool allocated = false;
-		// TODO: kernel heap
-		for(size_t i = 0; i < 1024; i++) {
-			/* find a space to map the new page table for accessing */
-			if(!vmm_krnlpt.pt[i].present) {
-				if(kernel_end & 0xFFF) kernel_end = (kernel_end & 0xFFF) + 0x1000; // 4K align kernel_end if it's not already aligned
+		size_t frame = pmm_first_free(1); // ask for a single contiguous free frame
+		if(frame == (size_t)-1) kerror("no more free frames, brace for impact");
+		else {
+			bool allocated = false;
+			for(size_t i = 0; i < 1024; i++) {
+				/* find a space to map the new page table for accessing */
+				if(!vmm_krnlpt.pt[i].present) {
 
-				vmm_krnlpt.pt[i].present = 1;
-				vmm_krnlpt.pt[i].rw = 1;
-				vmm_krnlpt.pt[i].user = 0;
-				vmm_krnlpt.pt[i].pa = (kernel_end - 0xC0000000) >> 12;
+					vmm_krnlpt.pt[i].present = 1;
+					vmm_krnlpt.pt[i].rw = 1;
+					vmm_krnlpt.pt[i].user = 0;
+					vmm_krnlpt.pt[i].pa = frame;
 
-				cfg->pd[pde].present = 0; // to be filled later
-				cfg->pd[pde].rw = 0;
-				cfg->pd[pde].user = 0;
-				cfg->pd[pde].wthru = 0;
-				cfg->pd[pde].ncache = 1; // TODO: VMM caching
-				cfg->pd[pde].accessed = 0; // just in case this is used
-				cfg->pd[pde].zero = 0;
-				cfg->pd[pde].pgsz = 0; // no PSE (yet)
-				cfg->pd[pde].pt = vmm_krnlpt.pt[i].pa;
+					cfg->pd[pde].present = 0; // to be filled later
+					cfg->pd[pde].rw = 0;
+					cfg->pd[pde].user = 0;
+					cfg->pd[pde].wthru = 0;
+					cfg->pd[pde].ncache = 1; // TODO: VMM caching
+					cfg->pd[pde].accessed = 0; // just in case this is used
+					cfg->pd[pde].zero = 0;
+					cfg->pd[pde].pgsz = 0; // no PSE (yet)
+					cfg->pd[pde].pt = vmm_krnlpt.pt[i].pa;
 
-				cfg->pt[pde] = (vmm_pt_t*) (0xEFC00000 + (i << 12)); // 0xEFC00000 + i * 0x1000
+					cfg->pt[pde] = (vmm_pt_t*) (0xEFC00000 + (i << 12)); // 0xEFC00000 + i * 0x1000
 
-				kernel_end += 0x1000; // expand the kernel to include our page table
-
-				allocated = true;
-				break;
+					allocated = true;
+					// kdebug("PT %u (VMM 0x%08x) @ 0x%08x (phys 0x%08x)", pde, (uintptr_t) vmm, (uintptr_t) (cfg->pt[pde]), frame << 12);
+					break;
+				}
 			}
-		}
 
-		if(!allocated) kerror("cannot allocate page table, brace for impact");
+			if(!allocated) kerror("cannot allocate page table, brace for impact");
+		}
 	}
 
 	/* set settings in page directory entry */
@@ -106,6 +107,13 @@ void vmm_pgunmap(void* vmm, uintptr_t va) {
 	size_t pde = va >> 22, pte = (va >> 12) & 0x3ff;
 	cfg->pt[pde]->pt[pte].present = 0;
 	asm volatile("invlpg (%0)" : : "r"(va) : "memory");
+}
+
+uintptr_t vmm_physaddr(void* vmm, uintptr_t va) {
+	vmm_t* cfg = vmm;
+	size_t pde = va >> 22, pte = (va >> 12) & 0x3ff;
+	if(!cfg->pd[pde].present || cfg->pt[pde] == NULL || !cfg->pt[pde]->pt[pte].present) return 0; // address is not mapped
+	return ((cfg->pt[pde]->pt[pte].pa << 12) | (va & 0xFFF));
 }
 
 void vmm_switch(void* vmm) {

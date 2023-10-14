@@ -26,6 +26,13 @@ void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, bool present, bool user, b
 void vmm_pgunmap(void* vmm, uintptr_t va);
 
 /*
+ * uintptr_t vmm_physaddr(uintptr_t va)
+ *  Retrieves the physical memory address of a given virtual
+ *  address.
+ */
+uintptr_t vmm_physaddr(void* vmm, uintptr_t va);
+
+/*
  * void vmm_switch(void* vmm)
  *  Switches to the specified MMU configuration.
  */

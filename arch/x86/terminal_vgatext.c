@@ -10,6 +10,10 @@
 
 #ifdef TERM_VGATEXT
 
+#ifndef KINIT_MM_FIRST
+#error "VGA textmode terminal requires PMM and VMM to be initialized first; add -DKINIT_MM_FIRST to CFLAGS."
+#endif
+
 static uint8_t term_x = 0, term_y = 0; // current cursor coordinates
 static uint16_t* term_buffer = (uint16_t*) TERM_VGATEXT_ADDR;
 

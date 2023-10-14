@@ -861,7 +861,7 @@ static int _vsnprintf(out_fct_type out, char* buffer, const size_t maxlen, const
 
 static void pt_outfct(char character, void* arg) {
   struct ptstream* stream = arg;
-  if(stream->write) stream->write(stream, (uint8_t) character);
+  if(stream != NULL && stream->write != NULL) stream->write(stream, (uint8_t) character);
 }
 
 int kvfprintf(ptstream_t* stream, const char* fmt, va_list arg) {

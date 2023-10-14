@@ -8,16 +8,23 @@
 extern int ktgtinit(); // must be defined somewhere in the target specific code
 
 void kinit() {
+#ifdef KINIT_MM_FIRST // initialize MM first
+    pmm_init();
+    vmm_init();
+#endif
+    
     term_init();
     stdio_init();
 
     kinfo("SysX version 0.0.1 prealpha (compiled %s %s)", __DATE__, __TIME__);
     kinfo("Copyright <C> 2023 Thanh Vinh Nguyen (itsmevjnk)");
 
+#ifndef KINIT_MM_FIRST
     kinfo("initializing physical memory management");
     pmm_init();
     kinfo("initializing virtual memory management");
     vmm_init();
+#endif
 
     kinfo("invoking target-specific system initialization routine");
     if(ktgtinit()) {

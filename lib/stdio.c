@@ -37,14 +37,6 @@ static ptstream_t pts_log = {
     &ptlog_write
 };
 
-#ifdef TERM_NO_INPUT
-ptstream_t* kstdin = NULL;
-#else
-ptstream_t* kstdin = &pts_log;
-#endif
-
-ptstream_t* kstdout = &pts_log;
-
 #ifdef KSTDERR_SER
 
 #ifdef NO_SERIAL
@@ -91,21 +83,29 @@ static ptstream_t pts_kstderr = {
     &kstderr_read,
     &kstderr_write
 };
-
-ptstream_t* kstderr = &pts_kstderr;
-
-#else
-ptstream_t* kstderr = &pts_log;
 #endif
 
+ptstream_t* kstdin = NULL;
+ptstream_t* kstdout = NULL;
+ptstream_t* kstderr = NULL;
+
 void stdio_init() {
+    kstdout = &pts_log;
+
+#ifndef TERM_NO_INPUT
+    kstdin = &pts_log;
+#endif
+
 #ifdef KSTDERR_SER
     ser_init(KSTDERR_SER_PORT, KSTDERR_SER_DBIT, KSTDERR_SER_SBIT, KSTDERR_SER_PARITY, KSTDERR_SER_BAUD);
+    kstderr = &pts_kstderr;
+#else
+    kstderr = &pts_log;
 #endif
 }
 
 int kputc(int c, ptstream_t* stream) {
-    stream->write(stream, (uint8_t) c);
+    if(stream != NULL && stream->write != NULL) stream->write(stream, (uint8_t) c);
     return c;
 }
 
@@ -118,6 +118,7 @@ int kputs(const char* str) {
 }
 
 int kprintf(const char* fmt, ...) {
+    if(kstdout == NULL) return 0; // don't even bother
     va_list arg; va_start(arg, fmt);
     int ret = kvfprintf(kstdout, fmt, arg);
     va_end(arg);
@@ -125,6 +126,7 @@ int kprintf(const char* fmt, ...) {
 }
 
 int kfprintf(ptstream_t* stream, const char* fmt, ...) {
+    if(stream == NULL) return 0; // don't even bother
     va_list arg; va_start(arg, fmt);
     int ret = kvfprintf(stream, fmt, arg);
     va_end(arg);
