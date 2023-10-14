@@ -74,5 +74,5 @@ void vmm_switch(void* vmm) {
 }
 
 void vmm_init() {
-	vmm_current = &vmm_default;
+	// do nothing - VMM initialization is done during bootstrapping
 }

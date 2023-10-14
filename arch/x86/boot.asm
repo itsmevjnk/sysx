@@ -48,6 +48,8 @@ extern __bss_end
 extern vmm_default
 extern vmm_krnlpt
 
+extern vmm_current
+
 ; EAX = 0x2badb002, EBX = ptr to Multiboot info structure (to be relocated ASAP)
 _start:
 ; set up stack (we will be using the kernel stack, which will be re-used in higher half)
@@ -320,6 +322,8 @@ mov ecx, 768
 rep stosd
 mov eax, cr3
 mov cr3, eax ; quick and dirty TLB invalidation
+
+mov dword [vmm_current], vmm_default
 
 xor ebp, ebp ; initialize call frame
 
