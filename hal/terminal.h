@@ -40,6 +40,28 @@ char term_getc_noecho();
  */
 void term_clear();
 
+/*
+ * void term_get_dimensions(size_t* width, size_t* height)
+ *  Retrieves the terminal's display dimensions, and save them to the
+ *  variables referenced by width and height.
+ *  If TERM_NO_XY is defined, this function will not do anything.
+ */
+void term_get_dimensions(size_t* width, size_t* height);
+
+/*
+ * void term_set_xy(size_t x, size_t y)
+ *  Sets the terminal's cursor coordinates.
+ *  If TERM_NO_XY is defined, this function will not do anything.
+ */
+void term_set_xy(size_t x, size_t y);
+
+/*
+ * void term_get_xy(size_t* x, size_t* y)
+ *  Gets the terminal's current cursor coordinates.
+ *  If TERM_NO_XY is defined, this function will not do anything.
+ */
+void term_get_xy(size_t* x, size_t* y);
+
 /* handled by hal/terminal.c */
 
 /*

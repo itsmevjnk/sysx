@@ -6,6 +6,23 @@ void term_clear() {
 }
 #endif
 
+#ifdef TERM_NO_XY
+void term_get_dimensions(size_t* width, size_t* height) {
+    (void) width;
+    (void) height;
+}
+
+void term_set_xy(size_t x, size_t y) {
+    (void) x;
+    (void) y;
+}
+
+void term_get_xy(size_t* x, size_t* y) {
+    (void) x;
+    (void) y;
+}
+#endif
+
 void term_puts(const char* s) {
     for(size_t i = 0; s[i] != 0; i++) term_putc(s[i]);
 }

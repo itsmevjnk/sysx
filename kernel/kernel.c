@@ -24,5 +24,13 @@ void kinit() {
         kinfo("ktgtinit() failed, committing suicide");
         return; // this should send us into an infinite loop prepared by the bootstrap code
     }
+
+#ifndef TERM_NO_XY
+    /* display terminal dimensions */
+    size_t term_width, term_height;
+    term_get_dimensions(&term_width, &term_height);
+    kinfo("terminal size: %u x %u", term_width, term_height);
+#endif
+    
     while(1);
 }
