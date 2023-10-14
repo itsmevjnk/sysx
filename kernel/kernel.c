@@ -1,6 +1,6 @@
 #include <kernel/log.h>
 
-#include <hal/serial.h>
+#include <hal/terminal.h>
 #include <mm/pmm.h>
 #include <mm/vmm.h>
 #include <stdio.h>
@@ -8,7 +8,9 @@
 extern int ktgtinit(); // must be defined somewhere in the target specific code
 
 void kinit() {
-    ser_init(0, 8, 1, SER_PARITY_NONE, 115200);
+    term_init();
+    stdio_init();
+
     kinfo("SysX version 0.0.1 prealpha (compiled %s %s)", __DATE__, __TIME__);
     kinfo("Copyright <C> 2023 Thanh Vinh Nguyen (itsmevjnk)");
 

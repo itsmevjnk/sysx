@@ -9,27 +9,17 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <hal/serial.h>
-
-int kputchar(int c) {
-    // TODO: allow the log output to be redirected
-    ser_putc(0, (char) c);
-    return c;
-}
-
-int kputs(const char* str) {
-    return kprintf("%s\n", str);
-}
+#include <hal/terminal.h>
 
 /* protostream for log output */
-    static uint8_t ptlog_read(struct ptstream* stream) {
+static uint8_t ptlog_read(struct ptstream* stream) {
     (void) stream;
-    return (uint8_t) ser_getc(0);
+    return (uint8_t) term_getc_noecho();
 }
 
 static int ptlog_write(struct ptstream* stream, uint8_t c) {
     (void) stream;
-    ser_putc(0, (char) c);
+    term_putc(c);
     return 0;
 }
 
@@ -41,9 +31,92 @@ static ptstream_t pts_log = {
     &ptlog_write
 };
 
+ptstream_t* kstdin = &pts_log;
+
+ptstream_t* kstdout = &pts_log;
+
+#ifdef KSTDERR_SER
+
+#ifdef NO_SERIAL
+#error "Serial is disabled through the NO_SERIAL macro!"
+#endif
+
+#include <hal/serial.h>
+
+#ifndef KSTDERR_SER_PORT
+#define KSTERRR_SER_PORT            0
+#endif
+
+#ifndef KSTDERR_SER_DBIT
+#define KSTDERR_SER_DBIT            8
+#endif
+
+#ifndef KSTDERR_SER_SBIT
+#define KSTDERR_SER_SBIT            1
+#endif
+
+#ifndef KSTDERR_SER_PARITY
+#define KSTDERR_SER_PARITY          SER_PARITY_NONE
+#endif
+
+#ifndef KSTDERR_SER_BAUD
+#define KSTDERR_SER_BAUD            115200UL
+#endif
+
+static uint8_t kstderr_read(struct ptstream* stream) {
+    (void) stream;
+    return (uint8_t) return (uint8_t) ser_getc(KSTDERR_SER_PORT);
+}
+
+static int kstderr_write(struct ptstream* stream, uint8_t c) {
+    (void) stream;
+    ser_putc(KSTDERR_SER_PORT, (uint8_t) c);
+    return 0;
+}
+
+static ptstream_t pts_kstderr = {
+    NULL,
+    (size_t) -1,
+    0,
+    &kstderr_read,
+    &kstderr_write
+};
+
+ptstream_t* kstderr = &pts_kstderr;
+
+#else
+ptstream_t* kstderr = &pts_log;
+#endif
+
+void stdio_init() {
+#ifdef KSTDERR_SER
+    ser_init(KSTDERR_SER_PORT, KSTDERR_SER_DBIT, KSTDERR_SER_SBIT, KSTDERR_SER_PARITY, KSTDERR_SER_BAUD);
+#endif
+}
+
+int kputc(int c, ptstream_t* stream) {
+    stream->write(stream, (uint8_t) c);
+    return c;
+}
+
+int kputchar(int c) {
+    return kputc(c, kstdout);
+}
+
+int kputs(const char* str) {
+    return kprintf("%s\n", str);
+}
+
 int kprintf(const char* fmt, ...) {
     va_list arg; va_start(arg, fmt);
-    int ret = kvfprintf(&pts_log, fmt, arg);
+    int ret = kvfprintf(kstdout, fmt, arg);
+    va_end(arg);
+    return ret;
+}
+
+int kfprintf(ptstream_t* stream, const char* fmt, ...) {
+    va_list arg; va_start(arg, fmt);
+    int ret = kvfprintf(stream, fmt, arg);
     va_end(arg);
     return ret;
 }
