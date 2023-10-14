@@ -56,6 +56,7 @@ void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, bool present, bool user, b
 		size_t frame = pmm_first_free(1); // ask for a single contiguous free frame
 		if(frame == (size_t)-1) kerror("no more free frames, brace for impact");
 		else {
+			pmm_alloc(frame);
 			bool allocated = false;
 			for(size_t i = 0; i < 1024; i++) {
 				/* find a space to map the new page table for accessing */
