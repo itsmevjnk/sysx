@@ -36,6 +36,10 @@ void term_init() {
 }
 
 void term_putc(char c) {
+#ifndef TERM_SER_NO_CRNL
+    if(c == '\r') return; // ignore CR (since we'll be converting NL to CR+NL anyway)
+    if(c == '\n') ser_putc(TERM_SER_PORT, '\r'); // add CR to NL
+#endif
     ser_putc(TERM_SER_PORT, c);
 }
 
