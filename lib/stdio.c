@@ -12,10 +12,12 @@
 #include <hal/terminal.h>
 
 /* protostream for log output */
+#ifndef TERM_NO_INPUT
 static uint8_t ptlog_read(struct ptstream* stream) {
     (void) stream;
     return (uint8_t) term_getc_noecho();
 }
+#endif
 
 static int ptlog_write(struct ptstream* stream, uint8_t c) {
     (void) stream;
@@ -27,11 +29,19 @@ static ptstream_t pts_log = {
     NULL,
     (size_t) -1,
     0,
+#ifdef TERM_NO_INPUT
+    NULL,
+#else
     &ptlog_read,
+#endif
     &ptlog_write
 };
 
+#ifdef TERM_NO_INPUT
+ptstream_t* kstdin = NULL;
+#else
 ptstream_t* kstdin = &pts_log;
+#endif
 
 ptstream_t* kstdout = &pts_log;
 
