@@ -1,4 +1,7 @@
 #include <mm/vmm.h>
+#include <mm/addr.h>
+#include <kernel/log.h>
+#include <stdbool.h>
 
 /* MMU data types */
 typedef struct {
@@ -49,9 +52,47 @@ void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, bool present, bool user, b
 	vmm_t* cfg = vmm;
 	size_t pde = va >> 22, pte = (va >> 12) & 0x3ff;
 	if(cfg->pt[pde] == NULL) {
-		/* create page table */
+		/* allocate page table */
+		bool allocated = false;
+		// TODO: kernel heap
+		for(size_t i = 0; i < 1024; i++) {
+			/* find a space to map the new page table for accessing */
+			if(!vmm_krnlpt.pt[i].present) {
+				if(kernel_end & 0xFFF) kernel_end = (kernel_end & 0xFFF) + 0x1000; // 4K align kernel_end if it's not already aligned
 
+				vmm_krnlpt.pt[i].present = 1;
+				vmm_krnlpt.pt[i].rw = 1;
+				vmm_krnlpt.pt[i].user = 0;
+				vmm_krnlpt.pt[i].pa = (kernel_end - 0xC0000000) >> 12;
+
+				cfg->pd[pde].present = 0; // to be filled later
+				cfg->pd[pde].rw = 0;
+				cfg->pd[pde].user = 0;
+				cfg->pd[pde].wthru = 0;
+				cfg->pd[pde].ncache = 1; // TODO: VMM caching
+				cfg->pd[pde].accessed = 0; // just in case this is used
+				cfg->pd[pde].zero = 0;
+				cfg->pd[pde].pgsz = 0; // no PSE (yet)
+				cfg->pd[pde].pt = vmm_krnlpt.pt[i].pa;
+
+				cfg->pt[pde] = (vmm_pt_t*) (0xEFC00000 + (i << 12)); // 0xEFC00000 + i * 0x1000
+
+				kernel_end += 0x1000; // expand the kernel to include our page table
+
+				allocated = true;
+				break;
+			}
+		}
+
+		if(!allocated) kerror("cannot allocate page table, brace for impact");
 	}
+
+	/* set settings in page directory entry */
+	cfg->pd[pde].present |= (present) ? 1 : 0;
+	cfg->pd[pde].rw |= (rw) ? 1 : 0;
+	cfg->pd[pde].user |= (user) ? 1 : 0;
+
+	/* populate page table entry */
 	cfg->pt[pde]->pt[pte].present = (present) ? 1 : 0;
 	cfg->pt[pde]->pt[pte].user = (user) ? 1 : 0;
 	cfg->pt[pde]->pt[pte].rw = (rw) ? 1 : 0;

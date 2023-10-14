@@ -304,6 +304,7 @@ _hstart:
 mov esp, stack.top ; dump stack, and use higher half stack now
 
 mov [mb_info], ebx
+add edi, 0xC0000000 ; bring kernel_end to higher half too
 mov [kernel_end], edi
 mov dword [kernel_start], __kernel_start
 mov dword [text_start], __text_start
