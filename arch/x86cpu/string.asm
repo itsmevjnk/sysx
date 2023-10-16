@@ -5,9 +5,9 @@ global memcpy
 memcpy:
 pusha
 pushf
-mov edi, [ebp + 8] ; dest
-mov esi, [ebp + 12] ; src
-mov ecx, [ebp + 16] ; n
+mov edi, [esp + 40] ; dest
+mov esi, [esp + 44] ; src
+mov ecx, [esp + 48] ; n
 cld ; set to auto-incrementing
 rep movsb
 popf
@@ -22,9 +22,9 @@ global memmove
 memmove:
 pusha
 pushf
-mov edi, [ebp + 8] ; dest
-mov esi, [ebp + 12] ; src
-mov ecx, [ebp + 16] ; n
+mov edi, [esp + 40] ; dest
+mov esi, [esp + 44] ; src
+mov ecx, [esp + 48] ; n
 cld ; set to auto-incrementing
 cmp edi, esi
 je .done ; dest = src - nothing to be done
@@ -51,9 +51,9 @@ global memset
 memset:
 pusha
 pushf
-mov edi, [ebp + 8] ; str
-mov eax, [ebp + 12] ; c (but we'll only use the lowest 8 bits)
-mov ecx, [ebp + 16] ; n
+mov edi, [esp + 40] ; str
+mov eax, [esp + 44] ; c (but we'll only use the lowest 8 bits)
+mov ecx, [esp + 48] ; n
 cld ; set to auto-incrementing
 rep stosb
 popf
