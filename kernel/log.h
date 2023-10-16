@@ -14,6 +14,6 @@
 #define kinfo(fmt, ...)     do { kprintf("[INF] %s:%d: " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__); } while(0)
 #define kwarn(fmt, ...)     do { kprintf("[WRN] %s:%d: " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__); } while(0)
 #define kerror(fmt, ...)    do { kprintf("[ERR] %s:%d: " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__); } while(0)
-#define kdebug(fmt, ...)    do { if(_DEBUG) kprintf("[DBG] %s:%d: " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__); } while(0)
+#define kdebug(fmt, ...)    do { if(_DEBUG) kfprintf(kstderr, "[DBG] %s:%d: " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__); } while(0)
 
 #endif

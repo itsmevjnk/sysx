@@ -46,7 +46,7 @@ static ptstream_t pts_log = {
 #include <hal/serial.h>
 
 #ifndef KSTDERR_SER_PORT
-#define KSTERRR_SER_PORT            0
+#define KSTDERR_SER_PORT            0
 #endif
 
 #ifndef KSTDERR_SER_DBIT
@@ -67,7 +67,7 @@ static ptstream_t pts_log = {
 
 static uint8_t kstderr_read(struct ptstream* stream) {
     (void) stream;
-    return (uint8_t) return (uint8_t) ser_getc(KSTDERR_SER_PORT);
+    return (uint8_t) ser_getc(KSTDERR_SER_PORT);
 }
 
 static int kstderr_write(struct ptstream* stream, uint8_t c) {
