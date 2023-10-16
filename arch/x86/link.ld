@@ -57,4 +57,12 @@ SECTIONS
   __bss_end = .;
 
   __kernel_end = .;
+
+  /* other kernel memory spaces, which will be allocated during runtime */
+
+  /* kernel heap - REQUIRED FOR ALL PLATFORMS */
+  . = 0xF0000000;
+  __kheap_start = .;
+  . += 16777216;
+  __kheap_end = .;
 }

@@ -23,11 +23,13 @@ typedef struct {
 } __attribute__((packed)) kheap_footer_t;
 
 #ifndef KHEAP_BASE_ADDRESS
-#define KHEAP_BASE_ADDRESS                          0xF0000000 // base address for the kernel heap
+extern uintptr_t __kheap_start;
+#define KHEAP_BASE_ADDRESS                          &__kheap_start // base address for the kernel heap - use config from linker script
 #endif
 
 #ifndef KHEAP_MAX_SIZE
-#define KHEAP_MAX_SIZE                              16777216 // kernel heap's maximum size in bytes
+extern uintptr_t __kheap_end;
+#define KHEAP_MAX_SIZE                              ((size_t)&__kheap_end - (size_t)&__kheap_start) // kernel heap's maximum size in bytes - use config from linker script
 #endif
 
 #ifndef KHEAP_BLOCK_MIN_SIZE
