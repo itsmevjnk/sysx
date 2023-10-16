@@ -1,4 +1,6 @@
 LIB_OBJS=\
 lib/string.o \
 lib/stdio.o \
-lib/mp-printf.o
+lib/stdlib.o \
+lib/mp-printf.o \
+lib/kheap.o
