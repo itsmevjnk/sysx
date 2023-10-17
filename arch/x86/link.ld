@@ -60,6 +60,10 @@ SECTIONS
 
   /* other kernel memory spaces, which will be allocated during runtime */
 
+  /* kernel page table mapping location (mapped with vmm_krnlpt) */
+  . = 0xEFC00000; /* requires 4M, 4M aligned */
+  __krnlpt_start = .;
+
   /* kernel heap - REQUIRED FOR ALL PLATFORMS */
   . = 0xF0000000;
   __kheap_start = .;

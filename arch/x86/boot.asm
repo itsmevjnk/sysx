@@ -47,6 +47,7 @@ extern __bss_end
 
 extern vmm_default
 extern vmm_krnlpt
+extern __krnlpt_start
 
 extern vmm_current
 
@@ -267,7 +268,9 @@ mov ecx, 1024
 rep stosd
 pop edi
 ; tell the page directory about the kernel page table (vmm_krnlpt)
-mov ebp, (PD(vmm_default) + 959 * 4) ; ptr to page directory's entry #959 (EFC00000->F0000000)
+mov ebp, __krnlpt_start
+shr ebp, 20 ; shr 22 + shl 2
+add ebp, PD(vmm_default) ; ptr to page directory's entry for kernel page table mapping
 mov eax, PHYS(vmm_krnlpt)
 or eax, (1 << 0) | (1 << 1) ; present, writable, supervisor
 mov [ebp], eax

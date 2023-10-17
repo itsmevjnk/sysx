@@ -44,6 +44,8 @@ typedef struct {
 vmm_t vmm_default __attribute__((aligned(4096))); // for bootstrap code
 vmm_pt_t vmm_krnlpt __attribute__((aligned(4096))); // kernel page table for mapping newly allocated page tables to EFC00000->F0000000
 
+extern uintptr_t __krnlpt_start; // krnlpt start location (in link.ld)
+
 size_t vmm_pgsz() {
 	return 4096;
 }
@@ -77,7 +79,7 @@ void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, bool present, bool user, b
 					cfg->pd[pde].pgsz = 0; // no PSE (yet)
 					cfg->pd[pde].pt = vmm_krnlpt.pt[i].pa;
 
-					cfg->pt[pde] = (vmm_pt_t*) (0xEFC00000 + (i << 12)); // 0xEFC00000 + i * 0x1000
+					cfg->pt[pde] = (vmm_pt_t*) ((uintptr_t) &__krnlpt_start + (i << 12)); // 0xEFC00000 + i * 0x1000
 
 					allocated = true;
 					// kdebug("PT %u (VMM 0x%08x) @ 0x%08x (phys 0x%08x)", pde, (uintptr_t) vmm, (uintptr_t) (cfg->pt[pde]), frame << 12);
