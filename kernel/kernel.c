@@ -6,6 +6,7 @@
 #include <stdio.h>
 
 #include <stdlib.h>
+#include <mm/kheap.h>
 #include <string.h>
 
 extern int ktgtinit(); // must be defined somewhere in the target specific code

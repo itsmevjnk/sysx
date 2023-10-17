@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
+#include <mm/kheap.h>
 
 void* kmalloc(size_t size) {
     return kmalloc_ext(size, 1, NULL);
