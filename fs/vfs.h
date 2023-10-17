@@ -45,6 +45,9 @@ typedef struct vfs_node {
         void* ptr;
         struct vfs_node* target;
     } link; // mountpoint pointer/symlink target node
+    uint64_t atime; // timestamp of last access
+    uint64_t mtime; // timestamp of last modification
+    uint64_t ctime; // creation timestamp
 } vfs_node_t;
 
 extern const vfs_node_t* vfs_root; // root node
