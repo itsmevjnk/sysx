@@ -56,13 +56,13 @@ static inline kheap_header_t* kheap_last_block() {
 static kheap_header_t* kheap_merge(kheap_header_t* header) {
     /* resolve block footer */
     kheap_footer_t* footer = kheap_footer(header);
-    // kassert(footer->magic == KHEAP_FOOTER_MAGIC);
+    kassert(footer->magic == KHEAP_FOOTER_MAGIC);
 
     if((uintptr_t) header > (uintptr_t) kheap_first_block) {
         /* check if it can be merged with the previous block */
         kheap_footer_t* prev_footer = (kheap_footer_t*) ((uintptr_t) header - sizeof(kheap_footer_t));
-        // kassert(prev_footer->magic == KHEAP_FOOTER_MAGIC);
-        // kassert(prev_footer->header->magic == KHEAP_HEADER_MAGIC); // just to be sure
+        kassert(prev_footer->magic == KHEAP_FOOTER_MAGIC);
+        kassert(prev_footer->header->magic == KHEAP_HEADER_MAGIC); // just to be sure
         
         if(!prev_footer->header->used) {
             /* previous block is not in use - we're ready to go */
@@ -75,13 +75,13 @@ static kheap_header_t* kheap_merge(kheap_header_t* header) {
     kheap_header_t* next_header = (kheap_header_t*) ((uintptr_t) footer + sizeof(kheap_footer_t)); // resolve (possible) next block's header
     if((uintptr_t) next_header < (uintptr_t) kheap_first_block + kheap_size) {
         /* this block exists */
-        // kassert(next_header->magic == KHEAP_HEADER_MAGIC);
+        kassert(next_header->magic == KHEAP_HEADER_MAGIC);
 
         if(!next_header->used) {
             /* next block is not in use - we're ready to go */
             footer = kheap_footer(next_header); // resolve next block's footer
-            // kassert(footer->magic == KHEAP_FOOTER_MAGIC);
-            // kassert((uintptr_t) footer->header == (uintptr_t) next_header); // just to be sure
+            kassert(footer->magic == KHEAP_FOOTER_MAGIC);
+            kassert((uintptr_t) footer->header == (uintptr_t) next_header); // just to be sure
 
             header->size += sizeof(kheap_footer_t) + sizeof(kheap_header_t) + next_header->size;
             footer->header = header;
@@ -157,13 +157,13 @@ static kheap_header_t* kheap_align_block(kheap_header_t* header, uintptr_t retur
             kheap_merge(prev_header); // merge previous header if possible
         } else {
             /* cede space to preceding block */
-            // kassert((uintptr_t) header > (uintptr_t) kheap_first_block); // just to be sure here
+            kassert((uintptr_t) header > (uintptr_t) kheap_first_block); // just to be sure here
 
             kheap_footer_t* prev_footer = (kheap_footer_t*) ((uintptr_t) header - sizeof(kheap_footer_t)); // previous block's footer
-            // kassert(prev_footer->magic == KHEAP_FOOTER_MAGIC);
+            kassert(prev_footer->magic == KHEAP_FOOTER_MAGIC);
 
             kheap_header_t* prev_header = prev_footer->header; // previous block's header
-            // kassert(prev_header->magic == KHEAP_HEADER_MAGIC); // just to be sure
+            kassert(prev_header->magic == KHEAP_HEADER_MAGIC); // just to be sure
             prev_header->size += return_addr - start_addr; // increase the previous block's size to cover the unused space
 
             prev_footer = kheap_footer(prev_header); // get new footer location
@@ -175,10 +175,8 @@ static kheap_header_t* kheap_align_block(kheap_header_t* header, uintptr_t retur
             header->size = orig_size - (return_addr - start_addr);
         }
 
-        // kassert(kheap_footer(header)->magic == KHEAP_FOOTER_MAGIC); // in case we got the size wrong
+        kassert(kheap_footer(header)->magic == KHEAP_FOOTER_MAGIC); // in case we got the size wrong
     }
-
-    // kassert(header->size >= size); // make sure nothing went wrong when we cut the preceding space off
 
     return header;
 }
@@ -188,7 +186,7 @@ static void kheap_truncate_block(kheap_header_t* header, size_t size) {
     if(header->size - size >= KHEAP_BLOCK_MIN_SIZE_TOTAL) {
         /* we can cut the unused space into a new block */
         kheap_footer_t* next_footer = kheap_footer(header); // next block's footer (AKA the current block's footer)
-        // kassert(next_footer->magic == KHEAP_FOOTER_MAGIC);
+        kassert(next_footer->magic == KHEAP_FOOTER_MAGIC);
 
         header->size = size; // shrink our block
 
@@ -232,7 +230,7 @@ void* kmalloc_ext(size_t size, size_t align, void** phys) {
         }
 
         /* traverse blocks until we've found one that satisfies our requirement */
-        // kassert(header->magic == KHEAP_HEADER_MAGIC); // just to be sure
+        kassert(header->magic == KHEAP_HEADER_MAGIC); // just to be sure
         if(!header->used) {
             /* this header is not in use */
             bool suitable = false; // set if the block is suitable in terms of memory space
@@ -258,6 +256,7 @@ void* kmalloc_ext(size_t size, size_t align, void** phys) {
             if(suitable) {
                 /* we're all clear and ready to go */
                 header = kheap_align_block(header, return_addr);
+                kassert(header->size >= size); // make sure nothing went wrong when we cut the preceding space off
                 kheap_truncate_block(header, size);
                 
                 header->used = 1; // mark block as used
@@ -292,7 +291,7 @@ void* krealloc_ext(void* ptr, size_t size, size_t align, void** phys) {
     }
 
     kheap_header_t* header = (kheap_header_t*) ((uintptr_t) ptr - sizeof(kheap_header_t)); // current block's header
-    // kassert(header->magic == KHEAP_HEADER_MAGIC);
+    kassert(header->magic == KHEAP_HEADER_MAGIC);
     size_t move_size = (header->size < size) ? header->size : size; // size of data to be relocated
     
     /* APPROACH 1: EXTEND CURRENT BLOCK */
@@ -301,8 +300,8 @@ void* krealloc_ext(void* ptr, size_t size, size_t align, void** phys) {
     kheap_footer_t* prev_footer = (kheap_footer_t*) ((uintptr_t) header - sizeof(kheap_footer_t)); // previous block's footer (if one exists)
     bool prev_unused = false, prev_block_available = ((uintptr_t) prev_footer >= (uintptr_t) kheap_first_block);
     if(prev_block_available) {
-        // kassert(prev_footer->magic == KHEAP_FOOTER_MAGIC);
-        // kassert(prev_footer->header->magic == KHEAP_HEADER_MAGIC);
+        kassert(prev_footer->magic == KHEAP_FOOTER_MAGIC);
+        kassert(prev_footer->header->magic == KHEAP_HEADER_MAGIC);
         if(!prev_footer->header->used) prev_unused = true;
     }
 
@@ -310,7 +309,7 @@ void* krealloc_ext(void* ptr, size_t size, size_t align, void** phys) {
     kheap_header_t* next_header = (kheap_header_t*) ((uintptr_t) ptr + header->size + sizeof(kheap_footer_t)); // next block's header (if one exists)
     bool next_unused = false, next_block_available = ((uintptr_t) next_header < (uintptr_t) kheap_first_block + kheap_size);
     if(next_block_available) {
-        // kassert(next_header->magic == KHEAP_HEADER_MAGIC);
+        kassert(next_header->magic == KHEAP_HEADER_MAGIC);
         if(!next_header->used) next_unused = true;
     }
 
@@ -356,12 +355,13 @@ void* krealloc_ext(void* ptr, size_t size, size_t align, void** phys) {
         /* we can fit the new data block in, and if we need to do alignment, we can either cede space to the previous block or create a new block */
 
         kheap_merge(header); // merge adjacent blocks (note that this is NOT supposed to affect the block's data). this will also take proj_header to the preceding block if it's merged.
-        // kassert((uintptr_t) kheap_merge(header) == (uintptr_t) proj_header); // check if projected header is correct
-        // kassert(proj_size == proj_header->size); // just to be sure that our projected size is correct
+        kassert((uintptr_t) kheap_merge(header) == (uintptr_t) proj_header); // check if projected header is correct
+        kassert(proj_size == proj_header->size); // just to be sure that our projected size is correct
 
         memmove((void*) return_addr, ptr, move_size); // relocate block data
 
         proj_header = kheap_align_block(proj_header, return_addr);
+        kassert(proj_header->size >= size); // make sure nothing went wrong when we cut the preceding space off
         kheap_truncate_block(proj_header, size);
 
         proj_header->used = 1; // mark block as used

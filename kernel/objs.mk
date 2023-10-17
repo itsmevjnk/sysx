@@ -1,2 +1,3 @@
 KERNEL_OBJS=\
-kernel/kernel.o
+kernel/kernel.o \
+kernel/log.o
