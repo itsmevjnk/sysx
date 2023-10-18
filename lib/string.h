@@ -30,6 +30,13 @@ void* memmove(void* dest, const void* src, size_t n);
 void* memset(void* str, int c, size_t n);
 
 /*
+ * int memcmp(const void* ptr1, const void* ptr2, size_t n)
+ *  Compares the first n bytes of ptr1 and ptr2 until they
+ *  differ. Returns the difference at the stop point.
+ */
+int memcmp(const void* ptr1, const void* ptr2, size_t n);
+
+/*
  * int strcmp(const char* str1, const char* str2)
  *  Compares the str1 and str2 strings until str1[i] and
  *  str2[i] differ, or one of the 2 strings reaches the
