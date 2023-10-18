@@ -208,6 +208,8 @@ vfs_node_t* tar_init(void* buffer, size_t size, vfs_node_t* root) {
             path_element += len + 1; // next element
         }
 
+        kdebug("inode %u: name %s, flags 0x%02x, size %u, child of inode %u", node->inode, node->name, node->flags, node->length, parent->inode);
+
         header = (tar_header_t*) ((uintptr_t) header + 512 + ((size_t) node->length + 511) / 512); // next header
     }
 
