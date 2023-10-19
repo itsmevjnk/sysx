@@ -8,6 +8,8 @@
 #define TERM_VGATEXT_CURSOR_START           14 // cursor starting scanline (0-15)
 #define TERM_VGATEXT_CURSOR_END             15 // cursor ending scanline (0-15)
 
+#define TERM_VGATEXT_HTAB_LENGTH            4 // horizontal tab length
+
 #ifdef TERM_VGATEXT
 
 #ifndef KINIT_MM_FIRST
@@ -49,6 +51,13 @@ static void vgaterm_putc_stub(char c) {
             break;
         case '\n': // newline
             vgaterm_newline();
+            break;
+        case '\t': // horizontal tab
+            do {
+                vgaterm_buffer[vgaterm_y * 80 + vgaterm_x] = 0x0700;
+                vgaterm_x++;
+            } while(vgaterm_x < 80 && vgaterm_x % TERM_VGATEXT_HTAB_LENGTH != 0);
+            if(vgaterm_x == 80) vgaterm_newline();
             break;
         default: // normal character
             vgaterm_buffer[vgaterm_y * 80 + vgaterm_x] = ((uint8_t)c) | 0x0700; // light grey on black
