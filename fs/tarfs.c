@@ -60,7 +60,7 @@ struct dirent* tar_vfs_readdir(struct vfs_node* node, uint64_t idx) {
                     result->ino = info->hierarchy[i].node->inode;
                 } else kerror("cannot allocate space for dirent");
                 return result;
-            }
+            } else n++;
         }
     }
     return NULL; // cannot find anything
@@ -131,11 +131,19 @@ vfs_node_t* tar_init(void* buffer, size_t size, vfs_node_t* root) {
     /* traverse the file, adding new items as we go */
     tar_header_t* header = buffer;
     while((uintptr_t) header < (uintptr_t) buffer + size) {
+        if(header->name[0] == 0 && header->size[0] == 0) {
+            /* probably empty sector - skip this one */
+            kwarn("empty header encountered at 0x%x", (uintptr_t) header);
+            header = (tar_header_t*) ((uintptr_t) header + 512);
+            continue;
+        }
+
         bool is_ustar = (!memcmp(header->ustar_sig, "ustar", 6));
 
         char name[256]; name[0] = 0; // full path
         if(is_ustar) strcpy(name, header->name_prefix); // copy name prefix
-        strcmp(&name[strlen(name)], header->name); // append it with the rest of the path
+        strcpy(&name[strlen(name)], header->name); // append it with the rest of the path
+        name[strlen(name) + 1] = 0; // this will be needed later
         
         vfs_node_t* node = kmalloc(sizeof(vfs_node_t)); // new node
         if(node == NULL) {
@@ -144,16 +152,16 @@ vfs_node_t* tar_init(void* buffer, size_t size, vfs_node_t* root) {
         }
 
         node->inode = root_info->node_count;
-        root_info->node_count++;
         if(root_info->node_count % TAR_HIERARCHY_ITEM_INCREMENT == 0) {
             /* allocate more space for hierarchy */
-            root_info->hierarchy = krealloc(root_info, (root_info->node_count + TAR_HIERARCHY_ITEM_INCREMENT) * sizeof(tar_hierarchy_t));
+            root_info->hierarchy = krealloc(root_info->hierarchy, (root_info->node_count + TAR_HIERARCHY_ITEM_INCREMENT) * sizeof(tar_hierarchy_t));
             if(root_info->hierarchy == NULL) {
                 kerror("cannot allocate more space for TAR hierarchy structure, stopping parsing");
                 kfree(node);
                 return root; // stop parsing
             }
         }
+        root_info->node_count++;
         root_info->hierarchy[node->inode].node = node;
 
         /* load information */
@@ -200,17 +208,19 @@ vfs_node_t* tar_init(void* buffer, size_t size, vfs_node_t* root) {
                         /* found it */
                         found = true;
                         parent = root_info->hierarchy[i].node;
+                        break;
                     }
                 }
-                if(!found) kerror("cannot find child node of %s (inode %u) with name %s", parent->name, parent->inode, path_element);
+                if(!found)
+                kerror("cannot find child node of %s (inode %llu) with name %s", parent->name, parent->inode, path_element);
             }
 
             path_element += len + 1; // next element
         }
 
-        kdebug("inode %u: name %s, flags 0x%02x, size %u, child of inode %u", node->inode, node->name, node->flags, node->length, parent->inode);
+        kdebug("inode %llu (node @ 0x%x): name %s, flags 0x%02x, size %llu, child of inode %u", node->inode, (uintptr_t) node, node->name, node->flags, node->length, parent->inode);
 
-        header = (tar_header_t*) ((uintptr_t) header + 512 + ((size_t) node->length + 511) / 512); // next header
+        header = (tar_header_t*) ((uintptr_t) header + 512 + (((size_t) node->length + 511) / 512) * 512); // next header
     }
 
     return root; // all done
