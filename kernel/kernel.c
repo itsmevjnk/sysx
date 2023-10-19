@@ -9,50 +9,23 @@
 #include <mm/kheap.h>
 #include <string.h>
 
+#include <fs/vfs.h>
+
 extern int ktgtinit(); // must be defined somewhere in the target specific code
 
-/* test kernel heap */
-void test_kernel_heap() {
-    kinfo("testing kernel heap, check debug terminal for information");
+/* VFS directory listing */
+void vfs_dirlist(vfs_node_t* node, size_t tab) {
+    char tab_str[10]; // should be enough
+    memset(tab_str, '\t', tab);
+    tab_str[tab] = 0;
 
-    /* malloc */
-    void* ptr1 = kmalloc(32);
-    memset(ptr1, 0x55, 32); // for data integrity check later
-    kdebug("kmalloc 32 bytes = 0x%x", (uintptr_t) ptr1);
-    kheap_dump();
-
-    /* malloc_ext */
-    void* ptr2_phys;
-    void* ptr2 = kmalloc_ext(42, 512, &ptr2_phys);
-    kdebug("kmalloc_ext 42 bytes w/ 512-byte align = 0x%x (phys 0x%x)", (uintptr_t) ptr2, (uintptr_t) ptr2_phys);
-    kheap_dump();
-
-    /* realloc */
-    uint8_t* ptr1_new = krealloc(ptr1, 53);
-    kdebug("krealloc memory @ 0x%x to 53 bytes = 0x%x", (uintptr_t) ptr1, (uintptr_t) ptr1_new);
-    for(size_t i = 0; i < 32; i++) {
-        if(ptr1_new[i] != 0x55) kdebug("   data mismatch @ idx %u (0x%x)", i, (uintptr_t) &ptr1_new[i]);
+    for(size_t i = 0; ; i++) {
+        struct dirent* de = vfs_readdir(node, i);
+        if(de == NULL) return;
+        vfs_node_t* n = vfs_finddir(node, de->name);
+        kinfo("ino %llu:%s%s (0x%02x), size %llu", de->ino, tab_str, de->name, n->flags, n->length);
+        if((n->flags & ~VFS_SYMLINK) == VFS_DIRECTORY || (n->flags & ~VFS_SYMLINK) == VFS_MOUNTPOINT) vfs_dirlist(n, tab + 1);
     }
-    kheap_dump();
-    ptr1 = ptr1_new;
-
-    /* realloc_ext approach 2 */
-    void* ptr1_phys;
-    ptr1_new = krealloc_ext(ptr1, 16, 4096, &ptr1_phys);
-    kdebug("krealloc_ext memory @ 0x%x to 16 bytes w/ 4096-byte align = 0x%x (phys 0x%x)", (uintptr_t) ptr1, (uintptr_t) ptr1_new, (uintptr_t) ptr1_phys);
-    for(size_t i = 0; i < 16; i++) {
-        if(ptr1_new[i] != 0x55) kdebug("   data mismatch @ idx %u (0x%x)", i, (uintptr_t) &ptr1_new[i]);
-    }
-    kheap_dump();
-    ptr1 = ptr1_new;
-
-    /* kfree */
-    kfree(ptr1);
-    kdebug("freed memory @ 0x%x", (uintptr_t) ptr1);
-    kheap_dump();
-    // we don't free ptr2 so there's a bit more variety
-
-    kinfo("kernel heap testing complete");
 }
 
 void kinit() {
@@ -86,8 +59,8 @@ void kinit() {
     term_get_dimensions(&term_width, &term_height);
     kinfo("terminal size: %u x %u", term_width, term_height);
 #endif
-    
-    test_kernel_heap();
+
+    vfs_dirlist(vfs_root, 0);
 
     while(1);
 }
