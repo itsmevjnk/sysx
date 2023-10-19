@@ -41,8 +41,9 @@ uint64_t tar_vfs_read(struct vfs_node* node, uint64_t offset, uint64_t size, uin
     tar_info_t* info = node->link.ptr;
     kassert(info != NULL);
     if(info->hierarchy[node->inode].data == NULL) return 0;
+    if(offset >= node->length) return 0;
     if(offset + size > node->length) size = node->length - offset;
-    memcpy(buffer, info->hierarchy[node->inode].data, size);
+    memcpy(buffer, &info->hierarchy[node->inode].data[offset], size);
     return size;
 }
 
