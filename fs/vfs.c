@@ -1,10 +1,12 @@
 #include <fs/vfs.h>
 #include <kernel/log.h>
+#include <string.h>
+#include <stdlib.h>
 
 const vfs_node_t* vfs_root = NULL;
 
-static vfs_node_t* vfs_traverse_symlink(vfs_node_t* node) {
-    while(node != NULL && node->flags & VFS_SYMLINK) {
+vfs_node_t* vfs_traverse_symlink(vfs_node_t* node) {
+    while(node != NULL && (node->flags & VFS_SYMLINK)) {
         if(node->link.target == node) {
             kerror("VFS node at 0x%x is a symlink to itself", (uintptr_t) node);
             break;
@@ -12,6 +14,33 @@ static vfs_node_t* vfs_traverse_symlink(vfs_node_t* node) {
         node = node->link.target;
     }
     if(node == NULL) kdebug("null VFS node encountered");
+    return node;
+}
+
+vfs_node_t* vfs_traverse_path(const char* path) {
+    if(path == NULL) {
+        kerror("path is NULL");
+        return NULL;
+    }
+
+    if(path[0] != '/') {
+        kerror("first character of path is not /, indicating relative path");
+        return NULL;
+    }
+
+    vfs_node_t* node = vfs_root; // start from the root node
+    char *name = kmalloc(256); // path element
+    while(node != NULL) {
+        path++; // skip past the preceding slash
+        size_t name_len = 0;
+        for(; *path != '/' && *path != '\0'; path++, name_len++)
+            name[name_len] = *path; // copy file/directory name
+        name[name_len] = '\0'; // null terminate name
+        node = vfs_finddir(node, name); // try to find next node
+        if(*path == '\0') break; // we've reached the end of the path, exit now
+    }
+    kfree(name);
+
     return node;
 }
 
