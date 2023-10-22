@@ -131,6 +131,7 @@ vfs_node_t* tar_init(void* buffer, size_t size, vfs_node_t* root) {
 
     /* traverse the file, adding new items as we go */
     tar_header_t* header = buffer;
+    char *name = kmalloc(256); // full path
     while((uintptr_t) header < (uintptr_t) buffer + size) {
         if(header->name[0] == 0 && header->size[0] == 0) {
             /* probably empty sector - skip this one */
@@ -141,7 +142,7 @@ vfs_node_t* tar_init(void* buffer, size_t size, vfs_node_t* root) {
 
         bool is_ustar = (!memcmp(header->ustar_sig, "ustar", 6));
 
-        char name[256]; name[0] = 0; // full path
+        name[0] = 0; // quick and dirty way to clear string
         if(is_ustar) strcpy(name, header->name_prefix); // copy name prefix
         strcpy(&name[strlen(name)], header->name); // append it with the rest of the path
         name[strlen(name) + 1] = 0; // this will be needed later
@@ -190,7 +191,7 @@ vfs_node_t* tar_init(void* buffer, size_t size, vfs_node_t* root) {
 
         /* traverse path */
         vfs_node_t* parent = root; // parent node
-        char* path_element = (char*)&name;
+        char* path_element = name;
         while(1) {
             size_t len = 0; // path element length
             for(; path_element[len] != '/' && path_element[len] != 0; len++);
@@ -223,6 +224,8 @@ vfs_node_t* tar_init(void* buffer, size_t size, vfs_node_t* root) {
 
         header = (tar_header_t*) ((uintptr_t) header + 512 + (((size_t) node->length + 511) / 512) * 512); // next header
     }
+
+    kfree(name);
 
     return root; // all done
 
