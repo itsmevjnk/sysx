@@ -1,6 +1,7 @@
 #include <arch/x86cpu/idt.h>
 #include <hal/intr.h>
 #include <kernel/log.h>
+#include <arch/x86cpu/asm.h>
 
 //#define IDT_DEBUG // uncomment for log hell
 
@@ -630,4 +631,9 @@ void idt_init() {
 	idt_add_gate(253, 0x08, (uintptr_t) &idt_handler_253, IDT_386_INTR32, 3);
 	idt_add_gate(254, 0x08, (uintptr_t) &idt_handler_254, IDT_386_INTR32, 3);
 	idt_add_gate(255, 0x08, (uintptr_t) &idt_handler_255, IDT_386_INTR32, 3);
+
+	__asm__ volatile("lidt %0" : : "m"(idt_desc)); // load IDTR
+
+	outb(0xA1, 0xFF); outb(0x21, 0xFF); // disable PIC for the time being so we don't end up with IRQs showing up as exceptions
+	__asm__ volatile("sti");
 }
