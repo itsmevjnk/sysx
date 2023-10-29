@@ -11,6 +11,15 @@
 
 #include <fs/vfs.h>
 
+#include <exec/elf.h>
+#include <exec/syms.h>
+
+#define KSYM_PATH           "/boot/kernel.sym"
+
+#ifndef KSYM_INITIAL_CNT
+#define KSYM_INITIAL_CNT    8
+#endif
+
 extern int ktgtinit(); // must be defined somewhere in the target specific code
 
 /* VFS directory listing */
@@ -61,6 +70,17 @@ void kinit() {
 #endif
 
     vfs_dirlist(vfs_root, 0);
+
+    /* load kernel symbols */
+    kinfo("creating kernel symbol table");
+    kernel_syms = sym_new_table(KSYM_INITIAL_CNT);
+    kinfo("locating kernel symbols file at " KSYM_PATH);
+    vfs_node_t* ksym_node = vfs_traverse_path(KSYM_PATH);
+    if(ksym_node == NULL) kinfo("cannot find kernel symbols file");
+    else {
+        kinfo("loading kernel symbols");
+        elf_load(ksym_node, "_init", NULL);
+    }
 
     while(1);
 }

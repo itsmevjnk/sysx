@@ -15,6 +15,7 @@ include lib/objs.mk
 include hal/objs.mk
 include mm/objs.mk
 include fs/objs.mk
+include exec/objs.mk
 
 OBJS=\
 $(TARGET_OBJS) \
@@ -24,7 +25,8 @@ $(KERNEL_OBJS) \
 $(LIB_OBJS) \
 $(HAL_OBJS) \
 $(MM_OBJS) \
-$(FS_OBJS)
+$(FS_OBJS) \
+$(EXEC_OBJS)
 
 .PHONY: all clean
 .SUFFIXES: .o .c .s .asm
