@@ -354,7 +354,7 @@ void* krealloc_ext(void* ptr, size_t size, size_t align, void** phys) {
     if(return_addr + size <= end_addr) {
         /* we can fit the new data block in, and if we need to do alignment, we can either cede space to the previous block or create a new block */
 
-        kheap_merge(header); // merge adjacent blocks (note that this is NOT supposed to affect the block's data). this will also take proj_header to the preceding block if it's merged.
+        // kheap_merge(header); // merge adjacent blocks (note that this is NOT supposed to affect the block's data). this will also take proj_header to the preceding block if it's merged.
         kassert((uintptr_t) kheap_merge(header) == (uintptr_t) proj_header); // check if projected header is correct
         kassert(proj_size == proj_header->size); // just to be sure that our projected size is correct
 
