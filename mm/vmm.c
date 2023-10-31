@@ -30,3 +30,23 @@ void vmm_unmap(void* vmm, uintptr_t va, size_t sz) {
 	for(size_t i = 0; i < (sz + vmm_pgsz() - 1) / vmm_pgsz(); i++)
 		vmm_pgunmap(vmm, va + i * vmm_pgsz());
 }
+
+uintptr_t vmm_first_free(void* vmm, uintptr_t va, size_t sz) {
+	/* convert virtual address to VMM page number */
+	if(va == 0) va = 1; // avoid null
+	else va = (va + vmm_pgsz() - 1) / vmm_pgsz();
+	sz = (sz + vmm_pgsz() - 1) / vmm_pgsz(); // sz now stores the number of pages required
+	uintptr_t result = va; size_t blk_sz = 0;
+	while((result + sz) * vmm_pgsz() != 0) {
+		if(vmm_physaddr(vmm, (result + blk_sz) * vmm_pgsz()) != 0) {
+			/* block end */
+			result += blk_sz + 1;
+			blk_sz = 0;
+			continue;
+		}
+		/* this page is free */
+		blk_sz++;
+		if(blk_sz == sz) return result * vmm_pgsz(); // we've reached our target
+	}
+	return 0; // cannot find block
+}

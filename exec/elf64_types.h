@@ -12,7 +12,7 @@ typedef uint64_t    Elf64_Addr;
 typedef uint32_t    Elf64_Word;
 typedef int32_t     Elf64_Sword;
 typedef uint64_t    Elf64_Xword;
-typedef int64_t     ELf64_Sxword;
+typedef int64_t     Elf64_Sxword;
 
 /* ELF64-specific e_ident indices */
 #define EI_OSABI        7
@@ -88,5 +88,21 @@ typedef struct {
     Elf64_Addr      st_value;
     Elf64_Xword     st_size;
 } __attribute__((packed)) Elf64_Sym;
+
+/* r_info breakdown */
+#define ELF64_R_SYM(i)          ((i) >> 32)
+#define ELF64_R_TYPE(i)         ((i) & 0xFFFFFFFFUL)
+
+/* relocation entries */
+typedef struct {
+    Elf64_Addr r_offset;
+    Elf64_Xword r_info;
+} __attribute__((packed)) Elf64_Rel;
+
+typedef struct {
+    Elf64_Addr r_offset;
+    Elf64_Xword r_info;
+    Elf64_Sxword r_addend;
+} __attribute__((packed)) Elf64_Rela;
 
 #endif

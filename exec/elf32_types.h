@@ -150,4 +150,20 @@ typedef struct {
     Elf32_Half      st_shndx;
 } __attribute__((packed)) Elf32_Sym;
 
+/* r_info breakdown */
+#define ELF32_R_SYM(i)          ((i) >> 8)
+#define ELF32_R_TYPE(i)         ((unsigned char)(i))
+
+/* relocation entries */
+typedef struct {
+    Elf32_Addr r_offset;
+    Elf32_Word r_info;
+} __attribute__((packed)) Elf32_Rel;
+
+typedef struct {
+    Elf32_Addr r_offset;
+    Elf32_Word r_info;
+    Elf32_Sword r_addend;
+} __attribute__((packed)) Elf32_Rela;
+
 #endif

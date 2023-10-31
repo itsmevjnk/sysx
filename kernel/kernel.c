@@ -79,7 +79,8 @@ void kinit() {
     if(ksym_node == NULL) kinfo("cannot find kernel symbols file");
     else {
         kinfo("loading kernel symbols");
-        elf_load(ksym_node, "_init", NULL);
+        elf_load(ksym_node, NULL, NULL, NULL, "_init", NULL);
+        kinfo("%u symbol(s) have been added to kernel symbol pool", kernel_syms->count);
     }
 
     while(1);

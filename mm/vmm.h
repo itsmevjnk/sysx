@@ -29,6 +29,7 @@ void vmm_pgunmap(void* vmm, uintptr_t va);
  * uintptr_t vmm_physaddr(uintptr_t va)
  *  Retrieves the physical memory address of a given virtual
  *  address.
+ *  Returns 0 if the virtual address is unmapped.
  */
 uintptr_t vmm_physaddr(void* vmm, uintptr_t va);
 
@@ -64,5 +65,14 @@ void vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, bool present, boo
  *  Unmaps sz byte(s) starting from linear address va.
  */
 void vmm_unmap(void* vmm, uintptr_t va, size_t sz);
+
+/*
+ * uintptr_t vmm_first_free(void* vmm, uintptr_t va, size_t sz)
+ *  Finds the first unmapped contiguous address space of size sz
+ *  starting from the virtual address va in the given VMM config.
+ *  Returns the space's starting virtual address, or 0 if none
+ *  can be found.
+ */
+uintptr_t vmm_first_free(void* vmm, uintptr_t va, size_t sz);
 
 #endif

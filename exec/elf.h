@@ -7,6 +7,7 @@
 #include <limits.h>
 
 #include <exec/elf_machines.h>
+#include <exec/elf_reloc.h>
 #include <exec/elf32_types.h>
 #include <exec/elf64_types.h>
 
@@ -35,6 +36,13 @@ enum elf_load_result {
     ERR_ENTRY, // file has been loaded, but the entry point cannot be found
 };
 
+/* program loading result entry */
+typedef struct {
+    size_t idx; // section header entry index
+    uintptr_t vaddr; // starting virtual address
+    size_t size; // section size
+} elf_prgload_t;
+
 /*
  * enum elf_check_result elf_check_header(void* buf)
  *  Checks the validity of an ELF file's header.
@@ -43,13 +51,13 @@ enum elf_load_result {
 enum elf_check_result elf_check_header(void* buf);
 
 /*
- * enum elf_load_result elf_load(vfs_node_t* file, const char* entry_name, uintptr_t* entry_ptr)
+ * enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t** load_result, size_t* load_result_len, const char* entry_name, uintptr_t* entry_ptr);
  *  Loads the specified ELF file (as a VFS node), and optionally retrieve
  *  the file's entry point via entry_ptr (optionally by searching for the
  *  entry symbol stored at entry_name, otherwise retrieving from the ELF
  *  header).
  *  Returns an elf_load_result value depending on the error/success status.
  */
-enum elf_load_result elf_load(vfs_node_t* file, const char* entry_name, uintptr_t* entry_ptr);
+enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t** load_result, size_t* load_result_len, const char* entry_name, uintptr_t* entry_ptr);
 
 #endif
