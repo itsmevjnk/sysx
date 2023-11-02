@@ -1,4 +1,5 @@
 #include <kernel/log.h>
+#include <kernel/settings.h>
 
 #include <hal/terminal.h>
 #include <mm/pmm.h>
