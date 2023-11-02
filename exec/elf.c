@@ -688,17 +688,15 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
                     }
 
                     // kdebug("symbol %s (0x%x)", &strtab_data[st_name], st_value);
-
-                    if(ELF_ST_BIND(st_info) == STB_GLOBAL) {
-#ifdef ELF_DEBUG_ADDSYM
-                        kdebug("adding symbol %s (0x%x)", &strtab_data[st_name], st_value);
-#endif
-                        sym_add_entry(kernel_syms, &strtab_data[st_name], st_value);
-                    }
                     
                     if(entry_name != NULL && entry_ptr != NULL && *entry_ptr == 0 && !strcmp(&strtab_data[st_name], entry_name)) {
                         kdebug("found entry point %s at 0x%x", entry_name, st_value);
                         *entry_ptr = st_value;
+                    } else if(ELF_ST_BIND(st_info) == STB_GLOBAL) {
+#ifdef ELF_DEBUG_ADDSYM
+                        kdebug("adding symbol %s (0x%x)", &strtab_data[st_name], st_value);
+#endif
+                        sym_add_entry(kernel_syms, &strtab_data[st_name], st_value);
                     }
                 }
             }
