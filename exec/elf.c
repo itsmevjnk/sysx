@@ -139,33 +139,85 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
 
     /* load section headers */
     size_t e_shentsize, e_shnum; // size of each section header entry and number of section headers
+#ifndef ELF_FORCE_CLASS
     if(is_elf64) {
+#endif
+#if !defined(ELF_FORCE_CLASS) || ELF_FORCE_CLASS == ELFCLASS64
         e_shentsize = hdr_64->e_shentsize;
         e_shnum = hdr_64->e_shnum;
+#endif
+#ifndef ELF_FORCE_CLASS
     } else {
+#endif
+#if !defined(ELF_FORCE_CLASS) || ELF_FORCE_CLASS == ELFCLASS32
         e_shentsize = hdr_32->e_shentsize;
         e_shnum = hdr_32->e_shnum;
+#endif
+#ifndef ELF_FORCE_CLASS
     }
+#endif
     Elf64_Shdr* shdr = kmalloc(e_shentsize * e_shnum);
     if(shdr == NULL) {
         kerror("cannot allocate memory for section headers");
         kfree(hdr_64); return ERR_ALLOC;
     }
-    vfs_read(file, (is_elf64) ? hdr_64->e_shoff : hdr_32->e_shoff, e_shentsize * e_shnum, (uint8_t*) shdr);
+    vfs_read(   file,
+#if ELF_FORCE_CLASS == ELFCLASS64
+                hdr_64->e_shoff,
+#elif ELF_FORCE_CLASS == ELFCLASS32
+                hdr_32->e_shoff,
+#else
+                (is_elf64) ? hdr_64->e_shoff : hdr_32->e_shoff,
+#endif
+                e_shentsize * e_shnum,
+                (uint8_t*) shdr);
 
     /* load section header string table */
-    Elf64_Shdr* shstrtab_64 = (Elf64_Shdr*) ((uintptr_t) shdr + ((is_elf64) ? hdr_64->e_shstrndx : hdr_32->e_shstrndx) * e_shentsize);
+    Elf64_Shdr* shstrtab_64 = ( Elf64_Shdr*) ((uintptr_t) shdr + (
+#if ELF_FORCE_CLASS == ELFCLASS64
+                                    hdr_64->e_shstrndx
+#elif ELF_FORCE_CLASS == ELFCLASS32
+                                    hdr_32->e_shstrndx
+#else
+                                    (is_elf64) ? hdr_64->e_shstrndx : hdr_32->e_shstrndx
+#endif
+                                ) * e_shentsize);
     Elf32_Shdr* shstrtab_32 = (Elf32_Shdr*) shstrtab_64;
+#if ELF_FORCE_CLASS == ELFCLASS64
+    if(shstrtab_64->sh_type != SHT_STRTAB) {
+#elif ELF_FORCE_CLASS == ELFCLASS32
+    if(shstrtab_32->sh_type != SHT_STRTAB) {
+#else
     if((is_elf64 && shstrtab_64->sh_type != SHT_STRTAB) || (!is_elf64 && shstrtab_32->sh_type != SHT_STRTAB)) {
+#endif
         kerror("section header string table indicated in e_shstrndx is not of type SHT_STRTAB");
         kfree(shdr); kfree(hdr_64); return ERR_INVALID_DATA;
     }
-    char* shstrtab_data = kmalloc((is_elf64) ? shstrtab_64->sh_size : shstrtab_32->sh_size);
+    char* shstrtab_data = kmalloc(
+#if ELF_FORCE_CLASS == ELFCLASS64
+        shstrtab_64->sh_size
+#elif ELF_FORCE_CLASS == ELFCLASS32
+        shstrtab_32->sh_size
+#else
+        (is_elf64) ? shstrtab_64->sh_size : shstrtab_32->sh_size
+#endif
+    );
     if(shstrtab_data == NULL) {
         kerror("cannot allocate memory for section header string table");
         kfree(shdr); kfree(hdr_64); return ERR_ALLOC;
     }
-    vfs_read(file, (is_elf64) ? shstrtab_64->sh_offset : shstrtab_32->sh_offset, (is_elf64) ? shstrtab_64->sh_size : shstrtab_32->sh_size, (uint8_t*) shstrtab_data);
+    vfs_read(   file,
+#if ELF_FORCE_CLASS == ELFCLASS64
+                shstrtab_64->sh_offset,
+                shstrtab_64->sh_size,
+#elif ELF_FORCE_CLASS == ELFCLASS32
+                shstrtab_32->sh_offset,
+                shstrtab_32->sh_size,
+#else
+                (is_elf64) ? shstrtab_64->sh_offset : shstrtab_32->sh_offset,
+                (is_elf64) ? shstrtab_64->sh_size : shstrtab_32->sh_size,
+#endif
+                (uint8_t*) shstrtab_data);
 
     /* handle loading logic depending on file type */
     elf_prgload_t* prgload_result = NULL;
@@ -177,11 +229,25 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
             void* shdr_ent = shdr;
             for(size_t i = 0; i < e_shnum; i++, shdr_ent = (void*) ((uintptr_t) shdr_ent + e_shentsize)) {
                 /* retrieve section header information */
+#if ELF_FORCE_CLASS == ELFCLASS64
+                size_t sh_name = ((Elf64_Shdr*) shdr_ent)->sh_name;
+                size_t sh_type = ((Elf64_Shdr*) shdr_ent)->sh_type;
+                size_t sh_flags = ((Elf64_Shdr*) shdr_ent)->sh_flags;
+                uintptr_t sh_off = ((Elf64_Shdr*) shdr_ent)->sh_offset;
+                size_t sh_size = ((Elf64_Shdr*) shdr_ent)->sh_size;
+#elif ELF_FORCE_CLASS == ELFCLASS32
+                size_t sh_name = ((Elf32_Shdr*) shdr_ent)->sh_name;
+                size_t sh_type = ((Elf32_Shdr*) shdr_ent)->sh_type;
+                size_t sh_flags = ((Elf32_Shdr*) shdr_ent)->sh_flags;
+                uintptr_t sh_off = ((Elf32_Shdr*) shdr_ent)->sh_offset;
+                size_t sh_size = ((Elf32_Shdr*) shdr_ent)->sh_size;
+#else
                 size_t sh_name = (is_elf64) ? ((Elf64_Shdr*) shdr_ent)->sh_name : ((Elf32_Shdr*) shdr_ent)->sh_name;
                 size_t sh_type = (is_elf64) ? ((Elf64_Shdr*) shdr_ent)->sh_type : ((Elf32_Shdr*) shdr_ent)->sh_type;
                 size_t sh_flags = (is_elf64) ? ((Elf64_Shdr*) shdr_ent)->sh_flags : ((Elf32_Shdr*) shdr_ent)->sh_flags;
                 uintptr_t sh_off = (is_elf64) ? ((Elf64_Shdr*) shdr_ent)->sh_offset : ((Elf32_Shdr*) shdr_ent)->sh_offset;
                 size_t sh_size = (is_elf64) ? ((Elf64_Shdr*) shdr_ent)->sh_size : ((Elf32_Shdr*) shdr_ent)->sh_size;
+#endif
                 kdebug("section header entry %u: %s, type %u, flags 0x%x, offset 0x%x, size %u", i, &shstrtab_data[sh_name], sh_type, sh_flags, sh_off, sh_size);
                 
                 if((sh_flags & SHF_ALLOC) && sh_size > 0 && (sh_type == SHT_PROGBITS || sh_type == SHT_NOBITS)) {
@@ -234,12 +300,28 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
         /* only perform relocation if we have loaded sections */
         for(size_t i = 0; i < e_shnum; i++, shdr_ent = (void*) ((uintptr_t) shdr_ent + e_shentsize)) {
             /* section header parameters */
+#if ELF_FORCE_CLASS == ELFCLASS64
+            size_t sh_type = ((Elf64_Shdr*) shdr_ent)->sh_type;
+            uintptr_t sh_off = ((Elf64_Shdr*) shdr_ent)->sh_offset;
+            size_t sh_size = ((Elf64_Shdr*) shdr_ent)->sh_size;
+            size_t sh_entsize = ((Elf64_Shdr*) shdr_ent)->sh_entsize;
+            size_t sh_link = ((Elf64_Shdr*) shdr_ent)->sh_link;
+            size_t sh_info = ((Elf64_Shdr*) shdr_ent)->sh_info;
+#elif ELF_FORCE_CLASS == ELFCLASS32
+            size_t sh_type = ((Elf32_Shdr*) shdr_ent)->sh_type;
+            uintptr_t sh_off = ((Elf32_Shdr*) shdr_ent)->sh_offset;
+            size_t sh_size = ((Elf32_Shdr*) shdr_ent)->sh_size;
+            size_t sh_entsize = ((Elf32_Shdr*) shdr_ent)->sh_entsize;
+            size_t sh_link = ((Elf32_Shdr*) shdr_ent)->sh_link;
+            size_t sh_info = ((Elf32_Shdr*) shdr_ent)->sh_info;
+#else
             size_t sh_type = (is_elf64) ? ((Elf64_Shdr*) shdr_ent)->sh_type : ((Elf32_Shdr*) shdr_ent)->sh_type;
             uintptr_t sh_off = (is_elf64) ? ((Elf64_Shdr*) shdr_ent)->sh_offset : ((Elf32_Shdr*) shdr_ent)->sh_offset;
             size_t sh_size = (is_elf64) ? ((Elf64_Shdr*) shdr_ent)->sh_size : ((Elf32_Shdr*) shdr_ent)->sh_size;
             size_t sh_entsize = (is_elf64) ? ((Elf64_Shdr*) shdr_ent)->sh_entsize : ((Elf32_Shdr*) shdr_ent)->sh_entsize;
             size_t sh_link = (is_elf64) ? ((Elf64_Shdr*) shdr_ent)->sh_link : ((Elf32_Shdr*) shdr_ent)->sh_link;
             size_t sh_info = (is_elf64) ? ((Elf64_Shdr*) shdr_ent)->sh_info : ((Elf32_Shdr*) shdr_ent)->sh_info;
+#endif
             if(sh_type == SHT_REL || sh_type == SHT_RELA) {
                 /* relocation section has been found */
 
@@ -261,13 +343,27 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
                     /* (re)load symbol table (part 1) */
                     kfree(symtab);
                     symtab_shdr = (void*) ((uintptr_t) shdr + e_shentsize * sh_link); // get symbol table referenced by the section
+#if ELF_FORCE_CLASS == ELFCLASS64
+                    if(((Elf64_Shdr*)symtab_shdr)->sh_type != SHT_SYMTAB) {
+#elif ELF_FORCE_CLASS == ELFCLASS32
+                    if(((Elf32_Shdr*)symtab_shdr)->sh_type != SHT_SYMTAB) {
+#else
                     if((is_elf64 && ((Elf64_Shdr*)symtab_shdr)->sh_type != SHT_SYMTAB) || (!is_elf64 && ((Elf32_Shdr*)symtab_shdr)->sh_type != SHT_SYMTAB)) {
+#endif
                         kerror("relocation section %u refers to non-symbol table section %u", i, sh_link);
                         kfree(shdr); kfree(hdr_64); kfree(shstrtab_data); return ERR_INVALID_DATA;
                     }
                 }
+#if ELF_FORCE_CLASS == ELFCLASS64
+                size_t symtab_sh_size = ((Elf64_Shdr*)symtab_shdr)->sh_size;
+                symtab_sh_entsize = ((Elf64_Shdr*)symtab_shdr)->sh_entsize;
+#elif ELF_FORCE_CLASS == ELFCLASS32
+                size_t symtab_sh_size = ((Elf32_Shdr*)symtab_shdr)->sh_size;
+                symtab_sh_entsize = ((Elf32_Shdr*)symtab_shdr)->sh_entsize;
+#else
                 size_t symtab_sh_size = (is_elf64) ? ((Elf64_Shdr*)symtab_shdr)->sh_size : ((Elf32_Shdr*)symtab_shdr)->sh_size;
                 symtab_sh_entsize = (is_elf64) ? ((Elf64_Shdr*)symtab_shdr)->sh_entsize : ((Elf32_Shdr*)symtab_shdr)->sh_entsize;
+#endif
                 if(sh_link != symtab_idx) {
                     /* (re)load symbol table (part 2) */
                     symtab = kmalloc(symtab_sh_size);
@@ -275,7 +371,16 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
                         kerror("cannot allocate memory for symbol table");
                         kfree(shdr); kfree(hdr_64); kfree(shstrtab_data); return ERR_ALLOC;
                     }
-                    vfs_read(file, (is_elf64) ? ((Elf64_Shdr*)symtab_shdr)->sh_offset : ((Elf32_Shdr*)symtab_shdr)->sh_offset, symtab_sh_size, (uint8_t*) symtab);
+                    vfs_read(   file,
+#if ELF_FORCE_CLASS == ELFCLASS64
+                                ((Elf64_Shdr*)symtab_shdr)->sh_offset,
+#elif ELF_FORCE_CLASS == ELFCLASS32
+                                ((Elf32_Shdr*)symtab_shdr)->sh_offset,
+#else
+                                (is_elf64) ? ((Elf64_Shdr*)symtab_shdr)->sh_offset : ((Elf32_Shdr*)symtab_shdr)->sh_offset,
+#endif
+                                symtab_sh_size,
+                                (uint8_t*) symtab);
                     symtab_idx = sh_link;
                 }
                 size_t symtab_sh_link = (is_elf64) ? ((Elf64_Shdr*)symtab_shdr)->sh_link : ((Elf32_Shdr*)symtab_shdr)->sh_link;
@@ -283,17 +388,38 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
                     /* load string table */
                     kfree(strtab_data);
                     void* strtab_shdr = (void*) ((uintptr_t) shdr + e_shentsize * symtab_sh_link); // get string table section header
+#if ELF_FORCE_CLASS == ELFCLASS64
+                    if(((Elf64_Shdr*)strtab_shdr)->sh_type != SHT_STRTAB) {
+#elif ELF_FORCE_CLASS == ELFCLASS32
+                    if(((Elf32_Shdr*)strtab_shdr)->sh_type != SHT_STRTAB) {
+#else
                     if((is_elf64 && ((Elf64_Shdr*)strtab_shdr)->sh_type != SHT_STRTAB) || (!is_elf64 && ((Elf32_Shdr*)strtab_shdr)->sh_type != SHT_STRTAB)) {
+#endif
                         kerror("symbol table at entry %u points to an invalid table at entry %u as its string table", sh_link, symtab_sh_link);
                         kfree(symtab); kfree(shdr); kfree(hdr_64); kfree(shstrtab_data); return ERR_INVALID_DATA;
                     }
+#if ELF_FORCE_CLASS == ELFCLASS64
+                    size_t strtab_sh_size = ((Elf64_Shdr*)strtab_shdr)->sh_size;
+#elif ELF_FORCE_CLASS == ELFCLASS32
+                    size_t strtab_sh_size = ((Elf32_Shdr*)strtab_shdr)->sh_size;
+#else
                     size_t strtab_sh_size = (is_elf64) ? ((Elf64_Shdr*)strtab_shdr)->sh_size : ((Elf32_Shdr*)strtab_shdr)->sh_size;
+#endif
                     strtab_data = kmalloc(strtab_sh_size);
                     if(strtab_data == NULL) {
                         kerror("cannot allocate memory for string table");
                         kfree(strtab_data); kfree(shdr); kfree(hdr_64); kfree(shstrtab_data); return ERR_INVALID_DATA;
                     }
-                    vfs_read(file, (is_elf64) ? ((Elf64_Shdr*)strtab_shdr)->sh_offset : ((Elf32_Shdr*)strtab_shdr)->sh_offset, strtab_sh_size, (uint8_t*) strtab_data);
+                    vfs_read(   file,
+#if ELF_FORCE_CLASS == ELFCLASS64
+                                ((Elf64_Shdr*)strtab_shdr)->sh_offset,
+#elif ELF_FORCE_CLASS == ELFCLASS32
+                                ((Elf32_Shdr*)strtab_shdr)->sh_offset,
+#else
+                                (is_elf64) ? ((Elf64_Shdr*)strtab_shdr)->sh_offset : ((Elf32_Shdr*)strtab_shdr)->sh_offset,
+#endif
+                                strtab_sh_size,
+                                (uint8_t*) strtab_data);
                     strtab_idx = symtab_sh_link;
                 }
 
@@ -307,16 +433,38 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
 
                 void* rel_ent = rel;
                 for(size_t j = 0; j < sh_size / sh_entsize; j++, rel_ent = (void*) ((uintptr_t) rel_ent + sh_entsize)) {
+#if ELF_FORCE_CLASS == ELFCLASS64
+                    uintptr_t r_offset = ((Elf64_Rel*)rel_ent)->r_offset;
+                    size_t r_sym = ELF64_R_SYM(((Elf64_Rel*)rel_ent)->r_info);
+                    size_t r_type = ELF64_R_TYPE(((Elf64_Rel*)rel_ent)->r_info);
+                    intptr_t r_addend = (sh_type == SHT_RELA) ? ((Elf64_Rela*)rel_ent)->r_addend : 0;
+#elif ELF_FORCE_CLASS == ELFCLASS32
+                    uintptr_t r_offset = ((Elf32_Rel*)rel_ent)->r_offset;
+                    size_t r_sym = ELF32_R_SYM(((Elf32_Rel*)rel_ent)->r_info);
+                    size_t r_type = ELF32_R_TYPE(((Elf32_Rel*)rel_ent)->r_info);
+                    intptr_t r_addend = (sh_type == SHT_RELA) ? ((Elf32_Rela*)rel_ent)->r_addend : 0;
+#else
                     uintptr_t r_offset = (is_elf64) ? ((Elf64_Rel*)rel_ent)->r_offset : ((Elf32_Rel*)rel_ent)->r_offset;
                     size_t r_sym = (is_elf64) ? ELF64_R_SYM(((Elf64_Rel*)rel_ent)->r_info) : ELF32_R_SYM(((Elf32_Rel*)rel_ent)->r_info);
                     size_t r_type = (is_elf64) ? ELF64_R_TYPE(((Elf64_Rel*)rel_ent)->r_info) : ELF32_R_TYPE(((Elf32_Rel*)rel_ent)->r_info);
                     intptr_t r_addend = (sh_type == SHT_RELA) ? ((is_elf64) ? ((Elf64_Rela*)rel_ent)->r_addend : ((Elf32_Rela*)rel_ent)->r_addend) : 0;
+#endif
                     
                     /* resolve symbol */
                     void* sym = (void*) ((uintptr_t) symtab + symtab_sh_entsize * r_sym);
+#if ELF_FORCE_CLASS == ELFCLASS64
+                    size_t st_name = ((Elf64_Sym*)sym)->st_name;
+                    uintptr_t st_value = ((Elf64_Sym*)sym)->st_value;
+                    size_t st_shndx = ((Elf64_Sym*)sym)->st_shndx;
+#elif ELF_FORCE_CLASS == ELFCLASS32
+                    size_t st_name = ((Elf32_Sym*)sym)->st_name;
+                    uintptr_t st_value = ((Elf32_Sym*)sym)->st_value;
+                    size_t st_shndx = ((Elf32_Sym*)sym)->st_shndx;
+#else
                     size_t st_name = (is_elf64) ? ((Elf64_Sym*)sym)->st_name : ((Elf32_Sym*)sym)->st_name;
                     uintptr_t st_value = (is_elf64) ? ((Elf64_Sym*)sym)->st_value : ((Elf32_Sym*)sym)->st_value;
                     size_t st_shndx = (is_elf64) ? ((Elf64_Sym*)sym)->st_shndx : ((Elf32_Sym*)sym)->st_shndx;
+#endif
                     if(st_shndx != SHN_ABS) {
                         /* leave absolute values as is */
                         if(st_shndx == SHN_UNDEF) {
@@ -339,7 +487,14 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
                     }
 
                     void* ref = (uint64_t*) (target->vaddr + r_offset); // will be casted to field types depending on relocation type
+#if ELF_FORCE_CLASS == ELFCLASS64
+                    switch(hdr_64->e_machine) {
+#elif ELF_FORCE_CLASS == ELFCLASS32
+                    switch(hdr_32->e_machine) {
+#else
                     switch((is_elf64) ? hdr_64->e_machine : hdr_32->e_machine) {
+#endif
+#if defined(__i386__) || defined(__x86_64__)
                         case EM_386: // x86
                             switch(r_type) {
                                 case R_386_NONE: // no relocation
@@ -370,6 +525,8 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
                                     break;
                             }
                             break;
+#endif
+#if defined(__x86_64__)
                         case EM_AMD64: // x86-64
                             switch(r_type) {
                                 case R_AMD64_NONE: // no relocation
@@ -406,6 +563,7 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
                                     break;
                             }
                             break;
+#endif
                         default:
                             kwarn("relocation is not supported for machine 0x%x", (is_elf64) ? hdr_64->e_machine : hdr_32->e_machine);
                             break;
@@ -422,38 +580,98 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
     /* load symbols */
     shdr_ent = shdr;
     for(size_t i = 0; i < e_shnum; i++, shdr_ent = (void*) ((uintptr_t) shdr_ent + e_shentsize)) {
+#if ELF_FORCE_CLASS == ELFCLASS64
+        size_t sh_link = ((Elf64_Shdr*)shdr_ent)->sh_link;
+#elif ELF_FORCE_CLASS == ELFCLASS32
+        size_t sh_link = ((Elf32_Shdr*)shdr_ent)->sh_link;
+#else
         size_t sh_link = (is_elf64) ? ((Elf64_Shdr*)shdr_ent)->sh_link : ((Elf32_Shdr*)shdr_ent)->sh_link;
+#endif
         void* strtab_shdr = (void*) ((uintptr_t) shdr + e_shentsize * sh_link); // get its matching string table
+#if ELF_FORCE_CLASS == ELFCLASS64
+        if(((Elf64_Shdr*)shdr_ent)->sh_type == SHT_SYMTAB) {
+#elif ELF_FORCE_CLASS == ELFCLASS32
+        if(((Elf32_Shdr*)shdr_ent)->sh_type == SHT_SYMTAB) {
+#else
         if((is_elf64 && ((Elf64_Shdr*)shdr_ent)->sh_type == SHT_SYMTAB) || (!is_elf64 && ((Elf32_Shdr*)shdr_ent)->sh_type == SHT_SYMTAB)) {
+#endif
             /* we've found the symbol table */
             // kdebug("symbol table at entry %u", i);
+#if ELF_FORCE_CLASS == ELFCLASS64
+            size_t strtab_type = ((Elf64_Shdr*)strtab_shdr)->sh_type;
+            size_t sh_size = ((Elf64_Shdr*)strtab_shdr)->sh_size;
+#elif ELF_FORCE_CLASS == ELFCLASS32
+            size_t strtab_type = ((Elf32_Shdr*)strtab_shdr)->sh_type;
+            size_t sh_size = ((Elf32_Shdr*)strtab_shdr)->sh_size;
+#else
             size_t strtab_type = (is_elf64) ? ((Elf64_Shdr*)strtab_shdr)->sh_type : ((Elf32_Shdr*)strtab_shdr)->sh_type;
+            size_t sh_size = (is_elf64) ? ((Elf64_Shdr*)strtab_shdr)->sh_size : ((Elf32_Shdr*)strtab_shdr)->sh_size;
+#endif
             if(strtab_type != SHT_STRTAB) {
                 kerror("symbol table at entry %u points to an invalid table at entry %u as its string table (type 0x%x)", i, sh_link, strtab_type);
                 kfree(shdr); kfree(hdr_64); kfree(shstrtab_data); return ERR_INVALID_DATA;
             }
-            size_t sh_size = (is_elf64) ? ((Elf64_Shdr*)strtab_shdr)->sh_size : ((Elf32_Shdr*)strtab_shdr)->sh_size;
             strtab_data = kmalloc(sh_size);
             if(strtab_data == NULL) {
                 kerror("cannot allocate memory for string table");
                 kfree(shdr); kfree(hdr_64); kfree(shstrtab_data); return ERR_ALLOC;
             }
-            vfs_read(file, (is_elf64) ? ((Elf64_Shdr*)strtab_shdr)->sh_offset : ((Elf32_Shdr*)strtab_shdr)->sh_offset, sh_size, (uint8_t*) strtab_data);
+            vfs_read(   file,
+#if ELF_FORCE_CLASS == ELFCLASS64
+                        ((Elf64_Shdr*)strtab_shdr)->sh_offset,
+#elif ELF_FORCE_CLASS == ELFCLASS32
+                        ((Elf32_Shdr*)strtab_shdr)->sh_offset,
+#else
+                        (is_elf64) ? ((Elf64_Shdr*)strtab_shdr)->sh_offset : ((Elf32_Shdr*)strtab_shdr)->sh_offset,
+#endif
+                        sh_size,
+                        (uint8_t*) strtab_data);
+#if ELF_FORCE_CLASS == ELFCLASS64
+            sh_size = ((Elf64_Shdr*)shdr_ent)->sh_size;
+            size_t sh_entsize = ((Elf64_Shdr*)shdr_ent)->sh_entsize;
+#elif ELF_FORCE_CLASS == ELFCLASS32
+            sh_size = ((Elf32_Shdr*)shdr_ent)->sh_size;
+            size_t sh_entsize = ((Elf32_Shdr*)shdr_ent)->sh_entsize;
+#else
             sh_size = (is_elf64) ? ((Elf64_Shdr*)shdr_ent)->sh_size : ((Elf32_Shdr*)shdr_ent)->sh_size;
             size_t sh_entsize = (is_elf64) ? ((Elf64_Shdr*)shdr_ent)->sh_entsize : ((Elf32_Shdr*)shdr_ent)->sh_entsize;
+#endif
             symtab = kmalloc(sh_size);
             if(symtab == NULL) {
                 kerror("cannot allocate memory for symbol table");
                 kfree(strtab_data); kfree(shdr); kfree(hdr_64); kfree(shstrtab_data); return ERR_ALLOC;
             }
-            vfs_read(file, (is_elf64) ? ((Elf64_Shdr*)shdr_ent)->sh_offset : ((Elf32_Shdr*)shdr_ent)->sh_offset, sh_size, (uint8_t*) symtab);
+            vfs_read(   file,
+#if ELF_FORCE_CLASS == ELFCLASS64
+                        ((Elf64_Shdr*)shdr_ent)->sh_offset,
+#elif ELF_FORCE_CLASS == ELFCLASS32
+                        ((Elf32_Shdr*)shdr_ent)->sh_offset,
+#else
+                        (is_elf64) ? ((Elf64_Shdr*)shdr_ent)->sh_offset : ((Elf32_Shdr*)shdr_ent)->sh_offset,
+#endif
+                        sh_size,
+                        (uint8_t*) symtab);
             for(size_t j = 0; j < sh_size / sh_entsize; j++) {
                 void* sym = (void*) ((uintptr_t) symtab + j * sh_entsize);
+#if ELF_FORCE_CLASS == ELFCLASS64
+                size_t st_name = ((Elf64_Sym*)sym)->st_name;
+                size_t st_other = ((Elf64_Sym*)sym)->st_other;
+                size_t st_shndx = ((Elf64_Sym*)sym)->st_shndx;
+                size_t st_info = ((Elf64_Sym*)sym)->st_info;
+                uintptr_t st_value = ((Elf64_Sym*)sym)->st_value;
+#elif ELF_FORCE_CLASS == ELFCLASS32
+                size_t st_name = ((Elf32_Sym*)sym)->st_name;
+                size_t st_other = ((Elf32_Sym*)sym)->st_other;
+                size_t st_shndx = ((Elf32_Sym*)sym)->st_shndx;
+                size_t st_info = ((Elf32_Sym*)sym)->st_info;
+                uintptr_t st_value = ((Elf32_Sym*)sym)->st_value;
+#else
                 size_t st_name = (is_elf64) ? ((Elf64_Sym*)sym)->st_name : ((Elf32_Sym*)sym)->st_name;
                 size_t st_other = (is_elf64) ? ((Elf64_Sym*)sym)->st_other : ((Elf32_Sym*)sym)->st_other;
                 size_t st_shndx = (is_elf64) ? ((Elf64_Sym*)sym)->st_shndx : ((Elf32_Sym*)sym)->st_shndx;
                 size_t st_info = (is_elf64) ? ((Elf64_Sym*)sym)->st_info : ((Elf32_Sym*)sym)->st_info;
                 uintptr_t st_value = (is_elf64) ? ((Elf64_Sym*)sym)->st_value : ((Elf32_Sym*)sym)->st_value;
+#endif
                 // kdebug("0x%x %s: other %u shndx %u info 0x%x value 0x%x", sym, &strtab_data[st_name], st_other, st_shndx, st_info, st_value);
                 if(st_other != STV_HIDDEN && st_shndx != SHN_UNDEF && st_shndx != SHN_ABS && ELF_ST_TYPE(st_info) != STT_FILE && ELF_ST_TYPE(st_info) != STT_SECTION) {
                     if(prgload_result != NULL && hdr_64->e_type == ET_REL) {
@@ -491,7 +709,13 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
 
     if(entry_ptr != NULL && *entry_ptr == 0) {
         if(entry_name != NULL) kdebug("cannot find entry point, taking value from ELF header");
+#if ELF_FORCE_CLASS == ELFCLASS64
+        *entry_ptr = hdr_64->e_entry;
+#elif ELF_FORCE_CLASS == ELFCLASS32
+        *entry_ptr = hdr_32->e_entry;
+#else
         *entry_ptr = (is_elf64) ? hdr_64->e_entry : hdr_32->e_entry;
+#endif
     }
     
     if(load_result != NULL) *load_result = prgload_result;
