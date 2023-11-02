@@ -14,11 +14,6 @@
 #include <exec/elf.h>
 #include <exec/syms.h>
 
-#define KSYM_PATH           "/boot/kernel.sym"
-#define KMOD_PATH           "/boot/modules"
-
-#define KMOD_INIT_FUNC      "kmod_init"
-
 #ifndef KSYM_INITIAL_CNT
 #define KSYM_INITIAL_CNT    8
 #endif
