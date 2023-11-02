@@ -140,7 +140,7 @@ static int ptstr_write(struct ptstream* stream, uint8_t c) {
     return 0;
 }
 
-int ksprintf(char* str, const char* fmt, ...) {
+int kvsprintf(char* str, const char* fmt, va_list arg) {
     /* create stream for string */
     ptstream_t stream = {
         str,
@@ -149,9 +149,14 @@ int ksprintf(char* str, const char* fmt, ...) {
         NULL,
         &ptstr_write
     };
-    va_list arg; va_start(arg, fmt);
     int ret = kvfprintf(&stream, fmt, arg);
     str[ret] = 0; // terminate the string
+    return ret;
+}
+
+int ksprintf(char* str, const char* fmt, ...) {
+    va_list arg; va_start(arg, fmt);
+    int ret = kvsprintf(str, fmt, arg);
     va_end(arg);
     return ret;
 }

@@ -105,4 +105,11 @@ int kprintf(const char* fmt, ...);
  */
 int ksprintf(char* str, const char* fmt, ...);
 
+/*
+ * int kvsprintf(char* str, const char* fmt, va_list arg)
+ *  Writes and formats the string pointed by fmt to the buffer
+ *  str. Returns the number of characters printed.
+ */
+int kvsprintf(char* str, const char* fmt, va_list arg);
+
 #endif
