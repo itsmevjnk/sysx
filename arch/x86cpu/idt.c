@@ -2,6 +2,7 @@
 #include <hal/intr.h>
 #include <kernel/log.h>
 #include <arch/x86cpu/asm.h>
+#include <exec/syms.h>
 
 //#define IDT_DEBUG // uncomment for log hell
 
@@ -94,7 +95,7 @@ struct stkframe {
 
 void exc_stub(exc_context_t* context) {
   asm("cli"); // no more interrupts!
-  kerror("exception 0x%x (code 0x%x) @ 0x%x", context->vector, context->error, context->cs);
+  kerror("exception 0x%x (code 0x%x) @ 0x%x", context->vector, context->error, context->eip);
   kerror("eax=0x%08x ebx=0x%08x ecx=0x%08x edx=0x%08x", context->eax, context->ebx, context->ecx, context->edx);
   kerror("esi=0x%08x edi=0x%08x esp=0x%08x ebp=0x%08x", context->esi, context->edi, context->esp, context->ebp);
   kerror("cs=0x%04x ds=0x%04x ss=0x%04x user esp=0x%08x", context->cs, context->ds, context->ss, context->esp_usr);
@@ -103,7 +104,10 @@ void exc_stub(exc_context_t* context) {
 #ifdef DEBUG
   struct stkframe* stk = (struct stkframe*) context->ebp;
   for(size_t i = 0; stk; i++) {
-    kdebug("%-4u [0x%08x]: 0x%08x", (uint32_t) stk, stk->eip);
+  	struct sym_addr* sym = NULL;
+  	if(kernel_syms != NULL) sym = sym_addr2sym(kernel_syms, stk->eip);
+	if(sym != NULL) kdebug("%-4u [0x%08x]: 0x%08x (%s + 0x%08x)", i, (uint32_t) stk, stk->eip, sym->sym->name, sym->delta);
+    else kdebug("%-4u [0x%08x]: 0x%08x", i, (uint32_t) stk, stk->eip);
     stk = stk->ebp;
   }
 #endif
