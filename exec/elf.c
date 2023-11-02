@@ -334,7 +334,7 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
                     }
                 }
                 if(target == NULL) {
-                    kwarn("relocation section %u applies to section %u which is not loaded, skipping", i, sh_info);
+                    kdebug("relocation section %u applies to section %u which is not loaded, skipping", i, sh_info);
                     continue;
                 }
 
@@ -471,7 +471,7 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
                             /* symbol is not defined here, so try to resolve it from the kernel symbols pool instead */
                             sym_entry_t* ent = sym_resolve(kernel_syms, &strtab_data[st_name]);
                             if(ent == NULL) {
-                                kwarn("symbol %s (value 0x%x) cannot be resolved", &strtab_data[st_name], st_value);
+                                kdebug("symbol %s (value 0x%x) cannot be resolved", &strtab_data[st_name], st_value);
                             } else st_value = ent->addr;
                         } else {
                             /* symbol is in one of the file's functional sections, which might have been loaded */
@@ -482,7 +482,7 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
                                     loaded = true;
                                 }
                             }
-                            if(!loaded) kwarn("symbol %s (value 0x%x) is not loaded, skipping address resolution", &strtab_data[st_name], st_value);
+                            if(!loaded) kdebug("symbol %s (value 0x%x) is not loaded, skipping address resolution", &strtab_data[st_name], st_value);
                         }
                     }
 
@@ -521,7 +521,7 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
                                     *((uint8_t*)ref) = (uint8_t) (st_value + *((uint8_t*)ref) - (uint32_t)ref + r_addend);
                                     break;
                                 default:
-                                    kwarn("unsupported x86 relocation type %u", r_type);
+                                    kdebug("unsupported x86 relocation type %u", r_type);
                                     break;
                             }
                             break;
@@ -559,13 +559,13 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
                                     *((uint8_t*)ref) = (uint8_t) (st_value + *((uint8_t*)ref) - (uint32_t)ref + r_addend);
                                     break;
                                 default:
-                                    kwarn("unsupported AMD64 relocation type %u", r_type);
+                                    kdebug("unsupported AMD64 relocation type %u", r_type);
                                     break;
                             }
                             break;
 #endif
                         default:
-                            kwarn("relocation is not supported for machine 0x%x", (is_elf64) ? hdr_64->e_machine : hdr_32->e_machine);
+                            kdebug("relocation is not supported for machine 0x%x", (is_elf64) ? hdr_64->e_machine : hdr_32->e_machine);
                             break;
                     }
                 }
@@ -684,7 +684,7 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
                                 break;
                             }
                         }
-                        if(!resolved) kwarn("cannot resolve symbol entry %u (%s) of symbol table at entry %u", j, &strtab_data[st_name], i);
+                        if(!resolved) kdebug("cannot resolve symbol entry %u (%s) of symbol table at entry %u", j, &strtab_data[st_name], i);
                     }
 
                     // kdebug("symbol %s (0x%x)", &strtab_data[st_name], st_value);
