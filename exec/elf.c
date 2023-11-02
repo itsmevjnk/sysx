@@ -195,12 +195,12 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
                         size_t frame = pmm_first_free(1); // no need for contiguous memory
                         if(frame == (size_t)-1) {
                             kerror("cannot allocate memory for loading section");
-                            for(size_t k = 0; k < j; k++) pmm_free(vmm_physaddr(alloc_vmm, vaddr + k * pmm_framesz()) / pmm_framesz());
+                            for(size_t k = 0; k < j; k++) pmm_free(vmm_physaddr(alloc_vmm, vaddr) / pmm_framesz());
                             vmm_unmap(vmm_current, vaddr, j * pmm_framesz());
                             kfree(shdr); kfree(hdr_64); return ERR_ALLOC;
                         }
                         pmm_alloc(frame);
-                        vmm_pgmap(vmm_current, frame * pmm_framesz(), vaddr + j * pmm_framesz(), true, false, (sh_flags & SHF_WRITE));
+                        vmm_pgmap(vmm_current, frame * pmm_framesz(), vaddr, true, false, true);
                     }
                     if(sh_type != SHT_NOBITS) vfs_read(file, sh_off, sh_size, (uint8_t*) vaddr); // copy data from file
                     prgload_result_len++;
@@ -321,10 +321,10 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
                         /* leave absolute values as is */
                         if(st_shndx == SHN_UNDEF) {
                             /* symbol is not defined here, so try to resolve it from the kernel symbols pool instead */
-                            void* ptr = sym_resolve(kernel_syms, &strtab_data[st_name]);
-                            if(ptr == NULL) {
+                            sym_entry_t* ent = sym_resolve(kernel_syms, &strtab_data[st_name]);
+                            if(ent == NULL) {
                                 kwarn("symbol %s (value 0x%x) cannot be resolved", &strtab_data[st_name], st_value);
-                            } else st_value = (uintptr_t) ptr;
+                            } else st_value = ent->addr;
                         } else {
                             /* symbol is in one of the file's functional sections, which might have been loaded */
                             bool loaded = false;
@@ -455,7 +455,7 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
                 size_t st_info = (is_elf64) ? ((Elf64_Sym*)sym)->st_info : ((Elf32_Sym*)sym)->st_info;
                 uintptr_t st_value = (is_elf64) ? ((Elf64_Sym*)sym)->st_value : ((Elf32_Sym*)sym)->st_value;
                 // kdebug("0x%x %s: other %u shndx %u info 0x%x value 0x%x", sym, &strtab_data[st_name], st_other, st_shndx, st_info, st_value);
-                if(st_other != STV_HIDDEN && st_shndx != SHN_UNDEF && st_shndx != SHN_ABS && ELF_ST_BIND(st_info) == STB_GLOBAL) {
+                if(st_other != STV_HIDDEN && st_shndx != SHN_UNDEF && st_shndx != SHN_ABS && ELF_ST_TYPE(st_info) != STT_FILE && ELF_ST_TYPE(st_info) != STT_SECTION) {
                     if(prgload_result != NULL && hdr_64->e_type == ET_REL) {
                         /* symbol value is an offset */
                         bool resolved = false;
@@ -468,14 +468,20 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
                         }
                         if(!resolved) kwarn("cannot resolve symbol entry %u (%s) of symbol table at entry %u", j, &strtab_data[st_name], i);
                     }
+
+                    // kdebug("symbol %s (0x%x)", &strtab_data[st_name], st_value);
+
+                    if(ELF_ST_BIND(st_info) == STB_GLOBAL) {
 #ifdef ELF_DEBUG_ADDSYM
-                    kdebug("adding symbol %s (0x%x)", &strtab_data[st_name], st_value);
+                        kdebug("adding symbol %s (0x%x)", &strtab_data[st_name], st_value);
 #endif
-                    sym_add_entry(kernel_syms, &strtab_data[st_name], st_value);
-                }
-                if(entry_name != NULL && entry_ptr != NULL && *entry_ptr == 0 && !strcmp(&strtab_data[st_name], entry_name)) {
-                    kdebug("found entry point %s at 0x%x", entry_name, st_value);
-                    *entry_ptr = st_value;
+                        sym_add_entry(kernel_syms, &strtab_data[st_name], st_value);
+                    }
+                    
+                    if(entry_name != NULL && entry_ptr != NULL && *entry_ptr == 0 && !strcmp(&strtab_data[st_name], entry_name)) {
+                        kdebug("found entry point %s at 0x%x", entry_name, st_value);
+                        *entry_ptr = st_value;
+                    }
                 }
             }
             kfree(symtab);

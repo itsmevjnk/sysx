@@ -15,6 +15,9 @@
 #include <exec/syms.h>
 
 #define KSYM_PATH           "/boot/kernel.sym"
+#define KMOD_PATH           "/boot/modules"
+
+#define KMOD_INIT_FUNC      "kmod_init"
 
 #ifndef KSYM_INITIAL_CNT
 #define KSYM_INITIAL_CNT    8
@@ -76,11 +79,33 @@ void kinit() {
     kernel_syms = sym_new_table(KSYM_INITIAL_CNT);
     kinfo("locating kernel symbols file at " KSYM_PATH);
     vfs_node_t* ksym_node = vfs_traverse_path(KSYM_PATH);
-    if(ksym_node == NULL) kinfo("cannot find kernel symbols file");
+    if(ksym_node == NULL) kerror("cannot find kernel symbols file");
     else {
         kinfo("loading kernel symbols");
-        elf_load(ksym_node, NULL, NULL, NULL, "_init", NULL);
+        elf_load(ksym_node, NULL, NULL, NULL, NULL, NULL);
         kinfo("%u symbol(s) have been added to kernel symbol pool", kernel_syms->count);
+    }
+
+    /* load kernel modules */
+    kinfo("loading kernel modules from " KMOD_PATH);
+    vfs_node_t* kmods_node = vfs_traverse_path(KMOD_PATH);
+    if(kmods_node == NULL) kerror("cannot find kernel modules directory");
+    else for(size_t i = 0; ; i++) {
+        struct dirent* ent = vfs_readdir(kmods_node, i);
+        if(ent == NULL) break;
+        vfs_node_t* mod = vfs_finddir(kmods_node, ent->name);
+        if(mod == NULL) {
+            kerror("module %s shows up in readdir result but cannot be found using finddir", ent->name);
+            continue;
+        }
+        kinfo("loading %s (ino %llu)", mod->name, mod->inode);
+        int32_t (*kmod_init)() = NULL;
+        elf_load(mod, vmm_current, NULL, NULL, KMOD_INIT_FUNC, (uintptr_t*) &kmod_init);
+        if(kmod_init != NULL) {
+            kinfo(" - calling module's " KMOD_INIT_FUNC " function at 0x%x", (uintptr_t)kmod_init);
+            int32_t ret = (*kmod_init)();
+            kinfo(" - " KMOD_INIT_FUNC " returned %d", ret);
+        } else kwarn(" - module does not have an init function");
     }
 
     while(1);
