@@ -76,7 +76,9 @@ void kinit() {
         kinfo("mounting devfs at " DEVFS_ROOT);
         devfs_mount(devfs_root);
         devfs_std_init(devfs_root);
+#ifndef NO_SERIAL
         ser_devfs_init(devfs_root);
+#endif
     }
 
     vfs_dirlist(vfs_root, 0);
