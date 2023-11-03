@@ -1,6 +1,8 @@
 #include <arch/x86cpu/gdt.h>
 #include <arch/x86cpu/idt.h>
 #include <kernel/log.h>
+#include <arch/x86/i8259.h>
+#include <arch/x86/i8253.h>
 #include <arch/x86/multiboot.h>
 #include <string.h>
 
@@ -17,6 +19,8 @@ int ktgtinit() {
 
     kinfo("initializing GDT"); gdt_init();
     kinfo("initializing IDT"); idt_init();
+    kinfo("initializing PIC"); pic_init();
+    kinfo("initializing PIT as system timer source"); pit_systimer_init();
 
     if(mb_info->flags & MULTIBOOT_INFO_MODS && mb_info->mods_count > 0) {
         kdebug("module information @ 0x%08x:", mb_info->mods_addr);

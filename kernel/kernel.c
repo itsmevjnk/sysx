@@ -3,6 +3,8 @@
 
 #include <hal/terminal.h>
 #include <hal/serial.h>
+#include <hal/timer.h>
+
 #include <mm/pmm.h>
 #include <mm/vmm.h>
 #include <stdio.h>
@@ -117,5 +119,6 @@ void kinit() {
         } else kwarn(" - module does not have an init function");
     }
 
+    kinfo("kernel init finished, current timer tick: %llu", (uint64_t)timer_tick);
     while(1);
 }
