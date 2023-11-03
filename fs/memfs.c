@@ -34,6 +34,7 @@ const vfs_hook_t memfs_hook_ro = {
     NULL, // create
     NULL, // mkdir
     NULL, // remove
+    NULL, // ioctl
 };
 
 const vfs_hook_t memfs_hook_rw = {
@@ -46,6 +47,7 @@ const vfs_hook_t memfs_hook_rw = {
     NULL, // create
     NULL, // mkdir
     NULL, // remove
+    NULL, // ioctl
 };
 
 vfs_node_t* memfs_mount(vfs_node_t* node, void* ptr, size_t size, bool rw) {

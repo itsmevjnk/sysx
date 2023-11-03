@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include <fs/devfs.h>
+
 #ifndef NO_SERIAL
 
 #define SER_PARITY_NONE         0
@@ -80,6 +82,12 @@ size_t ser_getbuf(size_t p, char* buf, char stop);
  *  returns it.
  */
 char* ser_gets(size_t p, char* buf);
+
+/*
+ * void ser_devfs_init(vfs_node_t* root)
+ *  Creates serial port devices in the specified devfs root.
+ */
+void ser_devfs_init(vfs_node_t* root);
 
 #endif
 

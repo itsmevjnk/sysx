@@ -96,3 +96,8 @@ bool vfs_remove(vfs_node_t* node) {
     if(node != NULL && node->hook->remove != NULL) return node->hook->remove((void*)node);
     return false;
 }
+
+void vfs_ioctl(vfs_node_t* node, size_t request, void* buf) {
+    node = vfs_traverse_symlink(node);
+    if(node != NULL && node->hook->ioctl != NULL) return node->hook->ioctl((void*)node, request, buf);
+}

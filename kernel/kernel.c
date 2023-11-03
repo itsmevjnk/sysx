@@ -2,6 +2,7 @@
 #include <kernel/settings.h>
 
 #include <hal/terminal.h>
+#include <hal/serial.h>
 #include <mm/pmm.h>
 #include <mm/vmm.h>
 #include <stdio.h>
@@ -11,6 +12,7 @@
 #include <string.h>
 
 #include <fs/vfs.h>
+#include <fs/devfs.h>
 
 #include <exec/elf.h>
 #include <exec/syms.h>
@@ -67,6 +69,15 @@ void kinit() {
     term_get_dimensions(&term_width, &term_height);
     kinfo("terminal size: %u x %u", term_width, term_height);
 #endif
+
+    vfs_node_t* devfs_root = vfs_traverse_path(DEVFS_ROOT);
+    if(devfs_root == NULL) kerror("cannot find " DEVFS_ROOT " for devfs mounting");
+    else {
+        kinfo("mounting devfs at " DEVFS_ROOT);
+        devfs_mount(devfs_root);
+        devfs_std_init(devfs_root);
+        ser_devfs_init(devfs_root);
+    }
 
     vfs_dirlist(vfs_root, 0);
 

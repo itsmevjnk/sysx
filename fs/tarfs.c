@@ -86,7 +86,8 @@ const vfs_hook_t tar_hooks = {
     (void*) &tar_vfs_finddir,
     NULL, // create
     NULL, // mkdir
-    NULL // remove
+    NULL, // remove
+    NULL, // ioctl
 };
 
 #ifndef TAR_HIERARCHY_ITEM_INCREMENT

@@ -29,6 +29,7 @@ typedef struct vfs_hook {
     struct vfs_node* (*create)(struct vfs_node*, const char*, uint16_t); // node, file name, mask -> ptr to new file's node if created successfully
     struct vfs_node* (*mkdir)(struct vfs_node*, const char*, uint16_t); // node, directory name, mask -> ptr to new directory's node if created successfully
     bool (*remove)(struct vfs_node*); // node -> true on success, false on failure
+    void (*ioctl)(struct vfs_node*, size_t, void*); // node, request, buffer -> void
 } vfs_hook_t;
 
 typedef struct vfs_node {
@@ -134,5 +135,12 @@ struct vfs_node* vfs_mkdir(vfs_node_t* node, const char* name, uint16_t mask);
  *  this feature if not needed.
  */
 bool vfs_remove(vfs_node_t* node);
+
+/*
+ * void vfs_ioctl(vfs_node_t* node, size_t request, void* buf)
+ *  Performs an IOCTL request to the device mounted to the specified
+ *  node.
+ */
+void vfs_ioctl(vfs_node_t* node, size_t request, void* buf);
 
 #endif
