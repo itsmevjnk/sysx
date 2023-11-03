@@ -47,7 +47,8 @@ static void vgaterm_putc_stub(char c) {
                 vgaterm_y--;
             }
             break;
-        case '\r': // carriage return - ignore this
+        case '\r': // carriage return
+            vgaterm_x = 0;
             break;
         case '\n': // newline
             vgaterm_newline();
