@@ -336,16 +336,16 @@ void* krealloc_ext(void* ptr, size_t size, size_t align, void** phys) {
     }
 
     /* extend the next block if needed */
-    if((next_unused || !next_block_available) && return_addr + size > end_addr && (uintptr_t) kheap_footer(next_header) + sizeof(kheap_footer_t) == (uintptr_t) kheap_last_block()) {
+    if((next_unused || !next_block_available) && return_addr + size > end_addr && (!next_block_available || (uintptr_t) kheap_footer(next_header) + sizeof(kheap_footer_t) == (uintptr_t) kheap_last_block())) {
         size_t orig_size = proj_size; // save projected size
         if(next_unused) proj_size -= next_header->size; // remove next header
         size_t expand_size = return_addr + size - end_addr;
         if(kheap_expand(expand_size) > 0) {
             /* expansion is (somewhat) successful */
             proj_size += next_header->size;
-            if(!next_block_available) { // next block is now available, so we also have a new header to absorb into the projected block
+            if(!next_block_available) { // next block is now available, so we also have a new header and footer to absorb into the projected block
                 next_block_available = true;
-                proj_size += sizeof(kheap_header_t);
+                proj_size += sizeof(kheap_header_t) + sizeof(kheap_footer_t);
             }
             end_addr = start_addr + proj_size; // update end address
         } else proj_size = orig_size; // restore projected size on failure
@@ -356,6 +356,7 @@ void* krealloc_ext(void* ptr, size_t size, size_t align, void** phys) {
 
         // kheap_merge(header); // merge adjacent blocks (note that this is NOT supposed to affect the block's data). this will also take proj_header to the preceding block if it's merged.
         kassert((uintptr_t) kheap_merge(header) == (uintptr_t) proj_header); // check if projected header is correct
+        // kdebug("%u %u", proj_size, proj_header->size);
         kassert(proj_size == proj_header->size); // just to be sure that our projected size is correct
 
         memmove((void*) return_addr, ptr, move_size); // relocate block data
