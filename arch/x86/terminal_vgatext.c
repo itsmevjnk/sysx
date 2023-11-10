@@ -1,4 +1,5 @@
 #include <hal/terminal.h>
+#include <hal/keyboard.h>
 #include <mm/vmm.h>
 #include <arch/x86cpu/asm.h>
 #include <string.h>
@@ -84,10 +85,6 @@ void vgaterm_puts(const term_hook_t* impl, const char* s) {
 #endif
 }
 
-#ifndef TERM_NO_INPUT
-#error "VGA textmode terminal does NOT support input yet!"
-#endif
-
 #ifndef TERM_NO_CLEAR
 void vgaterm_clear(const term_hook_t* impl) {
     (void) impl;
@@ -124,8 +121,13 @@ void vgaterm_get_xy(const term_hook_t* impl, size_t* x, size_t* y) {
 const term_hook_t vgaterm_hook = {
     &vgaterm_putc,
     &vgaterm_puts,
+#ifndef TERM_NO_INPUT
+    &kbd_term_available,
+    &kbd_term_getc,
+#else
     NULL,
     NULL,
+#endif
 
 #ifndef TERM_NO_CLEAR
     &vgaterm_clear,
