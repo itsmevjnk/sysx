@@ -10,6 +10,7 @@ size_t kbd_register(char* keymap) {
         if(kbd_list[i].in_use == 0) {
             kbd_list[i].in_use = 1;
             kbd_list[i].keymap = (keymap == NULL) ? (char*)&keymap_us_qwerty : keymap;
+            kbd_list[i].mod = 0;
             return i;
         }
     }
@@ -62,8 +63,9 @@ kbd_event_t* kbd_keypress(size_t id, bool pressed, uint8_t code) {
     }
 
     if((kbd_events_wridx + 1) % KBD_MAXEVENTS == kbd_events_rdidx) {
-        kdebug("keyboard event buffer is full");
-        return NULL;
+        // kdebug("keyboard event buffer is full");
+        // return NULL;
+        kbd_events_rdidx = (kbd_events_rdidx + 1) & KBD_MAXEVENTS; // discard first event
     }
     
     kbd_event_t* result = &kbd_events[kbd_events_wridx];
@@ -71,48 +73,49 @@ kbd_event_t* kbd_keypress(size_t id, bool pressed, uint8_t code) {
     result->pressed = (pressed) ? 1 : 0;
     result->code = code;
 
-    /* derive modifier mask from previous event */
-    kbd_event_t* last_event = kbd_event_peek(id, NULL, true);
-    if(last_event != NULL) result->mod = last_event->mod;
-    else result->mod = 0; // there's nothing yet - reset modifier mask
-
     /* set modifier mask */
     switch(code) {
         case KEY_LEFTCTRL:
-            result->mod = (result->mod & ~KEY_MOD_LCTRL) | ((pressed) ? KEY_MOD_LCTRL : 0);
+            kbd_list[id].mod = (kbd_list[id].mod & ~KEY_MOD_LCTRL) | ((pressed) ? KEY_MOD_LCTRL : 0);
             break;
         case KEY_RIGHTCTRL:
-            result->mod = (result->mod & ~KEY_MOD_RCTRL) | ((pressed) ? KEY_MOD_RCTRL : 0);
+            kbd_list[id].mod = (kbd_list[id].mod & ~KEY_MOD_RCTRL) | ((pressed) ? KEY_MOD_RCTRL : 0);
             break;
         case KEY_LEFTSHIFT:
-            result->mod = (result->mod & ~KEY_MOD_LSHIFT) | ((pressed) ? KEY_MOD_LSHIFT : 0);
+            kbd_list[id].mod = (kbd_list[id].mod & ~KEY_MOD_LSHIFT) | ((pressed) ? KEY_MOD_LSHIFT : 0);
             break;
         case KEY_RIGHTSHIFT:
-            result->mod = (result->mod & ~KEY_MOD_RSHIFT) | ((pressed) ? KEY_MOD_RSHIFT : 0);
+            kbd_list[id].mod = (kbd_list[id].mod & ~KEY_MOD_RSHIFT) | ((pressed) ? KEY_MOD_RSHIFT : 0);
             break;
         case KEY_LEFTALT:
-            result->mod = (result->mod & ~KEY_MOD_LALT) | ((pressed) ? KEY_MOD_LALT : 0);
+            kbd_list[id].mod = (kbd_list[id].mod & ~KEY_MOD_LALT) | ((pressed) ? KEY_MOD_LALT : 0);
             break;
         case KEY_RIGHTALT:
-            result->mod = (result->mod & ~KEY_MOD_RALT) | ((pressed) ? KEY_MOD_RALT : 0);
+            kbd_list[id].mod = (kbd_list[id].mod & ~KEY_MOD_RALT) | ((pressed) ? KEY_MOD_RALT : 0);
             break;
         case KEY_LEFTMETA:
-            result->mod = (result->mod & ~KEY_MOD_LMETA) | ((pressed) ? KEY_MOD_LMETA : 0);
+            kbd_list[id].mod = (kbd_list[id].mod & ~KEY_MOD_LMETA) | ((pressed) ? KEY_MOD_LMETA : 0);
             break;
         case KEY_RIGHTMETA:
-            result->mod = (result->mod & ~KEY_MOD_RMETA) | ((pressed) ? KEY_MOD_RMETA : 0);
+            kbd_list[id].mod = (kbd_list[id].mod & ~KEY_MOD_RMETA) | ((pressed) ? KEY_MOD_RMETA : 0);
             break;
         case KEY_NUMLOCK: // TODO
-            result->mod ^= KEY_MOD_NUM;
+            if(!pressed) kbd_list[id].mod ^= KEY_MOD_NUM;
             break;
         case KEY_CAPSLOCK: // TODO
-            result->mod ^= KEY_MOD_CAPS;
+            if(!pressed) kbd_list[id].mod ^= KEY_MOD_CAPS;
             break;
     }
+    result->mod = kbd_list[id].mod;
 
-    /* process keypress */
-    uint8_t flags = ((result->mod & (KEY_MOD_LSHIFT | KEY_MOD_RSHIFT)) ? (1 << 0) : 0) | ((result->mod & KEY_MOD_CAPS) ? (1 << 1) : 0) | ((result->mod & KEY_MOD_RALT) ? (1 << 2) : 0);
-    result->c = kbd_list[id].keymap[flags * 256 + code];
+    result->c = 0;
+    if(pressed) {
+        /* process keypress */
+        uint8_t flags = ((result->mod & (KEY_MOD_LSHIFT | KEY_MOD_RSHIFT)) ? (1 << 0) : 0) | ((result->mod & KEY_MOD_CAPS) ? (1 << 1) : 0) | ((result->mod & KEY_MOD_RALT) ? (1 << 2) : 0);
+        result->c = kbd_list[id].keymap[flags * 256 + code];
+    }
+
+    kbd_events_wridx = (kbd_events_wridx + 1) % KBD_MAXEVENTS;
 
     return result;
 }
@@ -167,6 +170,7 @@ char kbd_char_read(size_t id) {
                 }
                 rdidx2 = (rdidx2 + 1) % KBD_MAXEVENTS;
             }
+            kbd_events_rdidx = (rdidx + 1) % KBD_MAXEVENTS; // set read index to after this event
             return kbd_events[rdidx].c;
         }
         rdidx = (rdidx + 1) % KBD_MAXEVENTS;

@@ -12,12 +12,13 @@ typedef struct {
     uint8_t pressed : 1; // 1 - pressed, 0 - released
     uint8_t code; // key scancode
     char c; // decoded character (if applicable; 0 otherwise)
-    uint16_t mod; // modifier mask
+    uint16_t mod; // modifier mask at time of event
 } __attribute__((packed)) kbd_event_t;
 
 /* keyboard information */
 typedef struct {
     char* keymap; // keymap: 8 layers (bit 0: Shift, bit 1: CapsLk, bit 2: AltGr) * 256 scancode to char mappings
+    uint16_t mod; // current modifier mask
     uint8_t in_use; // set if keyboard is in use
 } __attribute__ ((packed)) kbd_info_t;
 

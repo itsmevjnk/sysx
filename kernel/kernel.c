@@ -4,6 +4,7 @@
 #include <hal/terminal.h>
 #include <hal/serial.h>
 #include <hal/timer.h>
+#include <hal/keyboard.h>
 
 #include <mm/pmm.h>
 #include <mm/vmm.h>
@@ -120,5 +121,8 @@ void kinit() {
     }
 
     kinfo("kernel init finished, current timer tick: %llu", (uint64_t)timer_tick);
-    while(1);
+    while(1) {
+        char c = term_getc_noecho();
+        kinfo("keystroke: %c (0x%02x) - %u event(s) pending", (c < ' ') ? ' ' : c, c, kbd_event_available((size_t)-1));
+    }
 }
