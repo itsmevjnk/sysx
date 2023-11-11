@@ -248,7 +248,7 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
                 uintptr_t sh_off = (is_elf64) ? ((Elf64_Shdr*) shdr_ent)->sh_offset : ((Elf32_Shdr*) shdr_ent)->sh_offset;
                 size_t sh_size = (is_elf64) ? ((Elf64_Shdr*) shdr_ent)->sh_size : ((Elf32_Shdr*) shdr_ent)->sh_size;
 #endif
-                kdebug("section header entry %u: %s, type %u, flags 0x%x, offset 0x%x, size %u", i, &shstrtab_data[sh_name], sh_type, sh_flags, sh_off, sh_size);
+                // kdebug("section header entry %u: %s, type %u, flags 0x%x, offset 0x%x, size %u", i, &shstrtab_data[sh_name], sh_type, sh_flags, sh_off, sh_size);
                 
                 if((sh_flags & SHF_ALLOC) && sh_size > 0 && (sh_type == SHT_PROGBITS || sh_type == SHT_NOBITS)) {
                     /* memory needs to be allocated for this section */
@@ -266,7 +266,7 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
                             kfree(shdr); kfree(hdr_64); return ERR_ALLOC;
                         }
                         pmm_alloc(frame);
-                        vmm_pgmap(vmm_current, frame * pmm_framesz(), vaddr, true, false, true);
+                        vmm_pgmap(vmm_current, frame * pmm_framesz(), vaddr + j * pmm_framesz(), true, false, true);
                     }
                     if(sh_type != SHT_NOBITS) vfs_read(file, sh_off, sh_size, (uint8_t*) vaddr); // copy data from file
                     prgload_result_len++;
@@ -334,7 +334,7 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
                     }
                 }
                 if(target == NULL) {
-                    kdebug("relocation section %u applies to section %u which is not loaded, skipping", i, sh_info);
+                    // kdebug("relocation section %u applies to section %u which is not loaded, skipping", i, sh_info);
                     continue;
                 }
 
