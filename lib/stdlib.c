@@ -108,3 +108,37 @@ int32_t strtol(const char* str, char** endptr, int base) {
     if(result < INT32_MIN) return INT32_MIN;
     return result;
 }
+
+/* PSEUDORANDOM NUMBER GENERATOR */
+
+#ifndef RAND_SEEDCNT
+#define RAND_SEEDCNT                5 // number of seeds
+#endif
+
+#ifndef RAND_LCG_A
+#define RAND_LCG_A                  1103515245UL
+#endif
+
+#ifndef RAND_LCG_C
+#define RAND_LCG_C                  12345
+#endif
+
+unsigned int rand_seed[RAND_SEEDCNT] = {0};
+
+void srand(unsigned int seed) {
+    for(size_t i = 0; i < RAND_SEEDCNT; i++) {
+        /* populate the seed array using a generic linear congruential generator (LCG) */
+        seed = seed * RAND_LCG_A + RAND_LCG_C;
+        rand_seed[i] += seed; // this allows for more entropy for each seeding attempt
+    }
+}
+
+int rand() {
+    /* modified Fibonacci + LCG */
+    int ret = 0;
+    for(size_t i = 0; i < RAND_SEEDCNT; i++) ret += rand_seed[i];
+    ret = ret * RAND_LCG_A + RAND_LCG_C;
+    for(size_t i = 1; i < RAND_SEEDCNT; i++) rand_seed[i - 1] = rand_seed[i];
+    rand_seed[RAND_SEEDCNT - 1] = ret;
+    return (ret % RAND_MAX);
+}

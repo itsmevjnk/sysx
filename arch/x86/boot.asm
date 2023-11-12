@@ -302,6 +302,8 @@ extern mb_info
 
 extern kinit
 
+extern srand
+
 ; higher half kernel entry point
 section .text
 _hstart:
@@ -330,6 +332,40 @@ mov cr3, eax ; quick and dirty TLB invalidation
 
 mov dword [vmm_current], vmm_default
 
+; seed the PRNG using RDSEED and/or RDRAND if possible
+xor ecx, ecx ; subfunction 0
+mov eax, 1 ; function 1
+cpuid
+bt ecx, 30 ; ECX bit 30 indicates RDRAND support
+jnc .no_rdrand
+mov ecx, 100 ; try 100 times
+.attempt_rdrand:
+rdrand eax
+jc .rdrand_done
+loop .attempt_rdrand
+jmp .no_rdrand ; fail
+.rdrand_done:
+push eax
+call srand
+pop eax ; discard
+
+.no_rdrand:
+xor ecx, ecx
+mov eax, 7
+cpuid
+bt ebx, 18 ; EBX bit 18 indicates RDSEED support
+jnc .prng_done
+mov ecx, 100
+.attempt_rdseed:
+rdseed eax
+jc .prng_done
+loop .attempt_rdseed
+jmp .prng_done
+push eax
+call srand
+pop eax
+
+.prng_done:
 xor ebp, ebp ; initialize call frame
 
 call kinit

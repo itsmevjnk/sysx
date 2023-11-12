@@ -120,6 +120,9 @@ void kinit() {
         } else kwarn(" - module does not have an init function");
     }
 
+    kinfo("seeding PRNG using timer tick"); // for architectures without hardware pseudorandom number generation capabilities and additional entropy for those that do
+    srand(timer_tick);
+
     kinfo("kernel init finished, current timer tick: %llu", (uint64_t)timer_tick);
     while(1) {
         char c = term_getc_noecho();

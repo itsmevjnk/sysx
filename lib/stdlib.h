@@ -79,4 +79,18 @@ uint32_t strtoul(const char* str, char** endptr, int base);
  */
 int32_t strtol(const char* str, char** endptr, int base);
 
+#define RAND_MAX                            32767
+
+/*
+ * void srand(unsigned int seed)
+ *  Initializes the pseudorandom number generator.
+ */
+void srand(unsigned int seed);
+
+/*
+ * int rand()
+ *  Generates a pseudorandom number.
+ */
+int rand();
+
 #endif
