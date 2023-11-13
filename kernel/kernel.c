@@ -19,6 +19,7 @@
 
 #include <exec/elf.h>
 #include <exec/syms.h>
+#include <exec/usermode.h>
 
 #ifndef KSYM_INITIAL_CNT
 #define KSYM_INITIAL_CNT    8
@@ -124,6 +125,16 @@ void kinit() {
     srand(timer_tick);
 
     kinfo("kernel init finished, current timer tick: %llu", (uint64_t)timer_tick);
+
+    kinfo("switching into user mode - THE KERNEL WILL CRASH!");
+    usermode_switch(0, 0);
+
+    /*
+     * From this point on, the kernel will crash (this is the expected behavior!).
+     * This happens since the below code will operate in user mode, where kernel
+     * functions are **SUPPOSED** to be inaccessible (e.g. supervisor page on x86).
+     */
+
     while(1) {
         char c = term_getc_noecho();
         kinfo("keystroke: %c (0x%02x) - %u event(s) pending", (c < ' ') ? ' ' : c, c, kbd_event_available((size_t)-1));

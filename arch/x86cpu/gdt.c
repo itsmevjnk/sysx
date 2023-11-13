@@ -1,4 +1,5 @@
 #include <arch/x86cpu/gdt.h>
+#include <string.h>
 #include <kernel/log.h>
 
 #define BOOLINT(x)      ((x) ? 1 : 0) // idk if this is necessary
@@ -40,6 +41,41 @@ gdt_desc_t gdt_desc = {
   (uint32_t) &gdt_entries
 };
 
+/*
+ * tss_t
+ *  TSS entry structure.
+ */
+typedef struct tss_entry {
+  struct tss_entry* prev_tss;
+  uint32_t esp0; // NOTE: only esp0 and ss0 are relevant - the rest are unused
+  uint32_t ss0;
+  uint32_t esp1;
+  uint32_t ss1;
+  uint32_t esp2;
+  uint32_t ss2;
+  uint32_t cr3;
+  uint32_t eip;
+  uint32_t eflags;
+  uint32_t eax;
+  uint32_t ecx;
+  uint32_t edx;
+  uint32_t ebx;
+  uint32_t esp;
+  uint32_t ebp;
+  uint32_t esi;
+  uint32_t edi;
+  uint32_t es;
+  uint32_t cs;
+  uint32_t ss;
+  uint32_t ds;
+  uint32_t fs;
+  uint32_t gs;
+  uint32_t ldt;
+  uint32_t trap;
+  uint32_t iomap_base;
+} __attribute__((packed)) tss_t;
+tss_t tss_entry;
+
 void gdt_add_entry(uint8_t entry, uintptr_t base, uintptr_t limit, bool rw, bool dc, bool exec, bool type, uint8_t privl, bool size, bool granularity) {
   gdt_entries[entry].base_l = base & 0x00ffffff;
   gdt_entries[entry].base_h = (base & 0xff000000) >> 24;
@@ -65,8 +101,18 @@ void gdt_init() {
   /* initialize the GDT */
   kinfo("initializing the GDT");
   gdt_add_entry(0, 0, 0, false, false, false, false, 0, false, false); // so that certain emulators are happy
-  gdt_add_entry(1, 0, 0xfffff, true, false, true, true, 0, true, true); // ring 0 code segment, configured to only be executable in ring 0
-  gdt_add_entry(2, 0, 0xfffff, true, false, false, true, 0, true, true); // ring 0 data segment
+  gdt_add_entry(1, 0, 0xfffff, true, false, true, true, 0, true, true); // ring 0 code segment (0x08), configured to only be executable in ring 0
+  gdt_add_entry(2, 0, 0xfffff, true, false, false, true, 0, true, true); // ring 0 data segment (0x10)
+  gdt_add_entry(3, 0, 0xfffff, true, false, true, true, 3, true, true); // ring 3 code segment (0x18)
+  gdt_add_entry(4, 0, 0xfffff, true, false, false, true, 3, true, true); // ring 3 data segment (0x20)
+  
+  /* set up TSS */
+  memset(&tss_entry, 0, sizeof(tss_t));
+  tss_entry.ss0 = 0x10;
+  asm volatile("mov %%esp, %0" : "=r"(tss_entry.esp0)); // it does not really matter how far this is off from the actual stack bottom
+  gdt_add_entry(5, (uintptr_t)&tss_entry, sizeof(tss_t), false, false, true, false, 0, false, false); // TSS (0x28)
+  gdt_entries[5].accessed = 1; // set accessed bit too
+
   /* load the GDT descriptor and flush the cache :flushed: */
   kinfo("loading GDT descriptor and flushing CPU cache");
   gdt_load(&gdt_desc); // defined in desctabs.asm
