@@ -15,5 +15,7 @@ extern uintptr_t data_start;
 extern uintptr_t data_end;
 extern uintptr_t bss_start;
 extern uintptr_t bss_end;
+extern uintptr_t kernel_stack_top;
+extern uintptr_t kernel_stack_bottom;
 
 #endif

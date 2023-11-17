@@ -10,3 +10,5 @@ uintptr_t data_start = 0;
 uintptr_t data_end = 0;
 uintptr_t bss_start = 0;
 uintptr_t bss_end = 0;
+uintptr_t kernel_stack_bottom = 0;
+uintptr_t kernel_stack_top = 0;

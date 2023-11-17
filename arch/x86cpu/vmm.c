@@ -1,7 +1,12 @@
 #include <mm/vmm.h>
 #include <mm/pmm.h>
+#include <mm/addr.h>
+#include <mm/kheap.h>
 #include <kernel/log.h>
 #include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
+#include <arch/x86cpu/task.h>
 
 /* MMU data types */
 typedef struct {
@@ -81,6 +86,19 @@ void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, bool present, bool user, b
 
 					cfg->pt[pde] = (vmm_pt_t*) ((uintptr_t) &__krnlpt_start + (i << 12)); // 0xEFC00000 + i * 0x1000
 
+					if(task_kernel != NULL && va >= kernel_start) {
+						/* map kernel pages to all tasks' VMM configs */
+						task_t* task = task_kernel;
+						do {
+							if(task->common.vmm != vmm && ((vmm_t*)task->common.vmm)->pt[pde] != cfg->pt[pde]) {
+								/* copy PT pointer and PDE */
+								((vmm_t*)task->common.vmm)->pt[pde] = cfg->pt[pde];
+								memcpy(&((vmm_t*)task->common.vmm)->pd[pde], &cfg->pd[pde], sizeof(vmm_pde_t));
+							}
+							task = task->common.next;
+						} while(task != task_kernel);
+					}
+
 					allocated = true;
 					// kdebug("PT %u (VMM 0x%08x) @ 0x%08x (phys 0x%08x)", pde, (uintptr_t) vmm, (uintptr_t) (cfg->pt[pde]), frame << 12);
 					break;
@@ -127,4 +145,74 @@ void vmm_switch(void* vmm) {
 
 void vmm_init() {
 	// do nothing - VMM initialization is done during bootstrapping
+}
+
+void* vmm_clone(void* src) {
+	vmm_t* cfg_src = src;
+
+	uintptr_t cr3;
+	vmm_t* cfg_dest = kmalloc_ext(sizeof(vmm_t), 4096, (void**)&cr3);
+	if(cfg_dest == NULL) {
+		kerror("cannot allocate new VMM config");
+		return NULL;
+	}
+	memcpy(cfg_dest, cfg_src, sizeof(vmm_t));
+
+	/* clone page tables */
+	for(size_t i = 0; i < 768; i++) { // do not clone the kernel's top 1G space
+		if(cfg_src->pt[i] != NULL) {
+			size_t frame = pmm_first_free(1);
+			
+			bool allocated = false;
+
+			if(frame != (size_t)-1) {
+				pmm_alloc(frame);
+				for(size_t j = 0; j < 1024; j++) {
+					/* find a space to map the new page table for accessing */
+					if(!vmm_krnlpt.pt[j].present) {
+						vmm_krnlpt.pt[j].present = 1;
+						vmm_krnlpt.pt[j].rw = 1;
+						vmm_krnlpt.pt[j].user = 0;
+						vmm_krnlpt.pt[j].pa = frame;
+
+						cfg_dest->pd[i].pt = vmm_krnlpt.pt[j].pa;
+
+						cfg_dest->pt[i] = (vmm_pt_t*) ((uintptr_t) &__krnlpt_start + (j << 12)); // 0xEFC00000 + i * 0x1000
+
+						allocated = true;
+						break;
+					}
+				}
+			}
+
+			if(!allocated) {
+				kerror("cannot allocate memory for PT #%u", i);
+				if(frame != (size_t)-1) pmm_free(frame);
+				for(size_t j = 0; j < i; j++) {
+					pmm_free(cfg_dest->pd[j].pt);
+					vmm_pgunmap(vmm_current, (uintptr_t) cfg_dest->pt[j]);
+				}
+				kfree(cfg_dest);
+				return NULL;
+			} else memcpy(cfg_dest->pt[i], cfg_src->pt[i], sizeof(vmm_pt_t)); // copy PT
+		}
+	}
+
+	cfg_dest->cr3 = cr3;
+	return cfg_dest;
+}
+
+void vmm_free(void* vmm) {
+	kassert((uintptr_t)vmm != (uintptr_t)vmm_current); // we cannot free a configuration that is in use
+
+	if((uintptr_t)vmm == (uintptr_t)&vmm_default) return; // and we cannot free the default one either; however, this is not a fatal issue as we can just skip the deallocation
+
+	vmm_t* cfg = vmm;
+	for(size_t i = 0; i < 768; i++) {
+		if(cfg->pt[i] != NULL) {
+			pmm_free(cfg->pd[i].pt);
+			vmm_pgunmap(vmm_current, (uintptr_t) cfg->pt[i]);
+		}
+	}
+	kfree(cfg);
 }

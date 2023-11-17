@@ -74,17 +74,6 @@ void idt_stub(void* context) {
 /* exception handler stub */
 
 /*
- * exc_context_t
- *  Registers structure created by exception handlers.
- */
-typedef struct {
-  uint32_t ds;
-  uint32_t edi, esi, ebp, esp, ebx, edx, ecx, eax;
-  uint32_t vector, error;
-  uint32_t eip, cs, eflags, esp_usr, ss;
-} __attribute__((packed)) exc_context_t;
-
-/*
  * struct stkframe
  *  Stack frame structure for tracing.
  */
@@ -93,15 +82,16 @@ struct stkframe {
   uint32_t eip;
 } __attribute__((packed));
 
-void exc_stub(exc_context_t* context) {
+void exc_stub(uint8_t vector, idt_context_t* context) {
+  (void) vector;
   asm("cli"); // no more interrupts!
-  kerror("exception 0x%x (code 0x%x) @ 0x%x", context->vector, context->error, context->eip);
+  kerror("exception 0x%x (code 0x%x) @ 0x%x", context->vector, context->exc_code, context->eip);
   kerror("eax=0x%08x ebx=0x%08x ecx=0x%08x edx=0x%08x", context->eax, context->ebx, context->ecx, context->edx);
   kerror("esi=0x%08x edi=0x%08x esp=0x%08x ebp=0x%08x", context->esi, context->edi, context->esp, context->ebp);
-  kerror("cs=0x%04x ds=0x%04x ss=0x%04x user esp=0x%08x", context->cs, context->ds, context->ss, context->esp_usr);
-  kerror("eflags=0x%08x", context->eflags);
-  kdebug("stack trace:");
+  kerror("cs=0x%04x ds=0x%04x es=0x%04x fs=0x%04x gs=0x%04x", context->cs, context->ds, context->es, context->fs, context->gs);
+  kerror("user ss=0x%04x user esp=0x%08x eflags=0x%08x", context->ss_usr, context->esp_usr, context->eflags);
 #ifdef DEBUG
+  kdebug("stack trace:");
   struct stkframe* stk = (struct stkframe*) context->ebp;
   for(size_t i = 0; stk; i++) {
   	struct sym_addr* sym = NULL;
@@ -409,6 +399,7 @@ void idt_init() {
   idt_add_gate(29, 0x08, (uintptr_t) &exc_handler_29, IDT_386_INTR32, 0);
   idt_add_gate(30, 0x08, (uintptr_t) &exc_handler_30, IDT_386_INTR32, 0);
   idt_add_gate(31, 0x08, (uintptr_t) &exc_handler_31, IDT_386_INTR32, 0);
+  for(uint8_t i = 0; i < 0x20; i++) idt_handlers[i] = (void*)&exc_stub;
 
   /* other IDT handlers */
 	idt_add_gate(32, 0x08, (uintptr_t) &idt_handler_32, IDT_386_INTR32, 3);

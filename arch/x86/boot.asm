@@ -15,9 +15,9 @@ dd CHECKSUM
 section .bss
 align 16
 stack:
-.bottom:
-resb 4096 ; 4K of stack, probably enough to get us started
 .top:
+resb 4096 ; 4K of stack, probably enough to get us started
+.bottom:
 
 ; for converting between physical and virtual addresses (higher half only)
 %define PHYS(x)					(x - 0xC0000000)
@@ -50,11 +50,12 @@ extern vmm_krnlpt
 extern __krnlpt_start
 
 extern vmm_current
+extern vmm_kernel
 
 ; EAX = 0x2badb002, EBX = ptr to Multiboot info structure (to be relocated ASAP)
 _start:
 ; set up stack (we will be using the kernel stack, which will be re-used in higher half)
-mov esp, PHYS(stack.top)
+mov esp, PHYS(stack.bottom)
 
 cld ; clear direction flag
 mov edi, PHYS(__kernel_end) ; load EDI with the kernel end address
@@ -297,6 +298,8 @@ extern data_start
 extern data_end
 extern bss_start
 extern bss_end
+extern kernel_stack_top
+extern kernel_stack_bottom
 
 extern mb_info
 
@@ -307,12 +310,16 @@ extern srand
 ; higher half kernel entry point
 section .text
 _hstart:
-mov esp, stack.top ; dump stack, and use higher half stack now
+mov esp, stack.bottom ; dump stack, and use higher half stack now
+mov dword [kernel_stack_bottom], stack.bottom ; save stack bottom address
+mov dword [kernel_stack_top], stack.top ; save stack top address
 
 mov [mb_info], ebx
 add edi, 0xC0000000 ; bring kernel_end to higher half too
 mov [kernel_end], edi
-mov dword [kernel_start], __kernel_start
+mov eax, __kernel_start
+and eax, 0xF0000000
+mov [kernel_start], eax
 mov dword [text_start], __text_start
 mov dword [text_end], __text_end
 mov dword [rodata_start], __rodata_start
@@ -331,6 +338,7 @@ mov eax, cr3
 mov cr3, eax ; quick and dirty TLB invalidation
 
 mov dword [vmm_current], vmm_default
+mov dword [vmm_kernel], vmm_default
 
 ; seed the PRNG using RDSEED and/or RDRAND if possible
 xor ecx, ecx ; subfunction 0
@@ -371,5 +379,5 @@ xor ebp, ebp ; initialize call frame
 call kinit
 
 .halt:
-hlt
+nop ; is this needed?
 jmp .halt

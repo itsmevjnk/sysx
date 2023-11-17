@@ -15,10 +15,11 @@ typedef size_t      timer_tick_t;
 extern volatile timer_tick_t timer_tick; // microsecond resolution
 
 /*
- * void timer_handler(size_t delta)
+ * void timer_handler(size_t delta, void* context)
  *  Increments timer_tick by the specified delta microseconds, and
  *  performs any other timer-related tasks.
+ *  This is to be called from the timer interrupt handler.
  */
-void timer_handler(size_t delta);
+void timer_handler(size_t delta, void* context);
 
 #endif

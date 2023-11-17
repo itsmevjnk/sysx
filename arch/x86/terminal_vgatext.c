@@ -3,6 +3,7 @@
 #include <mm/vmm.h>
 #include <arch/x86cpu/asm.h>
 #include <string.h>
+#include <exec/task.h>
 
 #define TERM_VGATEXT_ADDR                   0xB8000 // the base address to map the textmode framebuffer to (must be 4K aligned)
 
@@ -40,6 +41,8 @@ static void vgaterm_newline() {
 }
 
 static void vgaterm_putc_stub(char c) {
+    bool task_en = task_yield_enable;
+    task_yield_enable = false; // TODO: use spinlock or something
     switch(c) {
         case '\b': // backspace character
             if(vgaterm_x > 0) vgaterm_x--;
@@ -67,6 +70,7 @@ static void vgaterm_putc_stub(char c) {
             if(vgaterm_x == 80) vgaterm_newline();
             break;
     }
+    task_yield_enable = task_en;
 }
 
 void vgaterm_putc(const term_hook_t* impl, char c) {
@@ -107,7 +111,10 @@ void vgaterm_get_dimensions(const term_hook_t* impl, size_t* width, size_t* heig
 
 void vgaterm_set_xy(const term_hook_t* impl, size_t x, size_t y) {
     (void) impl;
+    bool task_en = task_yield_enable;
+    task_yield_enable = false;
     vgaterm_x = x; vgaterm_y = y;
+    task_yield_enable = task_en;
 #ifndef TERM_VGATEXT_NO_CURSOR
     vgaterm_update_cursor();
 #endif

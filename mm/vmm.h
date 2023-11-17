@@ -45,6 +45,19 @@ void vmm_switch(void* vmm);
  */
 void vmm_init();
 
+/*
+ * void* vmm_clone(void* src)
+ *  Creates a new VMM configuration from the specified source.
+ *  Returns NULL on failure.
+ */
+void* vmm_clone(void* src);
+
+/*
+ * void vmm_free(void* vmm)
+ *  Deallocates the specified VMM configuration.
+ */
+void vmm_free(void* vmm);
+
 /* generic code */
 
 /*
@@ -52,6 +65,12 @@ void vmm_init();
  *  Points to the current MMU configuration.
  */
 extern void* vmm_current;
+
+/*
+ * void* vmm_kernel
+ *  Points to the kernel's MMU configuration.
+ */
+extern void* vmm_kernel;
 
 /*
  * void vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, bool present, bool user, bool rw)

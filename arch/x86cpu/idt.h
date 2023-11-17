@@ -18,10 +18,10 @@
  *  to interrupt handlers.
  */
 typedef struct {
-  uint32_t ds;
+  uint32_t gs, fs, es, ds;
   uint32_t edi, esi, ebp, esp, ebx, edx, ecx, eax;
-  uint32_t vector;
-  uint32_t eip, cs, eflags, esp_usr, ss;
+  uint32_t vector, exc_code; // exc_code is for exceptions
+  uint32_t eip, cs, eflags, esp_usr, ss_usr;
 } __attribute__((packed)) idt_context_t;
 
 /*

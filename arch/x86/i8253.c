@@ -33,8 +33,7 @@
 
 void pit_isr(uint8_t irq, void* context) {
     (void) irq;
-    (void) context;
-    timer_handler(1000000UL / PIT_SYSTIMER_FREQ);
+    timer_handler(1000000UL / PIT_SYSTIMER_FREQ, context);
 }
 
 void pit_systimer_init() {

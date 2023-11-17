@@ -34,6 +34,7 @@ gdt_load:
 %macro IDT_HANDLER 1
 global idt_handler_%1
 idt_handler_%1:
+  push 0
   push %1
   jmp idt_handler_stub
 %endmacro
@@ -43,7 +44,7 @@ global exc_handler_%1
 exc_handler_%1:
   cli
   push %1
-  jmp exc_handler_stub
+  jmp idt_handler_stub
 %endmacro
 
 %macro EXC_HANDLER_NOERR 1
@@ -52,7 +53,7 @@ exc_handler_%1:
   cli
   push 0
   push %1
-  jmp exc_handler_stub
+  jmp idt_handler_stub
 %endmacro
 
 EXC_HANDLER_NOERR 0
@@ -320,6 +321,12 @@ idt_handler_stub:
   xor eax, eax
   mov ax, ds
   push eax
+  mov ax, es
+  push eax
+  mov ax, fs
+  push eax
+  mov ax, gs
+  push eax
 
   mov ax, 0x10
   mov ds, ax
@@ -332,39 +339,14 @@ idt_handler_stub:
   add esp, 4
 
   pop eax
-  mov ds, ax
-  mov es, ax
-  mov fs, ax
   mov gs, ax
-
-  popa
-  add esp, 4
-  iret
-
-extern exc_stub
-exc_handler_stub:
-  pusha
-
-  xor eax, eax
-  mov ax, ds
-  push eax
-
-  mov ax, 0x10
-  mov ds, ax
-  mov es, ax
+  pop eax
   mov fs, ax
-  mov gs, ax
-
-  push esp
-  call exc_stub
-  add esp, 4
-
+  pop eax
+  mov es, ax
   pop eax
   mov ds, ax
-  mov es, ax
-  mov fs, ax
-  mov gs, ax
 
   popa
-  add esp, 8
+  add esp, 8 ; skip vector and exception error code
   iret

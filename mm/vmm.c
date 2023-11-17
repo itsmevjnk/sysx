@@ -1,6 +1,7 @@
 #include <mm/vmm.h>
 
 void* vmm_current = NULL;
+void* vmm_kernel = NULL;
 
 void vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, bool present, bool user, bool rw) {
 	size_t delta = 0;

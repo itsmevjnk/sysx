@@ -1,3 +1,4 @@
+#include <kernel/kernel.h>
 #include <kernel/log.h>
 #include <kernel/settings.h>
 
@@ -20,6 +21,7 @@
 #include <exec/elf.h>
 #include <exec/syms.h>
 #include <exec/usermode.h>
+#include <exec/task.h>
 
 #ifndef KSYM_INITIAL_CNT
 #define KSYM_INITIAL_CNT    8
@@ -124,19 +126,24 @@ void kinit() {
     kinfo("seeding PRNG using timer tick"); // for architectures without hardware pseudorandom number generation capabilities and additional entropy for those that do
     srand(timer_tick);
 
+    kinfo("creating kernel task");
+    task_init();
+
     kinfo("kernel init finished, current timer tick: %llu", (uint64_t)timer_tick);
 
-    kinfo("switching into user mode - THE KERNEL WILL CRASH!");
-    usermode_switch(0, 0);
+    /* create another task for testing */
+    kinfo("creating another task");
+    task_create(false, NULL, (uintptr_t) &kmain); // NOTE: we cannot create an user task since kernel code is not mapped as user-accessible (for security reasons)
 
-    /*
-     * From this point on, the kernel will crash (this is the expected behavior!).
-     * This happens since the below code will operate in user mode, where kernel
-     * functions are **SUPPOSED** to be inaccessible (e.g. supervisor page on x86).
-     */
+    kinfo("starting kernel task");
+    task_set_ready(task_kernel, true);
+}
 
+void kmain() {
+    bool is_kernel = (task_current == task_kernel);
     while(1) {
-        char c = term_getc_noecho();
-        kinfo("keystroke: %c (0x%02x) - %u event(s) pending", (c < ' ') ? ' ' : c, c, kbd_event_available((size_t)-1));
+        kprintf((is_kernel) ? "Hello, kernel task World! " : "Hello, another task World! ");
+        volatile timer_tick_t t_start = timer_tick;
+        while(timer_tick - t_start < ((is_kernel) ? 500000UL : 1000000UL)); // TODO: make something like a sleep() function
     }
 }
