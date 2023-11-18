@@ -143,7 +143,6 @@ void kmain() {
     bool is_kernel = (task_current == task_kernel);
     while(1) {
         kprintf((is_kernel) ? "Hello, kernel task World! " : "Hello, another task World! ");
-        volatile timer_tick_t t_start = timer_tick;
-        while(timer_tick - t_start < ((is_kernel) ? 500000UL : 1000000UL)); // TODO: make something like a sleep() function
+        timer_delay_ms((is_kernel) ? 500 : 1000);
     }
 }

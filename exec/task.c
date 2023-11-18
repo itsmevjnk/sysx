@@ -128,12 +128,12 @@ void task_delete(void* task) {
     task_common_t* common = task_common(task);
     common->ready = 0;
     if(task_current == task) {
-        common->delete_pending = 1;
+        common->type = TASK_TYPE_DELETE_PENDING;
         while(1); // wait until we switch out of the task - then we'll delete it later
     } else task_do_delete(task); // delete right away
 }
 
-void task_init() {
+void task_init_stub() {
     void* task = task_create_stub(NULL);
     task_common_t* common = task_common(task);
     common->pid = 0; common->type = TASK_TYPE_KERNEL;
@@ -150,15 +150,20 @@ void task_init() {
 
 volatile bool task_yield_enable = true;
 
+volatile timer_tick_t task_switch_tick = 0;
+
 void task_yield(void* context) {
     if(!task_yield_enable || task_kernel == NULL) return; // cannot switch yet
     if(task_current == NULL) {
-        if(task_get_ready(task_kernel)) task_switch(task_kernel, context); // switch into kernel task
+        if(task_get_ready(task_kernel)) {
+            task_switch_tick = timer_tick;
+            task_switch(task_kernel, context); // switch into kernel task
+        }
     } else {
         void* task = task_current;
         do {
             task = task_common(task)->next;
-            if(task_common(task)->delete_pending) {
+            if(task_common(task)->type == TASK_TYPE_DELETE_PENDING) {
                 /* this task is to be deleted - delete it now */
                 void* next_task = task_common(task_common(task)->next)->next; // go to the task after this one
                 task_do_delete(task);
@@ -167,11 +172,12 @@ void task_yield(void* context) {
         } while(!task_common(task)->ready && task != task_current); // find a ready task to switch to, while making sure that we don't get stuck in a loop if no tasks are ready
         if(task == task_current) return; // no tasks to switch to
         else {
-            if(task_common(task_current)->delete_pending) {
+            if(task_common(task_current)->type == TASK_TYPE_DELETE_PENDING) {
                 /* current task is waiting to be deleted - let's do it now */
                 task_do_delete(task_current);
                 task_current = NULL;
             }
+            task_switch_tick = timer_tick;
             task_switch(task, context);
         }
     }

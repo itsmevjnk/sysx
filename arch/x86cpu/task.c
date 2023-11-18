@@ -1,6 +1,7 @@
 #include <arch/x86cpu/task.h>
 #include <kernel/log.h>
 #include <arch/x86cpu/gdt.h>
+#include <hal/intr.h>
 #include <mm/vmm.h>
 #include <stdlib.h>
 #include <string.h>
@@ -46,4 +47,14 @@ void task_set_sptr(void* task, uintptr_t sptr) {
 
 task_common_t* task_common(void* task) {
     return &((task_t*)task)->common;
+}
+
+void task_do_yield_noirq(uint8_t vector, void* context) {
+    (void) vector;
+    task_yield(context);
+}
+
+void task_init() {
+    intr_handle(0x8F, (void*) &task_do_yield_noirq);
+    task_init_stub();
 }

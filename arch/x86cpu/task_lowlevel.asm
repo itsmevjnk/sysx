@@ -18,7 +18,8 @@ jz .switch_pd ; skip storing context
 mov ecx, (4 * 3)
 rep movsb ; EDI, ESI, EBP
 mov ebp, [task_current] ; task_current
-mov eax, [ebp + (4 * 11)] ; task_current->user
+mov eax, [ebp + (4 * 11)] ; task_current->type/ready/pid
+and eax, 0x00000007 ; extract type
 cmp eax, 1 ; were we in ring 3 at the time of the switch?
 jne .store_kernel_esp
 .store_user_esp:
@@ -58,7 +59,8 @@ mov ecx, [ebp + (4 * 6)]
 
 ; load ESP and set up stack for IRET
 .load_esp:
-mov eax, [ebp + (4 * 11)] ; task->user
+mov eax, [ebp + (4 * 11)] ; task->type/ready/pid
+and eax, 0x00000007 ; extract type
 cmp eax, 1
 jne .ring0_iret_prep
 .ring3_iret_prep:
@@ -88,7 +90,8 @@ push eax ; EBP
 ;     or will be restored by IRET (if switching into ring 3)
 
 .load_dseg: ; load data segments
-mov eax, [ebp + (4 * 11)] ; task->user
+mov eax, [ebp + (4 * 11)] ; task->type/ready/pid
+and eax, 0x00000007 ; extract type
 cmp eax, 1
 jne .eoi ; skip setting DS/ES/FS/GS for ring 0 since this has been done by the IDT handler
 .load_ring3_dseg:

@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <hal/timer.h>
 
 /* kernel task description structure pointer */
 extern void* task_kernel;
@@ -14,13 +15,15 @@ extern volatile void* task_current;
 /* task yielding (automatic switching) enable/disable */
 extern volatile bool task_yield_enable;
 
+/* task switch timestamp */
+extern volatile timer_tick_t task_switch_tick;
+
 /* COMMON TASK DESCRIPTION FIELDS */
 typedef struct {
     void* vmm; // VMM configuration pointer
-    size_t type; // task type
-    size_t ready; // set when the task is ready to be switched to
-    size_t delete_pending; // set if the task is to be deleted
-    size_t pid; // process ID
+    size_t type : 3; // task type
+    size_t ready : 1; // set when the task is ready to be switched to
+    size_t pid : 28; // process ID
     uintptr_t stack_bottom;
     size_t stack_size;
     void* prev; // previous task
@@ -31,10 +34,15 @@ typedef struct {
 #define TASK_TYPE_KERNEL                    0 // kernel task
 #define TASK_TYPE_USER                      1 // user task running user code
 #define TASK_TYPE_USER_SYS                  2 // user task running kernel code (e.g. syscall in progress)
-
+#define TASK_TYPE_DELETE_PENDING            3 // pending deletion
 /* initial task stack size */
 #ifndef TASK_INITIAL_STACK_SIZE
 #define TASK_INITIAL_STACK_SIZE             4096
+#endif
+
+/* task quantum (minimum number of ticks between yield calls) */
+#ifndef TASK_QUANTUM
+#define TASK_QUANTUM                        1000
 #endif
 
 /*
@@ -58,12 +66,20 @@ void task_switch(void* task, void* context);
 void task_yield(void* context);
 
 /*
- * void task_init()
+ * void task_init_stub()
  *  Initializes the kernel task with the entry point at kmain (see
  *  kernel/kernel.c). The kernel task is not active upon creation, and
  *  its state must be set to ready using task_set_ready() by kinit()
  *  before returning.
  *  This is a common-defined function.
+ */
+void task_init_stub();
+
+/*
+ * void task_init()
+ *  Initializes multitasking facilities specific to the target
+ *  architecture, before calling task_init_stub().
+ *  This is an architecture-specific function and is called in ring 0.
  */
 void task_init();
 
@@ -154,5 +170,12 @@ void task_set_ready(void* task, bool ready);
  *  Gets the ready state of the specified task.
  */
 bool task_get_ready(void* task);
+
+/*
+ * void task_yield_noirq()
+ *  Yields to the next task on demand (i.e. without IRQs).
+ *  This is an architecture-specific function.
+ */
+void task_yield_noirq();
 
 #endif

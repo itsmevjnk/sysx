@@ -39,3 +39,10 @@ push ecx ; EFLAGS
 push 0x1B ; CS: ring 3 code segment + RPL
 push eax ; EIP
 iretd ; goodbye!
+
+; void task_yield_noirq()
+;  Yields to the next task on demand (i.e. without IRQs).
+global task_yield_noirq
+task_yield_noirq:
+int 0x9F ; INT 0x9F will be configured to call task_yield()
+ret

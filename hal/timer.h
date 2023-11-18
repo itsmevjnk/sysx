@@ -22,4 +22,22 @@ extern volatile timer_tick_t timer_tick; // microsecond resolution
  */
 void timer_handler(size_t delta, void* context);
 
+/*
+ * void timer_delay_us(uint64_t us)
+ *  Stops execution on the task for AT LEAST the specified duration
+ *  in microseconds.
+ *  This is a non-blocking function; other tasks can execute while
+ *  the calling task is under delay.
+ */
+void timer_delay_us(uint64_t us);
+
+/*
+ * void timer_delay_ms(uint64_t ms)
+ *  Stops execution on the task for AT LEAST the specified duration
+ *  in milliseconds.
+ *  This is a non-blocking function; other tasks can execute while
+ *  the calling task is under delay.
+ */
+void timer_delay_ms(uint64_t ms);
+
 #endif
