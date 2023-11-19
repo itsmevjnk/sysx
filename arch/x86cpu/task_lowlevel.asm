@@ -1,5 +1,8 @@
+section .text
+
 extern task_current
 extern vmm_switch
+extern x86ext_on
 
 ; void task_switch(void* task, void* context)
 ;  Performs a context switch to the specified task.
@@ -38,6 +41,31 @@ movsd ; EIP
 add esi, (4 * 1) ; skip CS
 movsd ; EFLAGS
 
+mov edi, [task_current]
+add edi, 64 ; start of regs_ext
+
+test word [x86ext_on], (1 << 3)
+jz .no_fxsave
+.fxsave:
+fxsave [edi]
+jmp .switch_pd
+
+.no_fxsave:
+test word [x86ext_on], (1 << 0) | (1 << 1)
+jz .switch_pd ; there ain't no way a processor can support SSE without supporting FPU or MMX - correct me if I'm wrong...
+fsave [edi] ; MMX uses the same regs as FPU so this is enough
+test word [x86ext_on], (1 << 2)
+jz .switch_pd ; no SSE
+stmxcsr [edi + 108] ; store MXCSR
+movaps [edi + 108 + 4 + 0*16], xmm0
+movaps [edi + 108 + 4 + 1*16], xmm1
+movaps [edi + 108 + 4 + 2*16], xmm2
+movaps [edi + 108 + 4 + 3*16], xmm3
+movaps [edi + 108 + 4 + 4*16], xmm4
+movaps [edi + 108 + 4 + 5*16], xmm5
+movaps [edi + 108 + 4 + 6*16], xmm6
+movaps [edi + 108 + 4 + 7*16], xmm7
+
 .switch_pd: ; switch page directory - since the kernel is mapped across all pages, the stack will remain available
 mov ebp, [esp + (4 * 1)] ; task
 mov dword [task_current], ebp ; change task_current since we will not be working on it
@@ -46,6 +74,31 @@ mov eax, [ebp + (4 * 10)] ; task->vmm
 push eax
 call vmm_switch
 add esp, 4
+
+.load_regs_s0: ; load FPU/MMX/SSE registers
+mov edi, ebp
+add edi, 64 ; start of regs_ext
+test word [x86ext_on], (1 << 3)
+jz .no_fxrstor
+.fxrstor:
+fxrstor [edi]
+jmp .load_regs_s1
+
+.no_fxrstor:
+test word [x86ext_on], (1 << 0) | (1 << 1)
+jz .load_regs_s1 ; there ain't no way a processor can support SSE without supporting FPU or MMX - correct me if I'm wrong...
+frstor [edi] ; MMX uses the same regs as FPU so this is enough
+test word [x86ext_on], (1 << 2)
+jz .load_regs_s1 ; no SSE
+ldmxcsr [edi + 108] ; load new MXCSR
+movaps xmm0, [edi + 108 + 4 + 0*16]
+movaps xmm1, [edi + 108 + 4 + 1*16]
+movaps xmm2, [edi + 108 + 4 + 2*16]
+movaps xmm3, [edi + 108 + 4 + 3*16]
+movaps xmm4, [edi + 108 + 4 + 4*16]
+movaps xmm5, [edi + 108 + 4 + 5*16]
+movaps xmm6, [edi + 108 + 4 + 6*16]
+movaps xmm7, [edi + 108 + 4 + 7*16]
 
 .load_regs_s1: ; load general purpose registers from specified task
 mov edi, [ebp + (4 * 0)]

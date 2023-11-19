@@ -19,6 +19,9 @@ stack:
 resb 4096 ; 4K of stack, probably enough to get us started
 .bottom:
 
+global x86ext_on
+x86ext_on: resw 1 ; FPU = bit 0, MMX = bit 1, SSE = bit 2, XSAVE = bit 3
+
 ; for converting between physical and virtual addresses (higher half only)
 %define PHYS(x)					(x - 0xC0000000)
 %define VIRT(x)					(x + 0xC0000000)
@@ -340,10 +343,45 @@ mov cr3, eax ; quick and dirty TLB invalidation
 mov dword [vmm_current], vmm_default
 mov dword [vmm_kernel], vmm_default
 
-; seed the PRNG using RDSEED and/or RDRAND if possible
+.fpu: ; initialize the FPU and SSE (if possible)
+mov word [x86ext_on], 0x55AA ; use x86ext_on for temporary storage too
+
+mov eax, cr0
+and al, ~((1 << 2) | (1 << 3)) ; disable CR0.TS and CR0.EM - force FPU access
+or al, (1 << 5) | (1 << 1) ; enable CR0.NE and CR0.MP
+mov cr0, eax
+
+fninit
+fnstsw [x86ext_on]
+cmp word [x86ext_on], 0
+mov word [x86ext_on], 0
+jne .mmx ; no FPU
+or word [x86ext_on], (1 << 0)
+
+.mmx:
 xor ecx, ecx ; subfunction 0
 mov eax, 1 ; function 1
 cpuid
+
+bt edx, 23
+jnc .sse
+or word [x86ext_on], (1 << 1)
+
+.sse:
+bt edx, 25
+jnc .xsave ; no SSE
+or word [x86ext_on], (1 << 2)
+mov eax, cr4
+or ax, (1 << 9) | (1 << 10) ; set CR4.OSFXSR and CR4.OSXMMEXCPT - enable SSE
+mov cr4, eax
+
+.xsave:
+bt ecx, 26
+jnc .prng ; no XSAVE
+or word [x86ext_on], (1 << 3)
+
+.prng: ; seed the PRNG using RDSEED and/or RDRAND if possible
+; we'll use the CPUID results from the previous code
 bt ecx, 30 ; ECX bit 30 indicates RDRAND support
 jnc .no_rdrand
 mov ecx, 100 ; try 100 times

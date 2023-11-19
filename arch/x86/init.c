@@ -12,7 +12,11 @@
 
 #define INITRD_PATH                             "/initrd.tar"
 
+extern uint16_t x86ext_on;
+
 int ktgtinit() {
+    kdebug("x86ext_on = 0x%x", x86ext_on);
+
     kdebug("Multiboot information structure address: 0x%08x", mb_info);
 
     if(mb_info->flags & MULTIBOOT_INFO_MEMORY) kdebug("memory size: lo %uK, hi %uK", mb_info->mem_lower, mb_info->mem_upper);

@@ -6,17 +6,24 @@
 #include <stdlib.h>
 #include <string.h>
 
+static size_t task_size = sizeof(task_t); // size of each task structure (including extended registers)
+
+extern uint16_t x86ext_on;
+
 void* task_create_stub(void* src_task) {
-    task_t* task = kmalloc(sizeof(task_t));
+    task_t* task = kmalloc_ext(task_size, 16, NULL);
     if(task == NULL) {
         kerror("cannot allocate memory for new task");
         return NULL;
     }
 
-    if(src_task == NULL) memset(task, 0, sizeof(task_t)); // new task
-    else memcpy(task, src_task, sizeof(task_t)); // copy from source
+    if(src_task == NULL) memset(task, 0, task_size); // new task
+    else memcpy(task, src_task, task_size); // copy from source
 
     task->regs.eflags |= (1 << 9); // enable interrupts in all cases
+    // set MXCSR; not sure if this is needed but we'll do it anyway
+    if(x86ext_on & (1 << 3)) task->regs_ext[6] = 0x1F80;
+    else if(x86ext_on & (1 << 2)) task->regs_ext[27] = 0x1F80; 
 
     return task;
 }
@@ -55,6 +62,22 @@ void task_do_yield_noirq(uint8_t vector, void* context) {
 }
 
 void task_init() {
+    kdebug("task structure size without regs_ext: %u", task_size);
+    if(x86ext_on & (1 << 3)) {
+        /* FXSAVE is supported - regs_ext is a 512-byte buffer for the instruction */
+        task_size += 512;
+    } else {
+        /* FXSAVE is not supported - store XMM registers manually */
+        if(x86ext_on & ((1 << 0) | (1 << 1))) {
+            /* FPU/MMX is available - so is FSAVE */
+            task_size += 108; // FSAVE takes 94 or 108 bytes depending on mode
+        }
+        if(x86ext_on & (1 << 2)) {
+            /* SSE is available */
+            task_size += 4 + 128; // 4 bytes for MXCSR + 8x 128-bit registers (XMM0-7) - task_size is assumed to be 16-byte aligned
+        }
+    }
+    kdebug("task structure size with regs_ext: %u", task_size);
     intr_handle(0x8F, (void*) &task_do_yield_noirq);
     task_init_stub();
 }
