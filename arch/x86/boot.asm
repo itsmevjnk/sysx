@@ -379,5 +379,5 @@ xor ebp, ebp ; initialize call frame
 call kinit
 
 .halt:
-nop ; is this needed?
+hlt ; this is good enough and is also more energy-efficient
 jmp .halt
