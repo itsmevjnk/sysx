@@ -12,18 +12,26 @@ task_switch:
 cli ; ensure that interrupt is off, otherwise it will mess up the task switch
 cld ; for movsb
 
-.store_ctx: ; store context into current task
-mov esi, [esp + (4 * 2)] ; context
-add esi, (4 * 4) ; skip DS/ES/FS/GS
-mov edi, [task_current]
-test edi, edi
-jz .switch_pd ; skip storing context
-mov ecx, (4 * 3)
-rep movsb ; EDI, ESI, EBP
 mov ebp, [task_current] ; task_current
+test ebp, ebp
+jz .switch_pd ; skip storing context
 mov eax, [ebp + (4 * 11)] ; task_current->type/ready/pid
 and eax, 0x00000007 ; extract type
-cmp eax, 1 ; were we in ring 3 at the time of the switch?
+mov esi, [esp + (4 * 2)] ; context
+cmp dword [esi], 0x10 ; GS = DS = 0x10 means we're in ring 0 at the time of switching
+jne .store_ctx ; we are not interested in the ring 3 case
+cmp eax, 1 ; DS = 0x10 and type = 1 means type should've been 2 (ring 3 task running ring 0 code) instead
+jne .store_ctx
+mov eax, [ebp + (4 * 11)]
+and eax, ~0x7
+or eax, 2
+mov [ebp + (4 * 11)], eax
+.store_ctx: ; store context into current task
+add esi, (4 * 4) ; skip DS/ES/FS/GS
+mov edi, [task_current]
+mov ecx, (4 * 3)
+rep movsb ; EDI, ESI, EBP
+cmp eax, 1 ; were we in ring 3 at the time of the switch? (EAX is from previously)
 jne .store_kernel_esp
 .store_user_esp:
 add esi, 4 ; skip pushed ESP

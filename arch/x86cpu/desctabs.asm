@@ -34,6 +34,7 @@ gdt_load:
 %macro IDT_HANDLER 1
 global idt_handler_%1
 idt_handler_%1:
+  cli
   push 0
   push %1
   jmp idt_handler_stub
@@ -333,6 +334,8 @@ idt_handler_stub:
   mov es, ax
   mov fs, ax
   mov gs, ax
+
+  sti ; once we've indicated that we're in ring 0, the interrupts can be turned back on
 
   push esp
   call idt_stub
