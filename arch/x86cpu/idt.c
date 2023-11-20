@@ -629,6 +629,7 @@ void idt_init() {
 
 	__asm__ volatile("lidt %0" : : "m"(idt_desc)); // load IDTR
 
+	outb(0xA0, 0x20); outb(0x20, 0x20);
 	outb(0xA1, 0xFF); outb(0x21, 0xFF); // disable PIC for the time being so we don't end up with IRQs showing up as exceptions
 	__asm__ volatile("sti");
 }
