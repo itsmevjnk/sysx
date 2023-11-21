@@ -59,11 +59,11 @@ void* task_create(bool user, void* src_task, uintptr_t entry) {
         if(frame == (size_t)-1) break; // cannot allocate more
         stack_frames++;
         pmm_alloc(frame);
-        vmm_pgmap(common->vmm, frame * framesz, kernel_start - stack_frames * framesz, true, user, true, VMM_CACHE_WTHRU, false);
+        vmm_pgmap(common->vmm, frame * framesz, kernel_start - stack_frames * framesz, VMM_FLAGS_PRESENT | VMM_FLAGS_RW | VMM_FLAGS_CACHE | ((user) ? VMM_FLAGS_USER : 0));
         if(copy_stack) {
             /* copy stack */
-            vmm_pgmap(vmm_current, vmm_physaddr(common_src->vmm, common_src->stack_bottom - stack_frames * framesz), (uintptr_t) stack_copy_src, true, false, true, VMM_CACHE_NONE, false);
-            vmm_pgmap(vmm_current, frame * framesz, (uintptr_t) stack_copy_dst, true, false, true, VMM_CACHE_NONE, false);
+            vmm_pgmap(vmm_current, vmm_physaddr(common_src->vmm, common_src->stack_bottom - stack_frames * framesz), (uintptr_t) stack_copy_src, VMM_FLAGS_PRESENT | VMM_FLAGS_RW);
+            vmm_pgmap(vmm_current, frame * framesz, (uintptr_t) stack_copy_dst, VMM_FLAGS_PRESENT | VMM_FLAGS_RW);
             memcpy(stack_copy_dst, stack_copy_src, framesz);
             vmm_pgunmap(vmm_current, (uintptr_t) stack_copy_src);
             vmm_pgunmap(vmm_current, (uintptr_t) stack_copy_dst);

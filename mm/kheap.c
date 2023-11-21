@@ -111,7 +111,7 @@ static size_t kheap_expand(size_t size) {
             // header = kheap_first_block;
         }
 
-        vmm_pgmap(vmm_current, frame * pmm_framesz(), (uintptr_t) kheap_first_block + kheap_size + i * pmm_framesz(), true, false, true, VMM_CACHE_WBACK, true); // map new frame to heap memory space
+        vmm_pgmap(vmm_current, frame * pmm_framesz(), (uintptr_t) kheap_first_block + kheap_size + i * pmm_framesz(), VMM_FLAGS_PRESENT | VMM_FLAGS_RW | VMM_FLAGS_GLOBAL | VMM_FLAGS_CACHE); // map new frame to heap memory space
         alloc_frames++;
     }
 

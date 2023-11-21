@@ -164,7 +164,7 @@ const term_hook_t vgaterm_hook = {
 };
 
 void term_init() {
-    vmm_map(vmm_current, 0xB8000, TERM_VGATEXT_ADDR, 80 * 25 * 2, true, false, true, VMM_CACHE_WBACK, true); // map textmode framebuffer
+    vmm_map(vmm_current, 0xB8000, TERM_VGATEXT_ADDR, 80 * 25 * 2, VMM_FLAGS_PRESENT | VMM_FLAGS_RW | VMM_FLAGS_GLOBAL | VMM_FLAGS_CACHE); // map textmode framebuffer
 #ifndef TERM_VGATEXT_NO_CURSOR
     /* enable cursor */
     outb(0x3D4, 0x09); outb(0x3D5, 15); // set maximum scan line to 15

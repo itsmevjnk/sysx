@@ -55,7 +55,7 @@ size_t vmm_pgsz() {
 	return 4096;
 }
 
-void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, bool present, bool user, bool rw, uint8_t caching, bool global) {
+void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 	vmm_t* cfg = vmm;
 	size_t pde = va >> 22, pte = (va >> 12) & 0x3ff;
 	if(cfg->pt[pde] == NULL) {
@@ -68,7 +68,6 @@ void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, bool present, bool user, b
 			for(size_t i = 0; i < 1024; i++) {
 				/* find a space to map the new page table for accessing */
 				if(!vmm_krnlpt.pt[i].present) {
-
 					vmm_krnlpt.pt[i].present = 1;
 					vmm_krnlpt.pt[i].rw = 1;
 					vmm_krnlpt.pt[i].user = 0;
@@ -110,22 +109,18 @@ void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, bool present, bool user, b
 	}
 
 	/* set settings in page directory entry */
-	cfg->pd[pde].present |= (present) ? 1 : 0;
-	cfg->pd[pde].rw |= (rw) ? 1 : 0;
-	cfg->pd[pde].user |= (user) ? 1 : 0;
+	cfg->pd[pde].present |= (flags & VMM_FLAGS_PRESENT) ? 1 : 0;
+	cfg->pd[pde].rw |= (flags & VMM_FLAGS_RW) ? 1 : 0;
+	cfg->pd[pde].user |= (flags & VMM_FLAGS_USER) ? 1 : 0;
 
 	/* populate page table entry */
-	cfg->pt[pde]->pt[pte].present = (present) ? 1 : 0;
-	cfg->pt[pde]->pt[pte].user = (user) ? 1 : 0;
-	cfg->pt[pde]->pt[pte].rw = (rw) ? 1 : 0;
+	cfg->pt[pde]->pt[pte].present = (flags & VMM_FLAGS_PRESENT) ? 1 : 0;
+	cfg->pt[pde]->pt[pte].user = (flags & VMM_FLAGS_USER) ? 1 : 0;
+	cfg->pt[pde]->pt[pte].rw = (flags & VMM_FLAGS_RW) ? 1 : 0;
 	cfg->pt[pde]->pt[pte].zero = 0;
-	cfg->pt[pde]->pt[pte].global = (global) ? 1 : 0;
-	switch(caching) {
-		case VMM_CACHE_NONE: cfg->pt[pde]->pt[pte].ncache = 1; break;
-		case VMM_CACHE_WTHRU: cfg->pt[pde]->pt[pte].ncache = 0; cfg->pt[pde]->pt[pte].wthru = 1; break;
-		case VMM_CACHE_WBACK: cfg->pt[pde]->pt[pte].ncache = 0; cfg->pt[pde]->pt[pte].wthru = 0; break;
-		default: break;
-	}
+	cfg->pt[pde]->pt[pte].global = (flags & VMM_FLAGS_GLOBAL) ? 1 : 0;
+	cfg->pt[pde]->pt[pte].ncache = (flags & VMM_FLAGS_CACHE) ? 0 : 1;
+	cfg->pt[pde]->pt[pte].wthru = (flags & VMM_FLAGS_CACHE_WTHRU) ? 1 : 0;
 	cfg->pt[pde]->pt[pte].pa = pa >> 12;
 	asm volatile("invlpg (%0)" : : "r"(va) : "memory");
 }

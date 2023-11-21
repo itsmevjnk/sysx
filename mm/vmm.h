@@ -14,15 +14,18 @@
 size_t vmm_pgsz();
 
 /*
- * void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, bool present, bool user, bool rw, uint8_t caching, bool global)
+ * void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, size_t flags)
  *  Maps a single page from pa to va.
  */
-void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, bool present, bool user, bool rw, uint8_t caching, bool global);
+void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, size_t flags);
 
-/* caching configuration constants (for vmm_pgmap and vmm_map) */
-#define VMM_CACHE_NONE                      0 // no caching
-#define VMM_CACHE_WTHRU                     1 // write-through caching (ensures consistency at the cost of performance)
-#define VMM_CACHE_WBACK                     2 // write-back caching (consistency not guaranteed, does not block CPU)
+/* flags for vmm_pgmap and vmm_map */
+#define VMM_FLAGS_PRESENT           (1 << 0) // set if page is present
+#define VMM_FLAGS_RW                (1 << 1) // set if page is writable
+#define VMM_FLAGS_USER              (1 << 2) // set if page is accessible in userland
+#define VMM_FLAGS_GLOBAL            (1 << 3) // set if mapping is global (TLB cached across VMM switches)
+#define VMM_FLAGS_CACHE             (1 << 4) // set if page can be cached
+#define VMM_FLAGS_CACHE_WTHRU       (1 << 5) // set if page is write-through instead of write-back cached
 
 /*
  * void vmm_pgunmap(void* vmm, uintptr_t va)
@@ -78,11 +81,11 @@ extern void* vmm_current;
 extern void* vmm_kernel;
 
 /*
- * void vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, bool present, bool user, bool rw, uint8_t caching, bool global)
+ * void vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, size_t flags)
  *  Maps sz byte(s) starting from linear address pa to virtual
  *  address va with the specified properties.
  */
-void vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, bool present, bool user, bool rw, uint8_t caching, bool global);
+void vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, size_t flags);
 
 /*
  * void vmm_unmap(void* vmm, uintptr_t va, size_t sz)
