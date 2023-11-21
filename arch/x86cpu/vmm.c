@@ -55,7 +55,7 @@ size_t vmm_pgsz() {
 	return 4096;
 }
 
-void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, bool present, bool user, bool rw) {
+void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, bool present, bool user, bool rw, uint8_t caching, bool global) {
 	vmm_t* cfg = vmm;
 	size_t pde = va >> 22, pte = (va >> 12) & 0x3ff;
 	if(cfg->pt[pde] == NULL) {
@@ -119,6 +119,13 @@ void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, bool present, bool user, b
 	cfg->pt[pde]->pt[pte].user = (user) ? 1 : 0;
 	cfg->pt[pde]->pt[pte].rw = (rw) ? 1 : 0;
 	cfg->pt[pde]->pt[pte].zero = 0;
+	cfg->pt[pde]->pt[pte].global = (global) ? 1 : 0;
+	switch(caching) {
+		case VMM_CACHE_NONE: cfg->pt[pde]->pt[pte].ncache = 1; break;
+		case VMM_CACHE_WTHRU: cfg->pt[pde]->pt[pte].ncache = 0; cfg->pt[pde]->pt[pte].wthru = 1; break;
+		case VMM_CACHE_WBACK: cfg->pt[pde]->pt[pte].ncache = 0; cfg->pt[pde]->pt[pte].wthru = 0; break;
+		default: break;
+	}
 	cfg->pt[pde]->pt[pte].pa = pa >> 12;
 	asm volatile("invlpg (%0)" : : "r"(va) : "memory");
 }

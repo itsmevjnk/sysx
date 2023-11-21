@@ -266,7 +266,7 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
                             kfree(shdr); kfree(hdr_64); return ERR_ALLOC;
                         }
                         pmm_alloc(frame);
-                        vmm_pgmap(vmm_current, frame * pmm_framesz(), vaddr + j * pmm_framesz(), true, false, true);
+                        vmm_pgmap(vmm_current, frame * pmm_framesz(), vaddr + j * pmm_framesz(), true, false, true, VMM_CACHE_WBACK, true);
                     }
                     if(sh_type != SHT_NOBITS) vfs_read(file, sh_off, sh_size, (uint8_t*) vaddr); // copy data from file
                     prgload_result_len++;

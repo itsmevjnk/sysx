@@ -14,10 +14,15 @@
 size_t vmm_pgsz();
 
 /*
- * void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, bool present, bool user, bool rw)
+ * void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, bool present, bool user, bool rw, uint8_t caching, bool global)
  *  Maps a single page from pa to va.
  */
-void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, bool present, bool user, bool rw);
+void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, bool present, bool user, bool rw, uint8_t caching, bool global);
+
+/* caching configuration constants (for vmm_pgmap and vmm_map) */
+#define VMM_CACHE_NONE                      0 // no caching
+#define VMM_CACHE_WTHRU                     1 // write-through caching (ensures consistency at the cost of performance)
+#define VMM_CACHE_WBACK                     2 // write-back caching (consistency not guaranteed, does not block CPU)
 
 /*
  * void vmm_pgunmap(void* vmm, uintptr_t va)
@@ -73,11 +78,11 @@ extern void* vmm_current;
 extern void* vmm_kernel;
 
 /*
- * void vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, bool present, bool user, bool rw)
+ * void vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, bool present, bool user, bool rw, uint8_t caching, bool global)
  *  Maps sz byte(s) starting from linear address pa to virtual
  *  address va with the specified properties.
  */
-void vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, bool present, bool user, bool rw);
+void vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, bool present, bool user, bool rw, uint8_t caching, bool global);
 
 /*
  * void vmm_unmap(void* vmm, uintptr_t va, size_t sz)

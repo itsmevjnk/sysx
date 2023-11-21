@@ -3,7 +3,7 @@
 void* vmm_current = NULL;
 void* vmm_kernel = NULL;
 
-void vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, bool present, bool user, bool rw) {
+void vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, bool present, bool user, bool rw, uint8_t caching, bool global) {
 	size_t delta = 0;
 	if(pa % vmm_pgsz()) {
 		delta = pa;
@@ -18,7 +18,7 @@ void vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, bool present, boo
 	}
 	sz += delta;
 	for(size_t i = 0; i < (sz + vmm_pgsz() - 1) / vmm_pgsz(); i++)
-		vmm_pgmap(vmm, pa + i * vmm_pgsz(), va + i * vmm_pgsz(), present, user, rw);
+		vmm_pgmap(vmm, pa + i * vmm_pgsz(), va + i * vmm_pgsz(), present, user, rw, caching, global);
 }
 
 void vmm_unmap(void* vmm, uintptr_t va, size_t sz) {
