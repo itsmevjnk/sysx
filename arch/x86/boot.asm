@@ -220,8 +220,8 @@ mov [ebp + 8192], ebp ; load CR3 value
 push edi
 xor eax, eax
 mov edi, ebp
-mov ecx, 1024
-rep stosd
+mov ecx, 1024 * 4
+rep stosb ; more speed?
 pop edi
 mov esi, 0x100000 ; ptr to beginning of the page we're mapping
 .map: ; mapping code begins here
@@ -259,7 +259,7 @@ shl ebp, 2
 and ebp, 0xfff ; remove the page directory entry junk
 add ebp, eax ; ptr to page table entry
 mov eax, esi
-or eax, (1 << 0) | (1 << 1) ; present, writable, supervisor
+or eax, (1 << 0) | (1 << 1) | (1 << 8) ; present, writable, supervisor, global
 mov [ebp], eax
 add esi, 0x1000 ; next page
 cmp esi, edi
@@ -281,6 +281,9 @@ mov [ebp], eax
 ; we're ready to go, so let's enable paging
 mov eax, PD(vmm_default)
 mov cr3, eax
+mov eax, cr4
+or eax, (1 << 7) ; enable global paging
+mov cr4, eax
 mov eax, cr0
 or eax, 0x80010000 ; enable paging as well as write protect enforcement
 mov cr0, eax
