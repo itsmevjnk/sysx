@@ -60,10 +60,10 @@ void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 	size_t pde = va >> 22, pte = (va >> 12) & 0x3ff;
 	if(cfg->pt[pde] == NULL) {
 		/* allocate page table */
-		size_t frame = pmm_first_free(1); // ask for a single contiguous free frame
+		size_t frame = pmm_alloc_free(1); // ask for a single contiguous free frame
 		if(frame == (size_t)-1) kerror("no more free frames, brace for impact");
 		else {
-			pmm_alloc(frame);
+			// pmm_alloc(frame);
 			bool allocated = false;
 			for(size_t i = 0; i < 1024; i++) {
 				/* find a space to map the new page table for accessing */
@@ -122,21 +122,29 @@ void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 	cfg->pt[pde]->pt[pte].ncache = (flags & VMM_FLAGS_CACHE) ? 0 : 1;
 	cfg->pt[pde]->pt[pte].wthru = (flags & VMM_FLAGS_CACHE_WTHRU) ? 1 : 0;
 	cfg->pt[pde]->pt[pte].pa = pa >> 12;
-	asm volatile("invlpg (%0)" : : "r"(va) : "memory");
+	if(vmm == vmm_current) asm volatile("invlpg (%0)" : : "r"(va) : "memory");
 }
 
 void vmm_pgunmap(void* vmm, uintptr_t va) {
 	vmm_t* cfg = vmm;
 	size_t pde = va >> 22, pte = (va >> 12) & 0x3ff;
 	cfg->pt[pde]->pt[pte].present = 0;
-	asm volatile("invlpg (%0)" : : "r"(va) : "memory");
+	if(vmm == vmm_current) asm volatile("invlpg (%0)" : : "r"(va) : "memory");
 }
 
-uintptr_t vmm_physaddr(void* vmm, uintptr_t va) {
+uintptr_t vmm_get_paddr(void* vmm, uintptr_t va) {
 	vmm_t* cfg = vmm;
 	size_t pde = va >> 22, pte = (va >> 12) & 0x3ff;
 	if(!cfg->pd[pde].present || cfg->pt[pde] == NULL || !cfg->pt[pde]->pt[pte].present) return 0; // address is not mapped
 	return ((cfg->pt[pde]->pt[pte].pa << 12) | (va & 0xFFF));
+}
+
+void vmm_set_paddr(void* vmm, uintptr_t va, uintptr_t pa) {
+	vmm_t* cfg = vmm;
+	size_t pde = va >> 22, pte = (va >> 12) & 0x3ff;
+	if(!cfg->pd[pde].present || cfg->pt[pde] == NULL || !cfg->pt[pde]->pt[pte].present) return;
+	cfg->pt[pde]->pt[pte].pa = pa >> 12;
+	if(vmm == vmm_current) asm volatile("invlpg (%0)" : : "r"(va) : "memory");
 }
 
 void vmm_switch(void* vmm) {
@@ -163,12 +171,12 @@ void* vmm_clone(void* src) {
 	/* clone page tables */
 	for(size_t i = 0; i < 768; i++) { // do not clone the kernel's top 1G space
 		if(cfg_src->pt[i] != NULL) {
-			size_t frame = pmm_first_free(1);
+			size_t frame = pmm_alloc_free(1);
 			
 			bool allocated = false;
 
 			if(frame != (size_t)-1) {
-				pmm_alloc(frame);
+				// pmm_alloc(frame);
 				for(size_t j = 0; j < 1024; j++) {
 					/* find a space to map the new page table for accessing */
 					if(!vmm_krnlpt.pt[j].present) {
@@ -217,4 +225,30 @@ void vmm_free(void* vmm) {
 		}
 	}
 	kfree(cfg);
+}
+
+size_t vmm_get_flags(void* vmm, uintptr_t va) {
+	vmm_t* cfg = vmm;
+	size_t pde = va >> 22, pte = (va >> 12) & 0x3ff;
+	if(!cfg->pd[pde].present || cfg->pt[pde] == NULL) return 0;
+	size_t flags = 0;
+	if(cfg->pt[pde]->pt[pte].present) flags |= VMM_FLAGS_PRESENT;
+	if(cfg->pt[pde]->pt[pte].rw) flags |= VMM_FLAGS_RW;
+	if(cfg->pt[pde]->pt[pte].user) flags |= VMM_FLAGS_USER;
+	if(cfg->pt[pde]->pt[pte].global) flags |= VMM_FLAGS_GLOBAL;
+	if(!cfg->pt[pde]->pt[pte].ncache) flags |= VMM_FLAGS_CACHE | ((cfg->pt[pde]->pt[pte].wthru) ? VMM_FLAGS_CACHE_WTHRU : 0);
+	return flags;
+}
+
+void vmm_set_flags(void* vmm, uintptr_t va, size_t flags) {
+	vmm_t* cfg = vmm;
+	size_t pde = va >> 22, pte = (va >> 12) & 0x3ff;
+	if(!cfg->pd[pde].present || cfg->pt[pde] == NULL) return;
+	cfg->pt[pde]->pt[pte].present = (flags & VMM_FLAGS_PRESENT) ? 1 : 0;
+	cfg->pt[pde]->pt[pte].user = (flags & VMM_FLAGS_USER) ? 1 : 0;
+	cfg->pt[pde]->pt[pte].rw = (flags & VMM_FLAGS_RW) ? 1 : 0;
+	cfg->pt[pde]->pt[pte].global = (flags & VMM_FLAGS_GLOBAL) ? 1 : 0;
+	cfg->pt[pde]->pt[pte].ncache = (flags & VMM_FLAGS_CACHE) ? 0 : 1;
+	cfg->pt[pde]->pt[pte].wthru = (flags & VMM_FLAGS_CACHE_WTHRU) ? 1 : 0;
+	if(vmm == vmm_current) asm volatile("invlpg (%0)" : : "r"(va) : "memory");
 }

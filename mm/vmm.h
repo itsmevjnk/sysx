@@ -34,12 +34,32 @@ void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, size_t flags);
 void vmm_pgunmap(void* vmm, uintptr_t va);
 
 /*
- * uintptr_t vmm_physaddr(uintptr_t va)
+ * size_t vmm_get_flags(void* vmm, uintptr_t va)
+ *  Retrieves the flags for the specified page.
+ *  Returns 0 if the address is not mapped.
+ */
+size_t vmm_get_flags(void* vmm, uintptr_t va);
+
+/*
+ * void vmm_set_flags(void* vmm, uintptr_t va, size_t flags)
+ *  Sets the flags for the specified page if it's mapped.
+ */
+void vmm_set_flags(void* vmm, uintptr_t va, size_t flags);
+
+/*
+ * uintptr_t vmm_get_paddr(void* vmm, uintptr_t va)
  *  Retrieves the physical memory address of a given virtual
  *  address.
  *  Returns 0 if the virtual address is unmapped.
  */
-uintptr_t vmm_physaddr(void* vmm, uintptr_t va);
+uintptr_t vmm_get_paddr(void* vmm, uintptr_t va);
+
+/*
+ * void vmm_set_paddr(void* vmm, uintptr_t va, uintptr_t pa)
+ *  Sets the physical memory address of a given virtual
+ *  address.
+ */
+void vmm_set_paddr(void* vmm, uintptr_t va, uintptr_t pa);
 
 /*
  * void vmm_switch(void* vmm)
@@ -101,5 +121,42 @@ void vmm_unmap(void* vmm, uintptr_t va, size_t sz);
  *  can be found.
  */
 uintptr_t vmm_first_free(void* vmm, uintptr_t va, size_t sz);
+
+/* list of page traps (pages destined to cause a fault and to be handled by the kernel) */
+enum vmm_trap_type {
+    VMM_TRAP_NONE = 0,
+    VMM_TRAP_COW // copy-on-write page - info points to the page's source entry
+};
+typedef struct {
+    enum vmm_trap_type type;
+    void* vmm;
+    uintptr_t vaddr;
+    void* info;
+} vmm_trap_t;
+
+/*
+ * size_t vmm_cow_setup(void* vmm_src, uintptr_t vaddr_src, void* vmm_dst, uintptr_t vaddr_dst, size_t size)
+ *  Sets up copy-on-write (COW) between the two specified address
+ *  ranges.
+ *  Returns the set-up address range size.
+ */
+size_t vmm_cow_setup(void* vmm_src, uintptr_t vaddr_src, void* vmm_dst, uintptr_t vaddr_dst, size_t size);
+
+/*
+ * bool vmm_cow_duplicate(void* vmm, uintptr_t vaddr)
+ *  Resolves the COW order on the specified page if it has one.
+ */
+bool vmm_cow_duplicate(void* vmm, uintptr_t vaddr);
+
+/*
+ * bool vmm_handle_fault(uintptr_t vaddr, size_t flags)
+ *  Handles a page fault exception occurring on the specified
+ *  virtual address, with access details (whether the page is
+ *  present, writable or user-accessible) in the flags
+ *  parameter (using the same bits as vmm_map).
+ *  Returns true if the fault is gracefully handled, or false
+ *  otherwise.
+ */
+bool vmm_handle_fault(uintptr_t vaddr, size_t flags);
 
 #endif

@@ -102,9 +102,9 @@ static size_t kheap_expand(size_t size) {
     size_t requested_frames = (size + pmm_framesz() - 1) / pmm_framesz(); // number of requested frames
     size_t alloc_frames = 0; // set to the number of frames that we were able to allocate
     for(size_t i = 0; i < requested_frames; i++) {
-        size_t frame = pmm_first_free(1); // no need for contiguous memory blocks since we'll be mapping to virtual memory anyway
+        size_t frame = pmm_alloc_free(1); // no need for contiguous memory blocks since we'll be mapping to virtual memory anyway
         if(frame == (size_t)-1) break; // out of memory
-        pmm_alloc(frame);
+        // pmm_alloc(frame);
 
         if(kheap_first_block == NULL) { // heap is being initialized
             kheap_first_block = (kheap_header_t*) KHEAP_BASE_ADDRESS;
@@ -260,7 +260,7 @@ void* kmalloc_ext(size_t size, size_t align, void** phys) {
                 kheap_truncate_block(header, size);
                 
                 header->used = 1; // mark block as used
-                if(phys != NULL) *phys = (void*) vmm_physaddr(vmm_current, return_addr);
+                if(phys != NULL) *phys = (void*) vmm_get_paddr(vmm_current, return_addr);
                 return (void*) return_addr;
             }
         }
@@ -366,7 +366,7 @@ void* krealloc_ext(void* ptr, size_t size, size_t align, void** phys) {
         kheap_truncate_block(proj_header, size);
 
         proj_header->used = 1; // mark block as used
-        if(phys != NULL) *phys = (void*) vmm_physaddr(vmm_current, return_addr);
+        if(phys != NULL) *phys = (void*) vmm_get_paddr(vmm_current, return_addr);
         return (void*) return_addr;
     }
 

@@ -9,10 +9,11 @@
 
 #include <mm/pmm.h>
 #include <mm/vmm.h>
-#include <stdio.h>
-
-#include <stdlib.h>
+#include <mm/addr.h>
 #include <mm/kheap.h>
+
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <fs/vfs.h>
@@ -132,17 +133,35 @@ void kinit() {
     kinfo("kernel init finished, current timer tick: %llu", (uint64_t)timer_tick);
 
     /* create another task for testing */
-    kinfo("creating another task");
-    task_create(false, NULL, (uintptr_t) &kmain); // NOTE: we cannot create an user task since kernel code is not mapped as user-accessible (for security reasons)
+    // kinfo("creating another task");
+    // task_create(false, NULL, (uintptr_t) &kmain); // NOTE: we cannot create an user task since kernel code is not mapped as user-accessible (for security reasons)
 
     kinfo("starting kernel task");
     task_set_ready(task_kernel, true);
 }
 
 void kmain() {
-    bool is_kernel = (task_current == task_kernel);
-    while(1) {
-        kprintf((is_kernel) ? "Hello, kernel task World! " : "Hello, another task World! ");
-        timer_delay_ms((is_kernel) ? 500 : 1000);
-    }
+    uintptr_t vaddr = vmm_first_free(vmm_current, kernel_end, 2 * vmm_pgsz());
+    kinfo("COW source 0x%x, dest 0x%x", vaddr, vaddr + vmm_pgsz());
+
+    uintptr_t paddr = pmm_alloc_free(1) * pmm_framesz();
+    kinfo("mapping source to 0x%x", paddr);
+    vmm_pgmap(vmm_current, paddr, vaddr, VMM_FLAGS_PRESENT | VMM_FLAGS_RW);
+    memset((void*)vaddr, 0x5A, pmm_framesz());
+
+    kinfo("setting up COW");
+    vmm_cow_setup(vmm_current, vaddr, vmm_current, vaddr + vmm_pgsz(), vmm_pgsz());
+    uint8_t* src = (uint8_t*)vaddr;
+    uint8_t* dst = (uint8_t*)(vaddr + vmm_pgsz());
+
+    kinfo("orig phys. addr: src = 0x%x, dst = 0x%x", vmm_get_paddr(vmm_current, vaddr), vmm_get_paddr(vmm_current, vaddr + vmm_pgsz()));
+    kinfo("src[5] = 0x%x, dst[5] = 0x%x", src[5], dst[5]);
+
+    kinfo("testing COW");
+    src[5] = 0xAA;
+
+    kinfo("new phys. addr: src = 0x%x, dst = 0x%x", vmm_get_paddr(vmm_current, vaddr), vmm_get_paddr(vmm_current, vaddr + vmm_pgsz()));
+    kinfo("src[5] = 0x%x, dst[5] = 0x%x", src[5], dst[5]);
+
+    while(1);
 }

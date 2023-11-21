@@ -50,5 +50,12 @@ size_t pmm_first_free(size_t sz);
  */
 void pmm_init();
 
+/*
+ * size_t pmm_alloc_free(size_t sz)
+ *  Finds the first sz frame(s) of contiguous free frames, then allocate
+ *  and return it if available. Returns -1 on failure.
+ *  This function is thread-safe.
+ */
+size_t pmm_alloc_free(size_t sz);
 
 #endif

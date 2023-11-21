@@ -258,14 +258,14 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
                         kfree(shdr); kfree(hdr_64); return ERR_ALLOC;
                     }
                     for(size_t j = 0; j < (sh_size + pmm_framesz() - 1) / pmm_framesz(); j++) {
-                        size_t frame = pmm_first_free(1); // no need for contiguous memory
+                        size_t frame = pmm_alloc_free(1); // no need for contiguous memory
                         if(frame == (size_t)-1) {
                             kerror("cannot allocate memory for loading section");
-                            for(size_t k = 0; k < j; k++) pmm_free(vmm_physaddr(alloc_vmm, vaddr) / pmm_framesz());
+                            for(size_t k = 0; k < j; k++) pmm_free(vmm_get_paddr(alloc_vmm, vaddr) / pmm_framesz());
                             vmm_unmap(vmm_current, vaddr, j * pmm_framesz());
                             kfree(shdr); kfree(hdr_64); return ERR_ALLOC;
                         }
-                        pmm_alloc(frame);
+                        // pmm_alloc(frame);
                         vmm_pgmap(vmm_current, frame * pmm_framesz(), vaddr + j * pmm_framesz(), VMM_FLAGS_PRESENT | VMM_FLAGS_RW | VMM_FLAGS_CACHE | VMM_FLAGS_GLOBAL);
                     }
                     if(sh_type != SHT_NOBITS) vfs_read(file, sh_off, sh_size, (uint8_t*) vaddr); // copy data from file
@@ -274,7 +274,7 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
                     prgload_result = krealloc(prgload_result, prgload_result_len * sizeof(elf_prgload_t));
                     if(prgload_result == NULL) {
                         kerror("cannot allocate memory for program loading result");
-                        for(size_t j = 0; j < (sh_size + pmm_framesz() - 1) / pmm_framesz(); j++) pmm_free(vmm_physaddr(alloc_vmm, vaddr + j * pmm_framesz()) / pmm_framesz());
+                        for(size_t j = 0; j < (sh_size + pmm_framesz() - 1) / pmm_framesz(); j++) pmm_free(vmm_get_paddr(alloc_vmm, vaddr + j * pmm_framesz()) / pmm_framesz());
                         vmm_unmap(vmm_current, vaddr, ((sh_size + pmm_framesz() - 1) / pmm_framesz()) * pmm_framesz());
                         kfree(prgload_result_old); kfree(shdr); kfree(hdr_64); return ERR_ALLOC;
                     }

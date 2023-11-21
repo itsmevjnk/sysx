@@ -3,6 +3,7 @@
 #include <kernel/log.h>
 #include <arch/x86cpu/asm.h>
 #include <exec/syms.h>
+#include <mm/vmm.h>
 
 //#define IDT_DEBUG // uncomment for log hell
 
@@ -84,8 +85,20 @@ struct stkframe {
 
 void exc_stub(uint8_t vector, idt_context_t* context) {
   (void) vector;
+  
+  uint32_t t; // temporary register
+  switch(vector) {
+	case 0x0E: // page fault
+		asm volatile("mov %%cr2, %0" : "=r"(t));
+		if(vmm_handle_fault(t, context->exc_code & 0b111)) return;
+		break;
+	default:
+		break;
+  }
+
+  /* unhandled exception */
   asm("cli"); // no more interrupts!
-  kerror("exception 0x%x (code 0x%x) @ 0x%x", context->vector, context->exc_code, context->eip);
+  kerror("unhandled exception 0x%x (code 0x%x) @ 0x%x", context->vector, context->exc_code, context->eip);
   kerror("eax=0x%08x ebx=0x%08x ecx=0x%08x edx=0x%08x", context->eax, context->ebx, context->ecx, context->edx);
   kerror("esi=0x%08x edi=0x%08x esp=0x%08x ebp=0x%08x", context->esi, context->edi, context->esp, context->ebp);
   kerror("cs=0x%04x ds=0x%04x es=0x%04x fs=0x%04x gs=0x%04x", context->cs, context->ds, context->es, context->fs, context->gs);

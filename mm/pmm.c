@@ -1,6 +1,7 @@
 #include <mm/pmm.h>
 #include <mm/vmm.h>
 #include <kernel/log.h>
+#include <exec/mutex.h>
 
 uintptr_t* pmm_bitmap = NULL;
 size_t pmm_frames = 0;
@@ -49,4 +50,16 @@ next:
 	}
 	kerror("out of memory");
 	return (size_t) -1; // out of memory
+}
+
+static mutex_t pmm_alloc_mutex = {0};
+
+size_t pmm_alloc_free(size_t sz) {
+	mutex_acquire(&pmm_alloc_mutex);
+	size_t frame = pmm_first_free(sz);
+	if(frame != (size_t)-1) {
+		for(size_t i = 0; i < sz; i++) pmm_alloc(frame + i);
+	}
+	mutex_release(&pmm_alloc_mutex);
+	return frame;
 }
