@@ -15,17 +15,25 @@ cld ; for movsb
 mov ebp, [task_current] ; task_current
 test ebp, ebp
 jz .switch_pd ; skip storing context
+
 mov eax, [ebp + (4 * 11)] ; task_current->type/ready/pid
 and eax, 0x00000007 ; extract type
+test eax, eax
 mov esi, [esp + (4 * 2)] ; context
+jz .store_ctx ; kernel tasks do not need the following (ring 3 task running ring 0/3 code) handling
+
+mov eax, [ebp + (4 * 11)] ; read type/ready/pid again
+and eax, ~0x7 ; get ready to change type
 cmp dword [esi], 0x10 ; GS = DS = 0x10 means we're in ring 0 at the time of switching
-jne .store_ctx ; we are not interested in the ring 3 case
-cmp eax, 1 ; DS = 0x10 and type = 1 means type should've been 2 (ring 3 task running ring 0 code) instead
-jne .store_ctx
-mov eax, [ebp + (4 * 11)]
-and eax, ~0x7
+jne .user_task_ring3
+.user_task_ring0:
 or eax, 2
+jmp .user_task_cont
+.user_task_ring3:
+or eax, 1
+.user_task_cont:
 mov [ebp + (4 * 11)], eax
+
 .store_ctx: ; store context into current task
 add esi, (4 * 4) ; skip DS/ES/FS/GS
 mov edi, [task_current]
@@ -74,14 +82,13 @@ movaps [edi + 108 + 4 + 5*16], xmm5
 movaps [edi + 108 + 4 + 6*16], xmm6
 movaps [edi + 108 + 4 + 7*16], xmm7
 
-.switch_pd: ; switch page directory - since the kernel is mapped across all pages, the stack will remain available
+.switch_pd: ; switch page directory
 mov ebp, [esp + (4 * 1)] ; task
 mov dword [task_current], ebp ; change task_current since we will not be working on it
 
 mov eax, [ebp + (4 * 10)] ; task->vmm
-push eax
-call vmm_switch
-add esp, 4
+mov eax, [eax + 4 * 1024 + 4 * 1024] ; skip PDEs and PT pointers
+mov cr3, eax ; no more stack beyond this point!
 
 .load_regs_s0: ; load FPU/MMX/SSE registers
 mov edi, ebp
@@ -133,7 +140,7 @@ push eax ; EFLAGS
 push 0x1B ; user CS
 mov eax, [ebp + (4 * 8)]
 push eax ; EIP
-jmp .load_regs_s2
+jmp .load_dseg
 .ring0_iret_prep:
 mov esp, [ebp + (4 * 3)] ; load ESP
 mov eax, [ebp + (4 * 9)]
@@ -142,11 +149,6 @@ push 0x08 ; kernel CS
 mov eax, [ebp + (4 * 8)]
 push eax ; EIP
 
-.load_regs_s2: ; load the rest of the general purpose registers into stack for later popping
-mov eax, [ebp + (4 * 7)]
-push eax ; EAX
-mov eax, [ebp + (4 * 2)]
-push eax ; EBP
 ; ESP is either restored previously (if switching into ring 0)
 ;     or will be restored by IRET (if switching into ring 3)
 
@@ -166,7 +168,84 @@ mov gs, ax
 mov al, 0x20
 out 0x20, al
 
-.load_regs_s3: ; pop EBP and EAX, and finally EFLAGS and CS:EIP via IRET (plus SS:ESP if switching to ring 3)
-pop ebp
-pop eax
+.load_regs_s2: ; load the rest of the general purpose registers, and finally EFLAGS and CS:EIP via IRET (plus SS:ESP if switching to ring 3)
+mov eax, [ebp + (4 * 7)]
+mov ebp, [ebp + (4 * 2)]
 iretd ; reload EFLAGS and EIP in one go
+
+; void* task_fork()
+;  Forks the current task and returns the child task.
+global task_fork
+extern task_fork_stub
+; NOTE: The i386 System V ABI specifies that:
+;  - EAX, ECX and EDX are scratch registers.
+;  - Functions must preserve EBX, ESI, EDI, EBP and ESP.
+;  - A stack frame is created by pushing EBP, then setting EBP to ESP (thus EBP stores the ptr to its original value in the stack).
+task_fork:
+push ebp ; create a new stack frame - this helps with debugging, and makes it easier to unwind the instruction and stack pointers later on.
+mov ebp, esp
+
+call task_fork_stub ; get new task - new task struct's ptr will be in EAX
+test eax, eax ; test EAX = NULL
+jz .done ; cannot create task - exit here.
+
+; save context
+.save_ctx:
+pushf
+cli ; for safety
+cld ; for string instructions - although DF should have been cleared already
+pusha
+
+; store PUSHA-saved registers
+mov esi, esp
+mov edi, eax ; task
+mov ecx, 8 * 4 ; EDI, ESI, EBP, ESP, EBX, EDX, ECX, EAX (we'll fix EBP and ESP later)
+rep movsb
+
+; store EBP
+mov eax, [ebp] ; the EBP that we pushed previously
+mov [edi - 6 * 4], eax
+
+; store ESP
+mov eax, ebp
+add eax, 2 * 4 ; discard EBP and return address (i.e. manually doing leave & ret)
+mov [edi - 5 * 4], eax
+
+; store EIP
+mov eax, [ebp + 1 * 4] ; return address pushed onto the stack by the caller
+stosd
+
+; store EFLAGS
+movsd ; ESI points at EFLAGS in the stack (pushed with PUSHF), and EDI points at task->regs.eflags (incremented by STOSD)
+
+; store FPU/MMX and SSE registers
+add edi, 64 - 4 * 10 ; start of regs_ext
+test word [x86ext_on], (1 << 3)
+jz .no_fxsave
+.fxsave: ; use FXSAVE to save FPU/MMX and SSE registers in one go
+fxsave [edi]
+jmp .done
+.no_fxsave:
+test word [x86ext_on], (1 << 0) | (1 << 1)
+jz .done ; no FPU/MMX support - nothing to be stored
+fsave [edi] ; MMX uses the same regs as FPU so this is enough
+test word [x86ext_on], (1 << 2)
+jz .done ; no SSE
+stmxcsr [edi + 108] ; store MXCSR
+movaps [edi + 108 + 4 + 0*16], xmm0
+movaps [edi + 108 + 4 + 1*16], xmm1
+movaps [edi + 108 + 4 + 2*16], xmm2
+movaps [edi + 108 + 4 + 3*16], xmm3
+movaps [edi + 108 + 4 + 4*16], xmm4
+movaps [edi + 108 + 4 + 5*16], xmm5
+movaps [edi + 108 + 4 + 6*16], xmm6
+movaps [edi + 108 + 4 + 7*16], xmm7
+
+popa
+popf
+
+or dword [eax + 10 * 4 + 1 * 4], (1 << 3) ; task->ready = 1
+
+.done:
+leave ; short for mov esp, ebp & pop ebp
+ret

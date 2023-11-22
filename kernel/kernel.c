@@ -9,11 +9,10 @@
 
 #include <mm/pmm.h>
 #include <mm/vmm.h>
-#include <mm/addr.h>
-#include <mm/kheap.h>
-
 #include <stdio.h>
+
 #include <stdlib.h>
+#include <mm/kheap.h>
 #include <string.h>
 
 #include <fs/vfs.h>
@@ -140,28 +139,16 @@ void kinit() {
     task_set_ready(task_kernel, true);
 }
 
+void task_main() {
+    void* task_parent = task_current;
+    kprintf("Hello, World!\n");
+    void* task = task_fork();
+    if(task_current == task) kprintf("...from the forked task.\n");
+    else kprintf("...from the parent task.\n");
+    while(1);
+}
+
 void kmain() {
-    uintptr_t vaddr = vmm_first_free(vmm_current, kernel_end, 2 * vmm_pgsz());
-    kinfo("COW source 0x%x, dest 0x%x", vaddr, vaddr + vmm_pgsz());
-
-    uintptr_t paddr = pmm_alloc_free(1) * pmm_framesz();
-    kinfo("mapping source to 0x%x", paddr);
-    vmm_pgmap(vmm_current, paddr, vaddr, VMM_FLAGS_PRESENT | VMM_FLAGS_RW);
-    memset((void*)vaddr, 0x5A, pmm_framesz());
-
-    kinfo("setting up COW");
-    vmm_cow_setup(vmm_current, vaddr, vmm_current, vaddr + vmm_pgsz(), vmm_pgsz());
-    uint8_t* src = (uint8_t*)vaddr;
-    uint8_t* dst = (uint8_t*)(vaddr + vmm_pgsz());
-
-    kinfo("orig phys. addr: src = 0x%x, dst = 0x%x", vmm_get_paddr(vmm_current, vaddr), vmm_get_paddr(vmm_current, vaddr + vmm_pgsz()));
-    kinfo("src[5] = 0x%x, dst[5] = 0x%x", src[5], dst[5]);
-
-    kinfo("testing COW");
-    src[5] = 0xAA;
-
-    kinfo("new phys. addr: src = 0x%x, dst = 0x%x", vmm_get_paddr(vmm_current, vaddr), vmm_get_paddr(vmm_current, vaddr + vmm_pgsz()));
-    kinfo("src[5] = 0x%x, dst[5] = 0x%x", src[5], dst[5]);
-
+    task_create(false, NULL, (uintptr_t) &task_main);
     while(1);
 }

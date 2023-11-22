@@ -17,6 +17,15 @@ bool task_get_ready(void* task) {
     return (task_common(task)->ready != 0);
 }
 
+void task_insert(void* task, void* target) {
+    task_common_t* common = task_common(task);
+    task_common_t* common_tgt = task_common(target);
+    common->prev = target;
+    common->next = common_tgt->next;
+    task_common(common->next)->prev = task;
+    common_tgt->next = task;
+}
+
 void* task_create(bool user, void* src_task, uintptr_t entry) {
     /* allocate memory for new task */
     void* task = task_create_stub(src_task);
@@ -85,10 +94,7 @@ void* task_create(bool user, void* src_task, uintptr_t entry) {
     if(entry != 0) common->ready = 1; // start task immediately if there's an instruction pointer ready
 
     /* insert this task after task_kernel */
-    common->prev = task_kernel;
-    common->next = task_common(task_kernel)->next;
-    task_common(common->next)->prev = task;
-    task_common(task_kernel)->next = task;
+    task_insert(task, task_kernel);
 
     return task;
 }
@@ -181,4 +187,49 @@ void task_yield(void* context) {
             task_switch(task, context);
         }
     }
+}
+
+void* task_fork_stub() {
+    /* create blank task */
+    void* task = task_create_stub(task_current);
+    if(task == NULL) return NULL;
+
+    task_common_t* common = task_common(task);
+    task_common_t* common_current = task_common(task_current);
+
+    /* set up common parameters */
+    common->vmm = vmm_clone(common_current->vmm);
+    common->type = (common_current->type == TASK_TYPE_KERNEL) ? TASK_TYPE_KERNEL : TASK_TYPE_USER_SYS;
+    common->stack_bottom = common_current->stack_bottom;
+    common->stack_size = common_current->stack_size;
+    common->ready = 0; // do not switch into this task as it's still being set up
+
+    size_t pgsz = vmm_pgsz();
+    void* stack_copy_dst = (void*) vmm_first_free(vmm_current, pgsz, pgsz);
+    if(stack_copy_dst == NULL) {
+        kerror("cannot find unused virtual address space to map new task's stack page for copying");
+        task_delete_stub(task);
+        return NULL;
+    }
+    vmm_pgmap(vmm_current, 0, (uintptr_t) stack_copy_dst, VMM_FLAGS_PRESENT | VMM_FLAGS_RW); // we'll fill in the phys address later
+    for(size_t i = 0; i < common->stack_size; i += pgsz) {
+        uintptr_t addr = common->stack_bottom - common->stack_size + i;
+        size_t frame = pmm_alloc_free(1);
+        if(frame == (size_t)-1) {
+            kerror("cannot allocate frame for new stack page at 0x%x", addr);
+            task_delete_stub(task);
+            vmm_pgunmap(vmm_current, (uintptr_t) stack_copy_dst);
+            return NULL;
+        }
+        vmm_set_paddr(common->vmm, addr, frame * pgsz); // change the phys address out
+
+        /* copy stack page - we may copy some of this function's garbage over, but it does not matter since task_fork will discard this stack frame anyway */
+        vmm_set_paddr(vmm_current, (uintptr_t) stack_copy_dst, frame * pgsz);
+        memcpy(stack_copy_dst, (void*) addr, pgsz);
+    }
+    vmm_pgunmap(vmm_current, (uintptr_t) stack_copy_dst);
+
+    task_insert(task, task_current);
+
+    return task;
 }
