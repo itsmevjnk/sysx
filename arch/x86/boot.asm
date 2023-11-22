@@ -60,6 +60,17 @@ _start:
 ; set up stack (we will be using the kernel stack, which will be re-used in higher half)
 mov esp, PHYS(stack.bottom)
 
+; disable the PICs now (so IRQs don't cause interrupts later and give us weird bugs)
+push eax
+mov al, 0x20
+out 0xa0, al
+out 0x20, al
+mov al, 0xff
+out 0xa1, al
+out 0x21, al
+cli
+pop eax
+
 cld ; clear direction flag
 mov edi, PHYS(__kernel_end) ; load EDI with the kernel end address
 ; from now on, EDI MUST NOT be touched
