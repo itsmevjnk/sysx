@@ -10,15 +10,14 @@ static size_t task_size = sizeof(task_t); // size of each task structure (includ
 
 extern uint16_t x86ext_on;
 
-void* task_create_stub(void* src_task) {
+void* task_create_stub() {
     task_t* task = kmalloc_ext(task_size, 16, NULL);
     if(task == NULL) {
         kerror("cannot allocate memory for new task");
         return NULL;
     }
 
-    if(src_task == NULL) memset(task, 0, task_size); // new task
-    else memcpy(task, src_task, task_size); // copy from source
+    memset(task, 0, task_size); // new task
 
     task->regs.eflags |= (1 << 9); // enable interrupts in all cases
     // set MXCSR; not sure if this is needed but we'll do it anyway
@@ -30,10 +29,6 @@ void* task_create_stub(void* src_task) {
 
 void task_delete_stub(void* task) {
     kfree(task);
-}
-
-void* task_get_vmm(void* task) {
-    return ((task_t*)task)->common.vmm;
 }
 
 uintptr_t task_get_iptr(void* task) {

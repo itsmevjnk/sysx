@@ -1,5 +1,6 @@
 #include <mm/vmm.h>
 #include <mm/pmm.h>
+#include <mm/addr.h>
 #include <stdlib.h>
 #include <kernel/log.h>
 #include <exec/mutex.h>
@@ -37,22 +38,25 @@ void vmm_unmap(void* vmm, uintptr_t va, size_t sz) {
 		vmm_pgunmap(vmm, va + i * vmm_pgsz());
 }
 
-uintptr_t vmm_first_free(void* vmm, uintptr_t va, size_t sz) {
+uintptr_t vmm_first_free(void* vmm, uintptr_t va_start, uintptr_t va_end, size_t sz, bool reverse) {
 	/* convert virtual address to VMM page number */
-	if(va == 0) va = 1; // avoid null
-	else va = (va + vmm_pgsz() - 1) / vmm_pgsz();
-	sz = (sz + vmm_pgsz() - 1) / vmm_pgsz(); // sz now stores the number of pages required
-	uintptr_t result = va; size_t blk_sz = 0;
-	while((result + sz) * vmm_pgsz() != 0) {
-		if(vmm_get_paddr(vmm, (result + blk_sz) * vmm_pgsz()) != 0) {
+	size_t pgsz = vmm_pgsz();
+	if(va_start == 0) va_start = 1; // avoid null
+	else va_start = (va_start + pgsz - 1) / pgsz;
+	va_end /= pgsz;
+	sz = (sz + pgsz - 1) / pgsz; // sz now stores the number of pages required
+	uintptr_t result = (!reverse) ? va_start : (va_end - sz); size_t blk_sz = 0;
+	while(result >= va_start && result + sz <= va_end) {
+		if(vmm_get_paddr(vmm, (result + blk_sz) * pgsz) != 0) {
 			/* block end */
-			result += blk_sz + 1;
+			if(reverse) result -= blk_sz + 1;
+			else result += blk_sz + 1;
 			blk_sz = 0;
 			continue;
 		}
 		/* this page is free */
 		blk_sz++;
-		if(blk_sz == sz) return result * vmm_pgsz(); // we've reached our target
+		if(blk_sz == sz) return result * pgsz; // we've reached our target
 	}
 	return 0; // cannot find block
 }
@@ -149,7 +153,7 @@ bool vmm_cow_duplicate(void* vmm, uintptr_t vaddr) {
 	vmm_trap_t* src = dst->info;
 
 	/* find virtual address space to map memory to for copying */
-    void* copy_src = (void*) vmm_first_free(vmm_current, pgsz, 2 * pgsz);
+    void* copy_src = (void*) vmm_first_free(vmm_current, pgsz, kernel_start, 2 * pgsz, false);
 	if(copy_src == NULL) {
 		kerror("cannot find virtual address space to map for copying");
 		return false;

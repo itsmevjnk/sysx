@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <hal/timer.h>
+#include <exec/process.h>
 
 /* kernel task description structure pointer */
 extern void* task_kernel;
@@ -26,7 +27,6 @@ extern volatile timer_tick_t task_switch_tick;
 #endif
 
 typedef struct {
-    void* vmm; // VMM configuration pointer
     size_t type : 3; // task type
     size_t ready : 1; // set when the task is ready to be switched to
     size_t pid : TASK_PID_BITS; // task's process ID
@@ -41,6 +41,7 @@ typedef struct {
 #define TASK_TYPE_USER                      1 // user task running user code
 #define TASK_TYPE_USER_SYS                  2 // user task running kernel code (e.g. syscall in progress)
 #define TASK_TYPE_DELETE_PENDING            3 // pending deletion
+
 /* initial task stack size */
 #ifndef TASK_INITIAL_STACK_SIZE
 #define TASK_INITIAL_STACK_SIZE             4096
@@ -90,27 +91,26 @@ void task_init_stub();
 void task_init();
 
 /*
- * void* task_create_stub(void* src_task)
- *  Creates a new task, optionally cloning a non-NULL source task, and
- *  gives the task a new PID (using task_pid_alloc()).
+ * void* task_create_stub()
+ *  Allocates space for a new task.
  *  This is an architecture-specific function and is called in ring 0.
  */
-void* task_create_stub(void* src_task);
+void* task_create_stub();
 
 /*
- * void* task_create(bool user, void* src_task, uintptr_t entry)
- *  Creates a new kernel/user task, then set the task's entry point to 
- *  the specified pointer and allocate stack space for it.
+ * void* task_create(bool user, proc_t* proc, size_t stack_sz, uintptr_t entry)
+ *  Creates a new kernel/user task belonging to the specified process,
+ *  then set the task's entry point to the specified pointer and allocate
+ *  stack space for it.
  *  The new task's stack will be located at the end of the user address
- *  space (start of kernel address space), copying from the source task
- *  if it uses the same stack space.
+ *  space (start of kernel address space).
  *  This is a common-defined function to be called in ring 0.
  */
-void* task_create(bool user, void* src_task, uintptr_t entry);
+void* task_create(bool user, proc_t* proc, size_t stack_sz, uintptr_t entry);
 
 /*
  * void task_delete_stub(void* task)
- *  Deallocates the task structure and free its PID (using task_pid_free()).
+ *  Deallocates the task structure.
  *  This is an architecture-specific function and is called in ring 0.
  */
 void task_delete_stub(void* task);
@@ -121,14 +121,6 @@ void task_delete_stub(void* task);
  *  This is a common-defined function.
  */
 void task_delete(void* task);
-
-/*
- * void* task_get_vmm(void* task)
- *  Retrieves the VMM configuration (mapped to the kernel's VMM) of the
- *  specified task.
- *  This is an architecture-specific function and is called in ring 0.
- */
-void* task_get_vmm(void* task);
 
 /*
  * uintptr_t task_get_iptr(void* task)

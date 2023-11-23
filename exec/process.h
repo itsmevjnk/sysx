@@ -14,10 +14,11 @@
 typedef struct {
     size_t pid; // process ID
     size_t parent_pid; // the process ID of the process that spawned this
+    void* vmm; // process' VMM configuration
     mutex_t mutex; // mutex for task operations
     size_t num_tasks; // number of tasks associated with the process
     void* tasks[]; // list of tasks
-} proc_t;
+} __attribute__((packed)) proc_t;
 
 extern proc_t* proc_kernel; // kernel process
 
@@ -29,11 +30,12 @@ extern proc_t* proc_kernel; // kernel process
 proc_t* proc_get(size_t pid);
 
 /*
- * proc_t* proc_create(proc_t* parent)
- *  Creates a new process, optionally given the caller's process.
+ * proc_t* proc_create(proc_t* parent, void* vmm)
+ *  Creates a new process, optionally given the caller's process, optionally
+ *  cloning the specified VMM config.
  *  Returns the process on success or NULL on failure.
  */
-proc_t* proc_create(proc_t* parent);
+proc_t* proc_create(proc_t* parent, void* vmm);
 
 /*
  * void proc_delete(proc_t* proc)
@@ -43,11 +45,11 @@ proc_t* proc_create(proc_t* parent);
 void proc_delete(proc_t* proc);
 
 /*
- * bool proc_add_task(proc_t* proc, void* task)
+ * size_t proc_add_task(proc_t* proc, void* task)
  *  Adds the specified task to the process.
- *  Returns true on success, or false on failure.
+ *  Returns the task's index in proc->tasks, or -1 on failure.
  */
-bool proc_add_task(proc_t* proc, void* task);
+size_t proc_add_task(proc_t* proc, void* task);
 
 /*
  * void proc_delete_task(proc_t* proc, void* task)

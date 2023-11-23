@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <arch/x86cpu/task.h>
+#include <exec/process.h>
 
 /* MMU data types */
 typedef struct {
@@ -88,11 +89,12 @@ void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 					if(task_kernel != NULL && va >= kernel_start) {
 						/* map kernel pages to all tasks' VMM configs */
 						task_t* task = task_kernel;
+						proc_t* proc = proc_get(task_common(task)->pid);
 						do {
-							if(task->common.vmm != vmm && ((vmm_t*)task->common.vmm)->pt[pde] != cfg->pt[pde]) {
+							if(proc->vmm != vmm && ((vmm_t*)proc->vmm)->pt[pde] != cfg->pt[pde]) {
 								/* copy PT pointer and PDE */
-								((vmm_t*)task->common.vmm)->pt[pde] = cfg->pt[pde];
-								memcpy(&((vmm_t*)task->common.vmm)->pd[pde], &cfg->pd[pde], sizeof(vmm_pde_t));
+								((vmm_t*)proc->vmm)->pt[pde] = cfg->pt[pde];
+								memcpy(&((vmm_t*)proc->vmm)->pd[pde], &cfg->pd[pde], sizeof(vmm_pde_t));
 							}
 							task = task->common.next;
 						} while(task != task_kernel);

@@ -6,6 +6,7 @@
 
 #include <mm/pmm.h>
 #include <mm/vmm.h>
+#include <mm/addr.h>
 
 /* most architectures can only load either ELF32 or ELF64 files */
 #if defined(__i386__)
@@ -110,8 +111,11 @@ enum elf_check_result elf_check_header(void* buf) {
 }
 
 #ifndef ELF_LOAD_ADDR_START
-#include <mm/addr.h>
 #define ELF_LOAD_ADDR_START                     kernel_end
+#endif
+
+#ifndef ELF_LOAD_ADDR_END
+#define ELF_LOAD_ADDR_END                       UINTPTR_MAX
 #endif
 
 enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t** load_result, size_t* load_result_len, const char* entry_name, uintptr_t* entry_ptr) {
@@ -252,7 +256,7 @@ enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t**
                 
                 if((sh_flags & SHF_ALLOC) && sh_size > 0 && (sh_type == SHT_PROGBITS || sh_type == SHT_NOBITS)) {
                     /* memory needs to be allocated for this section */
-                    uintptr_t vaddr = vmm_first_free(alloc_vmm, ELF_LOAD_ADDR_START, sh_size);
+                    uintptr_t vaddr = vmm_first_free(alloc_vmm, ELF_LOAD_ADDR_START, ELF_LOAD_ADDR_END, sh_size, false);
                     if(vaddr == 0) {
                         kerror("cannot find virtual memory space for loading section");
                         kfree(shdr); kfree(hdr_64); return ERR_ALLOC;

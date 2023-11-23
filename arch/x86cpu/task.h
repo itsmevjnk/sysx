@@ -10,6 +10,7 @@ typedef struct {
         uint32_t eip, eflags;
     } __attribute__((packed)) regs;
     task_common_t common;
+    uint32_t pad; // padding to get to 16-byte alignment for regs_ext
     uint32_t regs_ext[]; // extended registers
 } __attribute__((packed)) task_t;
 

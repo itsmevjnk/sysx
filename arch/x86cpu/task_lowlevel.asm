@@ -3,6 +3,7 @@ section .text
 extern task_current
 extern vmm_switch
 extern x86ext_on
+extern proc_pidtab
 
 ; void task_switch(void* task, void* context)
 ;  Performs a context switch to the specified task.
@@ -16,13 +17,13 @@ mov ebp, [task_current] ; task_current
 test ebp, ebp
 jz .switch_pd ; skip storing context
 
-mov eax, [ebp + (4 * 11)] ; task_current->type/ready/pid
+mov eax, [ebp + (4 * 10)] ; task_current->type/ready/pid
 and eax, 0x00000007 ; extract type
 test eax, eax
 mov esi, [esp + (4 * 2)] ; context
 jz .store_ctx ; kernel tasks do not need the following (ring 3 task running ring 0/3 code) handling
 
-mov eax, [ebp + (4 * 11)] ; read type/ready/pid again
+mov eax, [ebp + (4 * 10)] ; read type/ready/pid again
 and eax, ~0x7 ; get ready to change type
 cmp dword [esi], 0x10 ; GS = DS = 0x10 means we're in ring 0 at the time of switching
 jne .user_task_ring3
@@ -86,7 +87,12 @@ movaps [edi + 108 + 4 + 7*16], xmm7
 mov ebp, [esp + (4 * 1)] ; task
 mov dword [task_current], ebp ; change task_current since we will not be working on it
 
-mov eax, [ebp + (4 * 10)] ; task->vmm
+mov eax, [ebp + (4 * 10)] ; task->type/ready/pid
+shr eax, 4 ; discard type and ready
+shl eax, 2 ; multiply by 4
+add eax, dword [proc_pidtab] ; address into proc_pidtab
+mov eax, [eax]
+mov eax, [eax + 2 * 4] ; proc->vmm - TODO: do we need mutex_acquire and mutex_release here?
 mov eax, [eax + 4 * 1024 + 4 * 1024] ; skip PDEs and PT pointers
 mov cr3, eax ; no more stack beyond this point!
 
@@ -127,7 +133,7 @@ mov ecx, [ebp + (4 * 6)]
 
 ; load ESP and set up stack for IRET
 .load_esp:
-mov eax, [ebp + (4 * 11)] ; task->type/ready/pid
+mov eax, [ebp + (4 * 10)] ; task->type/ready/pid
 and eax, 0x00000007 ; extract type
 cmp eax, 1
 jne .ring0_iret_prep
@@ -153,7 +159,7 @@ push eax ; EIP
 ;     or will be restored by IRET (if switching into ring 3)
 
 .load_dseg: ; load data segments
-mov eax, [ebp + (4 * 11)] ; task->type/ready/pid
+mov eax, [ebp + (4 * 10)] ; task->type/ready/pid
 and eax, 0x00000007 ; extract type
 cmp eax, 1
 jne .eoi ; skip setting DS/ES/FS/GS for ring 0 since this has been done by the IDT handler
@@ -204,11 +210,19 @@ rep movsb
 
 ; store EBP
 mov eax, [ebp] ; the EBP that we pushed previously
+; fix EBP (EBP + new stack bottom - old stack bottom)
+mov edx, [task_current]
+mov edx, [edx + 10 * 4 + 1 * 4] ; task_current->stack_bottom
+sub edx, [edi + 2 * 4 + 1 * 4] ; task->stack_bottom
+neg edx ; EDX = new stack bottom - old stack bottom
+add eax, edx
 mov [edi - 6 * 4], eax
 
 ; store ESP
 mov eax, ebp
 add eax, 2 * 4 ; discard EBP and return address (i.e. manually doing leave & ret)
+; fix ESP (ESP + new stack bottom - old stack bottom)
+add eax, edx ; we'll use the value we calculated in EDX
 mov [edi - 5 * 4], eax
 
 ; store EIP
@@ -244,7 +258,7 @@ movaps [edi + 108 + 4 + 7*16], xmm7
 popa
 popf
 
-or dword [eax + 10 * 4 + 1 * 4], (1 << 3) ; task->ready = 1
+or dword [eax + 10 * 4 + 0 * 4], (1 << 3) ; task->ready = 1
 
 .done:
 leave ; short for mov esp, ebp & pop ebp

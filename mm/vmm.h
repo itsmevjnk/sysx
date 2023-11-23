@@ -114,13 +114,15 @@ void vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, size_t flags);
 void vmm_unmap(void* vmm, uintptr_t va, size_t sz);
 
 /*
- * uintptr_t vmm_first_free(void* vmm, uintptr_t va, size_t sz)
+ * uintptr_t vmm_first_free(void* vmm, uintptr_t va_start, uintptr_t va_end, size_t sz, bool reverse)
  *  Finds the first unmapped contiguous address space of size sz
- *  starting from the virtual address va in the given VMM config.
+ *  between va_start and va_end inclusive in the specified VMM
+ *  configuration. If reverse is set, the function will attempt
+ *  to find a space towards va_end.
  *  Returns the space's starting virtual address, or 0 if none
  *  can be found.
  */
-uintptr_t vmm_first_free(void* vmm, uintptr_t va, size_t sz);
+uintptr_t vmm_first_free(void* vmm, uintptr_t va_start, uintptr_t va_end, size_t sz, bool reverse);
 
 /* list of page traps (pages destined to cause a fault and to be handled by the kernel) */
 enum vmm_trap_type {

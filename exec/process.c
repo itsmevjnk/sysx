@@ -2,9 +2,10 @@
 #include <exec/task.h>
 #include <stdlib.h>
 #include <kernel/log.h>
+#include <mm/vmm.h>
 
-static proc_t** proc_pidtab = NULL; // array of PID to process struct mappings
-static size_t proc_pidtab_len = 0;
+proc_t** proc_pidtab = NULL; // array of PID to process struct mappings
+size_t proc_pidtab_len = 0;
 static mutex_t proc_mutex = {0}; // mutex for PID table-related operations
 
 proc_t* proc_kernel = NULL; // kernel process
@@ -58,15 +59,25 @@ proc_t* proc_get(size_t pid) {
     else return NULL;
 }
 
-proc_t* proc_create(proc_t* parent) {
+proc_t* proc_create(proc_t* parent, void* vmm) {
     proc_t* proc = kcalloc(1, sizeof(proc_t));
     if(proc == NULL) {
         kerror("cannot allocate memory for new process");
         return NULL;
     }
+    
+    if(vmm != NULL) {
+        proc->vmm = vmm_clone(vmm);
+        if(proc->vmm == NULL) {
+            kerror("cannot clone VMM for new process");
+            kfree(proc);
+            return NULL;
+        }
+    }
 
     if(proc_pid_alloc(proc) == (size_t)-1) {
         kerror("cannot give PID to new process");
+        vmm_free(proc->vmm);
         kfree(proc);
         return NULL;
     }
@@ -80,18 +91,19 @@ void proc_delete(proc_t* proc) {
     for(size_t i = 0; i < proc->num_tasks; i++) {
         task_delete(proc->tasks[i]);
     }
+    vmm_free(proc->vmm);
     kfree(proc);
     proc_pid_free(proc->pid);
 }
 
-bool proc_add_task(proc_t* proc, void* task) {
+size_t proc_add_task(proc_t* proc, void* task) {
     mutex_acquire(&proc->mutex);
     size_t i = 0;
     for(; i < proc->num_tasks; i++) {
         if(proc->tasks[i] == task) {
             /* attempting to insert an already existing task */
             mutex_release(&proc->mutex);
-            return true;
+            return i;
         }
         if(proc->tasks[i] == NULL) break;
     }
@@ -102,7 +114,7 @@ bool proc_add_task(proc_t* proc, void* task) {
             kerror("insufficient memory to add task to process 0x%x", proc);
             mutex_release(&proc_mutex);
             mutex_release(&proc->mutex);
-            return false;
+            return (size_t)-1;
         }
         proc_pidtab[proc->pid] = proc;
         mutex_release(&proc_mutex);
@@ -113,7 +125,7 @@ bool proc_add_task(proc_t* proc, void* task) {
     task_common(task)->pid = proc->pid;
 
     mutex_release(&proc->mutex);
-    return true;
+    return i;
 }
 
 void proc_delete_task(proc_t* proc, void* task) {
@@ -129,8 +141,9 @@ void proc_delete_task(proc_t* proc, void* task) {
 }
 
 void proc_init() {
-    task_init();
-    proc_kernel = proc_create(NULL);
+    proc_kernel = proc_create(NULL, NULL); // we'll set the VMM later
     kassert(proc_kernel != NULL);
+    proc_kernel->vmm = vmm_kernel;
+    task_init();
     proc_add_task(proc_kernel, task_kernel);
 }
