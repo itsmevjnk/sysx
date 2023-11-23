@@ -19,11 +19,21 @@ extern volatile bool task_yield_enable;
 extern volatile timer_tick_t task_switch_tick;
 
 /* COMMON TASK DESCRIPTION FIELDS */
+#if UINTPTR_MAX == UINT64_MAX
+#define TASK_PID_BITS               60 // number of bits reserved for PID field in task_common_t
+#else
+#define TASK_PID_BITS               28
+#endif
+
+#ifndef TASK_PIDMAX
+#define TASK_PIDMAX                 65535 // maximum PID that can be allocated
+#endif
+
 typedef struct {
     void* vmm; // VMM configuration pointer
     size_t type : 3; // task type
     size_t ready : 1; // set when the task is ready to be switched to
-    size_t pid : 28; // process ID
+    size_t pid : TASK_PID_BITS; // process ID
     uintptr_t stack_bottom;
     size_t stack_size;
     void* prev; // previous task
@@ -85,7 +95,8 @@ void task_init();
 
 /*
  * void* task_create_stub(void* src_task)
- *  Creates a new task, optionally cloning a non-NULL source task.
+ *  Creates a new task, optionally cloning a non-NULL source task, and
+ *  gives the task a new PID (using task_pid_alloc()).
  *  This is an architecture-specific function and is called in ring 0.
  */
 void* task_create_stub(void* src_task);
@@ -103,7 +114,7 @@ void* task_create(bool user, void* src_task, uintptr_t entry);
 
 /*
  * void task_delete_stub(void* task)
- *  Deallocates the task structure.
+ *  Deallocates the task structure and free its PID (using task_pid_free()).
  *  This is an architecture-specific function and is called in ring 0.
  */
 void task_delete_stub(void* task);
@@ -202,5 +213,24 @@ void* task_fork_stub();
  *  EBX on x86) during execution.
  */
 void* task_fork();
+
+/*
+ * size_t task_get_pid(void* task)
+ *  Retrieves the specified task's process ID (PID).
+ */
+size_t task_get_pid(void* task);
+
+/*
+ * size_t task_pid_alloc(void* task)
+ *  Retrieves an unused PID and mark it as used for the specified task.
+ *  Returns -1 on failure, or the PID on success.
+ */
+size_t task_pid_alloc(void* task);
+
+/*
+ * void task_pid_free(size_t pid)
+ *  Deallocates the specified PID.
+ */
+void task_pid_free(size_t pid);
 
 #endif

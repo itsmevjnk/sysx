@@ -143,12 +143,15 @@ void task_main() {
     void* task_parent = task_current;
     kprintf("Hello, World!\n");
     void* task = task_fork();
-    if(task_current == task) kprintf("...from the forked task.\n");
-    else kprintf("...from the parent task.\n");
+    kprintf("Task PID: %u\n", task_get_pid(task_current));
     while(1);
 }
 
 void kmain() {
+    kinfo("kernel task (kmain), PID %u", task_get_pid(task_current));
+
+    kinfo("creating new task for task_main demo");
     task_create(false, NULL, (uintptr_t) &task_main);
+    
     while(1);
 }
