@@ -20,13 +20,6 @@ void* task_create_stub(void* src_task) {
     if(src_task == NULL) memset(task, 0, task_size); // new task
     else memcpy(task, src_task, task_size); // copy from source
 
-    task->common.pid = task_pid_alloc(task);
-    if(task->common.pid == (size_t)-1) {
-        kerror("PID allocation failed");
-        kfree(task);
-        return NULL;
-    }
-
     task->regs.eflags |= (1 << 9); // enable interrupts in all cases
     // set MXCSR; not sure if this is needed but we'll do it anyway
     if(x86ext_on & (1 << 3)) task->regs_ext[6] = 0x1F80;
@@ -36,7 +29,6 @@ void* task_create_stub(void* src_task) {
 }
 
 void task_delete_stub(void* task) {
-    task_pid_free(((task_t*)task)->common.pid);
     kfree(task);
 }
 

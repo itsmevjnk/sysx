@@ -237,37 +237,3 @@ void* task_fork_stub() {
 size_t task_get_pid(void* task) {
     return task_common(task)->pid;
 }
-
-static void** task_pidtab = NULL; // array of PID to task struct mappings
-static size_t task_pidtab_len = 0;
-
-#ifndef TASK_PIDTAB_ALLOCSZ
-#define TASK_PIDTAB_ALLOCSZ         4 // number of entries to be allocated at once
-#endif
-
-size_t task_pid_alloc(void* task) {
-    size_t pid = 0;
-    for(; pid < task_pidtab_len; pid++) {
-        if(task_pidtab[pid] == NULL) break;
-    }
-    if(pid == task_pidtab_len) {
-        if(task_pidtab_len >= (1 << TASK_PID_BITS) || task_pidtab_len > TASK_PIDMAX) {
-            kerror("PID limit reached");
-            return (size_t)-1;
-        }
-        void** new_pidtab = krealloc(task_pidtab, (task_pidtab_len + TASK_PIDTAB_ALLOCSZ) * sizeof(void*));
-        if(new_pidtab == NULL) {
-            kerror("insufficient memory for PID allocation");
-            return (size_t)-1;
-        }
-        task_pidtab = new_pidtab;
-        memset(&task_pidtab[pid + 1], 0, (TASK_PIDTAB_ALLOCSZ - 1) * sizeof(void*));
-        task_pidtab_len += TASK_PIDTAB_ALLOCSZ;
-    }
-    task_pidtab[pid] = task;
-    return pid;
-}
-
-void task_pid_free(size_t pid) {
-    if(pid < task_pidtab_len) task_pidtab[pid] = NULL;
-}

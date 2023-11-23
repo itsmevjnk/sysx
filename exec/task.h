@@ -25,15 +25,11 @@ extern volatile timer_tick_t task_switch_tick;
 #define TASK_PID_BITS               28
 #endif
 
-#ifndef TASK_PIDMAX
-#define TASK_PIDMAX                 65535 // maximum PID that can be allocated
-#endif
-
 typedef struct {
     void* vmm; // VMM configuration pointer
     size_t type : 3; // task type
     size_t ready : 1; // set when the task is ready to be switched to
-    size_t pid : TASK_PID_BITS; // process ID
+    size_t pid : TASK_PID_BITS; // task's process ID
     uintptr_t stack_bottom;
     size_t stack_size;
     void* prev; // previous task
@@ -219,18 +215,5 @@ void* task_fork();
  *  Retrieves the specified task's process ID (PID).
  */
 size_t task_get_pid(void* task);
-
-/*
- * size_t task_pid_alloc(void* task)
- *  Retrieves an unused PID and mark it as used for the specified task.
- *  Returns -1 on failure, or the PID on success.
- */
-size_t task_pid_alloc(void* task);
-
-/*
- * void task_pid_free(size_t pid)
- *  Deallocates the specified PID.
- */
-void task_pid_free(size_t pid);
 
 #endif

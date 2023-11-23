@@ -126,8 +126,8 @@ void kinit() {
     kinfo("seeding PRNG using timer tick"); // for architectures without hardware pseudorandom number generation capabilities and additional entropy for those that do
     srand(timer_tick);
 
-    kinfo("creating kernel task");
-    task_init();
+    kinfo("creating kernel process and task");
+    proc_init();
 
     kinfo("kernel init finished, current timer tick: %llu", (uint64_t)timer_tick);
 
@@ -143,15 +143,13 @@ void task_main() {
     void* task_parent = task_current;
     kprintf("Hello, World!\n");
     void* task = task_fork();
-    kprintf("Task PID: %u\n", task_get_pid(task_current));
+    if(task_current == task) kprintf("...from the forked task.\n");
+    else kprintf("...from the parent task.\n");
     while(1);
 }
 
 void kmain() {
     kinfo("kernel task (kmain), PID %u", task_get_pid(task_current));
-
-    kinfo("creating new task for task_main demo");
     task_create(false, NULL, (uintptr_t) &task_main);
-    
     while(1);
 }
