@@ -61,6 +61,10 @@ static vmm_trap_t* vmm_traps = NULL;
 static size_t vmm_traps_maxlen = 0;
 static mutex_t vmm_traps_mutex = {0};
 
+#ifndef VMM_TRAP_ALLOCSZ
+#define VMM_TRAP_ALLOCSZ			4 // number of entries to be allocated at once
+#endif
+
 vmm_trap_t* vmm_new_trap(void* vmm, uintptr_t vaddr, enum vmm_trap_type type) {
 	vmm_trap_t* trap = NULL;
 	mutex_acquire(&vmm_traps_mutex);
@@ -72,13 +76,14 @@ vmm_trap_t* vmm_new_trap(void* vmm, uintptr_t vaddr, enum vmm_trap_type type) {
 	}
 	if(trap == NULL) {
 		/* create new trap */
-		vmm_trap_t* new_trap = krealloc(vmm_traps, (vmm_traps_maxlen + 1) * sizeof(vmm_trap_t));
+		vmm_trap_t* new_trap = krealloc(vmm_traps, (vmm_traps_maxlen + VMM_TRAP_ALLOCSZ) * sizeof(vmm_trap_t));
 		if(new_trap == NULL) {
 			kerror("cannot allocate memory for new trap (type %u, vmm 0x%x, vaddr 0x%x)", type, vmm, vaddr);
 		} else {
 			trap = &new_trap[vmm_traps_maxlen];
 			vmm_traps = new_trap;
-			vmm_traps_maxlen++;
+			memset(&new_trap[vmm_traps_maxlen + 1], 0, (VMM_TRAP_ALLOCSZ - 1) * sizeof(vmm_trap_t));
+			vmm_traps_maxlen += VMM_TRAP_ALLOCSZ;
 		}
 	}
 	if(trap != NULL) {
