@@ -108,16 +108,13 @@ size_t proc_add_task(proc_t* proc, void* task) {
         if(proc->tasks[i] == NULL) break;
     }
     if(i == proc->num_tasks) {
-        mutex_acquire(&proc_mutex);
-        proc = krealloc(proc, sizeof(proc_t) + (proc->num_tasks + PROC_TASK_ALLOCSZ) * sizeof(void*));
-        if(proc == NULL) {
+        void** new_tasks = krealloc(proc->tasks, (proc->num_tasks + PROC_TASK_ALLOCSZ) * sizeof(void*));
+        if(new_tasks == NULL) {
             kerror("insufficient memory to add task to process 0x%x", proc);
-            mutex_release(&proc_mutex);
             mutex_release(&proc->mutex);
             return (size_t)-1;
         }
-        proc_pidtab[proc->pid] = proc;
-        mutex_release(&proc_mutex);
+        proc->tasks = new_tasks;
         proc->num_tasks += PROC_TASK_ALLOCSZ;
         memset(&proc->tasks[i + 1], 0, (PROC_TASK_ALLOCSZ - 1) * sizeof(void*));
     }

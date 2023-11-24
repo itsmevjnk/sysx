@@ -15,9 +15,9 @@ typedef struct {
     size_t pid; // process ID
     size_t parent_pid; // the process ID of the process that spawned this
     void* vmm; // process' VMM configuration
-    mutex_t mutex; // mutex for task operations
-    size_t num_tasks; // number of tasks associated with the process
-    void* tasks[]; // list of tasks
+    mutex_t mutex; // mutex for process control block data read/write operations
+    size_t num_tasks; // number of entries (used + free) for tasks associated with the process
+    void** tasks; // list of tasks
 } __attribute__((packed)) proc_t;
 
 extern proc_t* proc_kernel; // kernel process
