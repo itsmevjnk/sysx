@@ -22,8 +22,6 @@
 static uint8_t vgaterm_x = 0, vgaterm_y = 0; // current cursor coordinates
 static uint16_t* vgaterm_buffer = (uint16_t*) TERM_VGATEXT_ADDR;
 
-mutex_t vgaterm_mutex = {0};
-
 #ifndef TERM_VGATEXT_NO_CURSOR // can be specified in CFLAGS
 static void vgaterm_update_cursor() {
     uint16_t pos = vgaterm_y * 80 + vgaterm_x;
@@ -44,9 +42,6 @@ static void vgaterm_newline() {
 }
 
 static void vgaterm_putc_stub(char c) {
-    // bool task_en = task_yield_enable;
-    // task_yield_enable = false; // TODO: use spinlock or something
-    mutex_acquire(&vgaterm_mutex);
     switch(c) {
         case '\b': // backspace character
             if(vgaterm_x > 0) vgaterm_x--;
@@ -74,11 +69,9 @@ static void vgaterm_putc_stub(char c) {
             if(vgaterm_x == 80) vgaterm_newline();
             break;
     }
-    // task_yield_enable = task_en;
-    mutex_release(&vgaterm_mutex);
 }
 
-void vgaterm_putc(const term_hook_t* impl, char c) {
+void vgaterm_putc(term_hook_t* impl, char c) {
     (void) impl;
     vgaterm_putc_stub(c);
 #ifndef TERM_VGATEXT_NO_CURSOR
@@ -86,7 +79,7 @@ void vgaterm_putc(const term_hook_t* impl, char c) {
 #endif
 }
 
-void vgaterm_puts(const term_hook_t* impl, const char* s) {
+void vgaterm_puts(term_hook_t* impl, const char* s) {
     (void) impl;
     for(size_t i = 0; s[i] != 0; i++) vgaterm_putc_stub(s[i]);
 #ifndef TERM_VGATEXT_NO_CURSOR
@@ -95,7 +88,7 @@ void vgaterm_puts(const term_hook_t* impl, const char* s) {
 }
 
 #ifndef TERM_NO_CLEAR
-void vgaterm_clear(const term_hook_t* impl) {
+void vgaterm_clear(term_hook_t* impl) {
     (void) impl;
     for(uint8_t y = 0; y < 25; y++) {
         for(uint8_t x = 0; x < 80; x++) vgaterm_buffer[y * 80 + x] = 0x0700;
@@ -108,32 +101,26 @@ void vgaterm_clear(const term_hook_t* impl) {
 #endif
 
 #ifndef TERM_NO_XY
-void vgaterm_get_dimensions(const term_hook_t* impl, size_t* width, size_t* height) {
+void vgaterm_get_dimensions(term_hook_t* impl, size_t* width, size_t* height) {
     (void) impl;
     *width = 80;
     *height = 25;
 }
 
-void vgaterm_set_xy(const term_hook_t* impl, size_t x, size_t y) {
+void vgaterm_set_xy(term_hook_t* impl, size_t x, size_t y) {
     (void) impl;
-    // bool task_en = task_yield_enable;
-    // task_yield_enable = false;
     vgaterm_x = x; vgaterm_y = y;
-    // task_yield_enable = task_en;
-    mutex_release(&vgaterm_mutex);
 #ifndef TERM_VGATEXT_NO_CURSOR
     vgaterm_update_cursor();
 #endif
 }
 
-void vgaterm_get_xy(const term_hook_t* impl, size_t* x, size_t* y) {
+void vgaterm_get_xy(term_hook_t* impl, size_t* x, size_t* y) {
     (void) impl;
-    mutex_acquire(&vgaterm_mutex);
     *x = vgaterm_x; *y = vgaterm_y;
-    mutex_release(&vgaterm_mutex);
 }
 
-const term_hook_t vgaterm_hook = {
+term_hook_t vgaterm_hook = {
     &vgaterm_putc,
     &vgaterm_puts,
 #ifndef TERM_NO_INPUT
@@ -159,6 +146,9 @@ const term_hook_t vgaterm_hook = {
     NULL,
     NULL,
 #endif
+
+    {0},
+    {0},
 
     NULL
 };

@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <exec/mutex.h>
 
 #define TERM_LINE_TERMINATION                   '\n' // line termination character, used by term_gets
 
@@ -16,9 +17,11 @@ typedef struct term_hook {
     void (*get_dimensions)(const struct term_hook*, size_t*, size_t*);
     void (*set_xy)(const struct term_hook*, size_t, size_t);
     void (*get_xy)(const struct term_hook*, size_t*, size_t*);
+    mutex_t mutex_in; // mutex for input operations (available/getc)
+    mutex_t mutex_out; // mutex for output operations (putc/puts/clear/get_dimensions/set_xy/get_xy)
     void* data; // other data if needed
 } __attribute__((packed)) term_hook_t;
-extern const term_hook_t* term_impl; // terminal implementation
+extern term_hook_t* term_impl; // terminal implementation
 
 /*
  * void term_init()

@@ -28,7 +28,7 @@
 #define TERM_SER_BAUD               115200UL
 #endif
 
-void serterm_putc(const term_hook_t* impl, char c) {
+void serterm_putc(term_hook_t* impl, char c) {
 #ifndef TERM_SER_NO_CRNL
     // if(c == '\r') return; // ignore CR (since we'll be converting NL to CR+NL anyway)
     if(c == '\n') ser_putc(TERM_SER_PORT, '\r'); // add CR to NL
@@ -37,23 +37,23 @@ void serterm_putc(const term_hook_t* impl, char c) {
 }
 
 #ifndef TERM_NO_INPUT
-size_t serterm_available(const term_hook_t* impl) {
+size_t serterm_available(term_hook_t* impl) {
     return (ser_avail_write(TERM_SER_PORT)) ? 1 : 0;
 }
 
-char serterm_getc(const term_hook_t* impl) {
+char serterm_getc(term_hook_t* impl) {
     return ser_getc(TERM_SER_PORT);
 }
 #endif
 
 #ifndef TERM_NO_CLEAR
-void serterm_clear(const term_hook_t* impl) {
+void serterm_clear(term_hook_t* impl) {
     ser_puts(TERM_SER_PORT, "\x1B[2J\x1B[H"); // clear entire screen, then move back to home position (ANSI)
 }
 #endif
 
 #ifndef TERM_NO_XY
-void serterm_get_dimensions(const term_hook_t* impl, size_t* width, size_t* height) {
+void serterm_get_dimensions(term_hook_t* impl, size_t* width, size_t* height) {
     size_t x, y; // for saving the current cursor position
     term_get_xy(&x, &y);
     term_set_xy(1000, 1000); // move the cursor to some outrageous position
@@ -62,11 +62,11 @@ void serterm_get_dimensions(const term_hook_t* impl, size_t* width, size_t* heig
     term_set_xy(x, y); // restore cursor position
 }
 
-void serterm_set_xy(const term_hook_t* impl, size_t x, size_t y) {
+void serterm_set_xy(term_hook_t* impl, size_t x, size_t y) {
     kprintf("\x1B[%u;%uH", y, x); // since kstdout is set to the terminal, we can use kprintf normally
 }
 
-void serterm_get_xy(const term_hook_t* impl, size_t* x, size_t* y) {
+void serterm_get_xy(term_hook_t* impl, size_t* x, size_t* y) {
     ser_puts(TERM_SER_PORT, "\x1B[6n"); // Device Status Report: returns cursor position
     
     *x = 0; *y = 0; // so we can start writing the results straight into them
@@ -97,7 +97,7 @@ void serterm_get_xy(const term_hook_t* impl, size_t* x, size_t* y) {
 }
 #endif
 
-const term_hook_t serterm_hook = {
+term_hook_t serterm_hook = {
     &serterm_putc,
     NULL,
 #ifndef TERM_NO_INPUT
@@ -124,6 +124,9 @@ const term_hook_t serterm_hook = {
     NULL,
 #endif
 
+    {0},
+    {0},
+    
     NULL
 };
 
