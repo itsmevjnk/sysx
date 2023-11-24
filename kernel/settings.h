@@ -8,6 +8,8 @@
 #define KMOD_PATH           "/boot/modules" // path to kernel modules directory
 #define DEVFS_ROOT          "/dev" // path to devices directory
 
-#define KMOD_INIT_FUNC      "kmod_init" // kernel module initialization function name
+#ifndef KSYM_INITIAL_CNT
+#define KSYM_INITIAL_CNT    8
+#endif
 
 #endif

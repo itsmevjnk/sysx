@@ -23,10 +23,6 @@
 #include <exec/usermode.h>
 #include <exec/task.h>
 
-#ifndef KSYM_INITIAL_CNT
-#define KSYM_INITIAL_CNT    8
-#endif
-
 extern int ktgtinit(); // must be defined somewhere in the target specific code
 
 /* VFS directory listing */
@@ -97,7 +93,7 @@ void kinit() {
     if(ksym_node == NULL) kerror("cannot find kernel symbols file");
     else {
         kinfo("loading kernel symbols");
-        elf_load(ksym_node, NULL, NULL, NULL, NULL, NULL);
+        elf_load_ksym(ksym_node);
         kinfo("%u symbol(s) have been added to kernel symbol pool", kernel_syms->count);
     }
 
@@ -115,11 +111,11 @@ void kinit() {
         }
         kinfo("loading %s (ino %llu)", mod->name, mod->inode);
         int32_t (*kmod_init)() = NULL;
-        elf_load(mod, vmm_current, NULL, NULL, KMOD_INIT_FUNC, (uintptr_t*) &kmod_init);
+        elf_load_kmod(mod, NULL, NULL, (uintptr_t*) &kmod_init);
         if(kmod_init != NULL) {
-            kinfo(" - calling module's " KMOD_INIT_FUNC " function at 0x%x", (uintptr_t)kmod_init);
+            kinfo(" - calling module's " ELF_KMOD_INIT_FUNC " function at 0x%x", (uintptr_t)kmod_init);
             int32_t ret = (*kmod_init)();
-            kinfo(" - " KMOD_INIT_FUNC " returned %d", ret);
+            kinfo(" - " ELF_KMOD_INIT_FUNC " returned %d", ret);
         } else kwarn(" - module does not have an init function");
     }
 

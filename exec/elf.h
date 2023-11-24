@@ -13,6 +13,8 @@
 
 #include <fs/vfs.h>
 
+#define ELF_KMOD_INIT_FUNC          "kmod_init" // kernel module initialization function name
+
 enum elf_check_result {
     OK_ELF32 = 0, // file is OK, and is ELF32
     OK_ELF64, // file is OK, and is ELF64
@@ -52,12 +54,18 @@ enum elf_check_result elf_check_header(void* buf);
 
 /*
  * enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t** load_result, size_t* load_result_len, const char* entry_name, uintptr_t* entry_ptr);
- *  Loads the specified ELF file (as a VFS node), and optionally retrieve
- *  the file's entry point via entry_ptr (optionally by searching for the
- *  entry symbol stored at entry_name, otherwise retrieving from the ELF
- *  header).
+ *  Loads the specified ELF kernel module (as a VFS node), and optionally
+ *  retrieve its entry point via entry_ptr (by searching for the function whose
+ *  name is specified in ELF_KMOD_INIT_FUNC above).
  *  Returns an elf_load_result value depending on the error/success status.
  */
-enum elf_load_result elf_load(vfs_node_t* file, void* alloc_vmm, elf_prgload_t** load_result, size_t* load_result_len, const char* entry_name, uintptr_t* entry_ptr);
+enum elf_load_result elf_load_kmod(vfs_node_t* file, elf_prgload_t** load_result, size_t* load_result_len, uintptr_t* entry_ptr);
+
+/*
+ * enum elf_load_result elf_load_ksym(vfs_node_t* file)
+ *  Loads the specified ELF kernel symbols file.
+ *  Returns an elf_load_result value depending on the error/success status.
+ */
+enum elf_load_result elf_load_ksym(vfs_node_t* file);
 
 #endif
