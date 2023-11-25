@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <exec/mutex.h>
+#include <exec/elf.h>
 
 #ifndef PROC_PIDMAX
 #define PROC_PIDMAX                 65535 // maximum PID that can be allocated
@@ -18,6 +19,8 @@ typedef struct {
     mutex_t mutex; // mutex for process control block data read/write operations
     size_t num_tasks; // number of entries (used + free) for tasks associated with the process
     void** tasks; // list of tasks
+    size_t num_elf_segments; // number of program segments (from loading ELF file)
+    elf_prgload_t* elf_segments; // list of ELF program segments
 } __attribute__((packed)) proc_t;
 
 extern proc_t* proc_kernel; // kernel process

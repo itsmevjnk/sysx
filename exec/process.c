@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <kernel/log.h>
 #include <mm/vmm.h>
+#include <mm/pmm.h>
 
 proc_t** proc_pidtab = NULL; // array of PID to process struct mappings
 size_t proc_pidtab_len = 0;
@@ -88,12 +89,29 @@ proc_t* proc_create(proc_t* parent, void* vmm) {
 
 void proc_delete(proc_t* proc) {
     mutex_acquire(&proc->mutex); // make sure nobody else is holding the process
+
+    /* delete all tasks */
     for(size_t i = 0; i < proc->num_tasks; i++) {
         if(proc->tasks[i] != NULL) task_delete(proc->tasks[i]);
     }
-    vmm_free(proc->vmm);
-    kfree(proc);
+
+    /* unmap ELF segments (if there's any) */
+    if(proc->elf_segments != NULL) {
+        size_t pgsz = vmm_pgsz();
+        for(size_t i = 0; i < proc->num_elf_segments; i++) {
+            for(size_t j = 0; j < proc->elf_segments[i].size; j += pgsz) {
+                uintptr_t addr = proc->elf_segments[i].vaddr + j;
+                pmm_free(vmm_get_paddr(proc->vmm, addr) / pgsz);
+                vmm_pgunmap(proc->vmm, addr);
+            }
+        }
+        kfree(proc->elf_segments);
+    }
+
+    vmm_free(proc->vmm); // delete VMM config
+    
     proc_pid_free(proc->pid);
+    kfree(proc);
 }
 
 size_t proc_add_task(proc_t* proc, void* task) {
