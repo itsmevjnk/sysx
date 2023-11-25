@@ -33,7 +33,7 @@ jmp .user_task_cont
 .user_task_ring3:
 or eax, 1
 .user_task_cont:
-mov [ebp + (4 * 11)], eax
+mov [ebp + (4 * 10)], eax
 
 .store_ctx: ; store context into current task
 add esi, (4 * 4) ; skip DS/ES/FS/GS

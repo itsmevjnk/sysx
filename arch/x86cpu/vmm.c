@@ -130,8 +130,10 @@ void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 void vmm_pgunmap(void* vmm, uintptr_t va) {
 	vmm_t* cfg = vmm;
 	size_t pde = va >> 22, pte = (va >> 12) & 0x3ff;
-	cfg->pt[pde]->pt[pte].present = 0;
-	if(vmm == vmm_current) asm volatile("invlpg (%0)" : : "r"(va) : "memory");
+	if(cfg->pt[pde] != NULL) {
+		cfg->pt[pde]->pt[pte].present = 0;
+		if(vmm == vmm_current) asm volatile("invlpg (%0)" : : "r"(va) : "memory");
+	}
 }
 
 uintptr_t vmm_get_paddr(void* vmm, uintptr_t va) {
@@ -223,7 +225,7 @@ void vmm_free(void* vmm) {
 	for(size_t i = 0; i < 768; i++) {
 		if(cfg->pt[i] != NULL) {
 			pmm_free(cfg->pd[i].pt);
-			vmm_pgunmap(vmm_current, (uintptr_t) cfg->pt[i]);
+			vmm_pgunmap(vmm_kernel, (uintptr_t) cfg->pt[i]);
 		}
 	}
 	kfree(cfg);

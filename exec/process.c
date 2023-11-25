@@ -89,7 +89,7 @@ proc_t* proc_create(proc_t* parent, void* vmm) {
 void proc_delete(proc_t* proc) {
     mutex_acquire(&proc->mutex); // make sure nobody else is holding the process
     for(size_t i = 0; i < proc->num_tasks; i++) {
-        task_delete(proc->tasks[i]);
+        if(proc->tasks[i] != NULL) task_delete(proc->tasks[i]);
     }
     vmm_free(proc->vmm);
     kfree(proc);
