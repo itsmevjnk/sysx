@@ -712,6 +712,208 @@ enum elf_load_result elf_load_syms(vfs_node_t* file, void* shdr, bool is_elf64, 
     return LOAD_OK;
 }
 
+enum elf_load_result elf_load_phdr(vfs_node_t* file, void* hdr, bool is_elf64, void* alloc_vmm, bool user, elf_prgload_t** prgload_result, size_t* prgload_result_len) {
+    *prgload_result = NULL; *prgload_result_len = 0;
+
+    /* load program header offset and sizes */
+    size_t e_phentsize, e_phnum; uintptr_t e_phoff;
+#ifndef ELF_FORCE_CLASS
+    if(is_elf64) {
+#endif
+#if !defined(ELF_FORCE_CLASS) || ELF_FORCE_CLASS == ELFCLASS64
+        e_phentsize = ((Elf64_Ehdr*)hdr)->e_phentsize;
+        e_phnum = ((Elf64_Ehdr*)hdr)->e_phnum;
+        e_phoff = ((Elf64_Ehdr*)hdr)->e_phoff;
+#endif
+#ifndef ELF_FORCE_CLASS
+    } else {
+#endif
+#if !defined(ELF_FORCE_CLASS) || ELF_FORCE_CLASS == ELFCLASS32
+        e_phentsize = ((Elf32_Ehdr*)hdr)->e_phentsize;
+        e_phnum = ((Elf32_Ehdr*)hdr)->e_phnum;
+        e_phoff = ((Elf32_Ehdr*)hdr)->e_phoff;
+#endif
+#ifndef ELF_FORCE_CLASS
+    }
+#endif
+
+    /* allocate and load program headers */
+    void* phdr = kmalloc(e_phentsize * e_phnum);
+    if(phdr == NULL) {
+        kerror("cannot allocate memory for program header table");
+        return ERR_ALLOC;
+    }
+    vfs_read(file, e_phoff, e_phentsize * e_phnum, (uint8_t*) phdr);
+
+    void* phdr_ent = phdr;
+    uint8_t* copy_dst = NULL;
+    for(size_t i = 0; i < e_phnum; i++) {
+#if ELF_FORCE_CLASS == ELFCLASS64
+        size_t p_type = ((Elf64_Phdr*)phdr_ent)->p_type;
+        size_t p_flags = ((Elf64_Phdr*)phdr_ent)->p_flags;
+        uintptr_t p_vaddr = ((Elf64_Phdr*)phdr_ent)->p_vaddr;
+        size_t p_memsz = ((Elf64_Phdr*)phdr_ent)->p_memsz;
+        uintptr_t p_offset = ((Elf64_Phdr*)phdr_ent)->p_offset;
+        size_t p_filesz = ((Elf64_Phdr*)phdr_ent)->p_filesz;
+#elif ELF_FORCE_CLASS == ELFCLASS32
+        size_t p_type = ((Elf32_Phdr*)phdr_ent)->p_type;
+        size_t p_flags = ((Elf32_Phdr*)phdr_ent)->p_flags;
+        uintptr_t p_vaddr = ((Elf32_Phdr*)phdr_ent)->p_vaddr;
+        size_t p_memsz = ((Elf32_Phdr*)phdr_ent)->p_memsz;
+        uintptr_t p_offset = ((Elf32_Phdr*)phdr_ent)->p_offset;
+        size_t p_filesz = ((Elf32_Phdr*)phdr_ent)->p_filesz;
+#else
+        size_t p_type = (is_elf64) ? ((Elf64_Phdr*)phdr_ent)->p_type : ((Elf32_Phdr*)phdr_ent)->p_type;
+        size_t p_flags = (is_elf64) ? ((Elf64_Phdr*)phdr_ent)->p_flags : ((Elf32_Phdr*)phdr_ent)->p_flags;
+        uintptr_t p_vaddr = (is_elf64) ? ((Elf64_Phdr*)phdr_ent)->p_vaddr : ((Elf32_Phdr*)phdr_ent)->p_vaddr;
+        size_t p_memsz = (is_elf64) ? ((Elf64_Phdr*)phdr_ent)->p_memsz : ((Elf32_Phdr*)phdr_ent)->p_memsz;
+        uintptr_t p_offset = (is_elf64) ? ((Elf64_Phdr*)phdr_ent)->p_offset : ((Elf32_Phdr*)phdr_ent)->p_offset;
+        size_t p_filesz = (is_elf64) ? ((Elf64_Phdr*)phdr_ent)->p_filesz : ((Elf32_Phdr*)phdr_ent)->p_filesz;
+#endif
+        phdr_ent = (void*) ((uintptr_t) phdr_ent + e_phentsize); // advance to next entry
+
+        if(p_type != PT_LOAD) continue; // skip non-loading headers
+
+        size_t pgsz = vmm_pgsz();
+
+        /* find a place in our address space to map segments to for copying */
+        if(copy_dst == NULL) {
+            copy_dst = (void*) vmm_first_free(vmm_current, 0, kernel_start, pgsz, false); // TODO: will mapping and unmapping the entire segment be more efficient than mapping individual pages?
+            if(copy_dst == NULL) {
+                kerror("cannot find space to map segment for copying data");
+                for(size_t j = 0; j < *prgload_result_len; j++) {
+                    for(size_t k = 0; k < (*prgload_result)[j].size; k += pgsz) {
+                        pmm_free(vmm_get_paddr(alloc_vmm, (*prgload_result)[j].vaddr + k) / pgsz);
+                        vmm_pgunmap(alloc_vmm, (*prgload_result)[j].vaddr + k);
+                    }
+                }
+                kfree(*prgload_result); return ERR_ALLOC;
+            }
+            vmm_pgmap(vmm_current, 0, (uintptr_t) copy_dst, VMM_FLAGS_PRESENT | VMM_FLAGS_RW); // we'll fill in the physical address later
+        }
+
+        /* allocate memory for the segment */
+        for(size_t j = 0; j < (p_memsz + p_vaddr % pgsz + pgsz - 1) / pgsz; j++) {
+            uintptr_t vaddr = p_vaddr - p_vaddr % pgsz + j * pgsz; // page's virtual address
+            if(vmm_get_paddr(alloc_vmm, vaddr) == 0) {
+                /* new page - allocate memory for it */
+                size_t frame = pmm_alloc_free(1);
+                if(frame == (size_t)-1) {
+                    kerror("cannot allocate memory for segment frame");
+                    for(size_t k = 0; k < *prgload_result_len; k++) {
+                        for(size_t l = 0; l < (*prgload_result)[k].size; l += pgsz) {
+                            pmm_free(vmm_get_paddr(alloc_vmm, (*prgload_result)[k].vaddr + l) / pgsz);
+                            vmm_pgunmap(alloc_vmm, (*prgload_result)[k].vaddr + l);
+                        }
+                    }
+                    for(size_t k = 0; k < j; k++) {
+                        pmm_free(vmm_get_paddr(alloc_vmm, p_vaddr - p_vaddr % pgsz + k * pgsz) / pgsz);
+                        vmm_pgunmap(alloc_vmm, p_vaddr - p_vaddr % pgsz + k * pgsz);
+                    }
+                    kfree(*prgload_result); return ERR_ALLOC;
+                }
+                vmm_pgmap(alloc_vmm, frame * pgsz, vaddr, VMM_FLAGS_PRESENT | ((user) ? VMM_FLAGS_USER : 0) | VMM_FLAGS_CACHE | ((p_flags & PF_W) ? VMM_FLAGS_RW : 0));
+            } else if(p_flags & PF_W) {
+                /* page is currently mapped, so we only need to set the RW flag if we need it */
+                size_t pg_flags = vmm_get_flags(alloc_vmm, vaddr);
+                if(!(pg_flags & VMM_FLAGS_RW)) vmm_set_flags(alloc_vmm, vaddr, pg_flags | VMM_FLAGS_RW);
+            }
+        }
+
+        /* copy data to the segment, one page at a time */
+        size_t offset = 0;
+        while(offset < p_memsz) {
+            uintptr_t paddr = vmm_get_paddr(alloc_vmm, p_vaddr + offset);
+            vmm_set_paddr(vmm_current, (uintptr_t) copy_dst, paddr);
+
+            size_t sz = pgsz - paddr % pgsz; // number of bytes to write to in this page
+            if(offset + sz > p_memsz) sz = p_memsz - offset;
+            
+            size_t sz_read = 0, sz_set = 0; // number of bytes to read from the file and to clear respectively
+            if(offset >= p_filesz) sz_set = sz; // offset is well outside of filesz - we only need to clear bytes
+            else if(offset + sz <= p_filesz) sz_read = sz; // offset + sz is well inside of filesz - we only need to read bytes out
+            else {
+                sz_read = p_filesz - offset;
+                sz_set = sz - sz_read;
+            }
+
+            if(sz_read) vfs_read(file, p_offset + offset, sz_read, &copy_dst[paddr % pgsz]);
+            if(sz_set) memset(&copy_dst[paddr % pgsz + sz_read], 0, sz_set);
+
+            offset += sz;
+        }
+
+        (*prgload_result_len)++;
+        elf_prgload_t* prgload_result_old = *prgload_result;
+        *prgload_result = krealloc(*prgload_result, *prgload_result_len * sizeof(elf_prgload_t));
+        if(*prgload_result == NULL) {
+            kerror("cannot allocate memory for program loading result");
+            for(size_t j = 0; j < *prgload_result_len; j++) {
+                for(size_t k = 0; k < (*prgload_result)[j].size; k += pgsz) {
+                    pmm_free(vmm_get_paddr(alloc_vmm, (*prgload_result)[j].vaddr + k) / pgsz);
+                    vmm_pgunmap(alloc_vmm, (*prgload_result)[j].vaddr + k);
+                }
+            }
+            for(size_t j = 0; j < p_memsz; j += pgsz) {
+                pmm_free(vmm_get_paddr(alloc_vmm, p_vaddr + j) / pgsz);
+                vmm_pgunmap(alloc_vmm, p_vaddr + j);
+            }
+            kfree(prgload_result_old); return ERR_ALLOC;
+        }
+
+        (*prgload_result)[*prgload_result_len - 1].idx = i;
+        (*prgload_result)[*prgload_result_len - 1].vaddr = p_vaddr;
+        (*prgload_result)[*prgload_result_len - 1].size = p_memsz;      
+    }
+    if(copy_dst != NULL) vmm_pgunmap(vmm_current, (uintptr_t) copy_dst);
+
+    kfree(phdr);
+    return LOAD_OK;
+}
+
+enum elf_load_result elf_load_exec(vfs_node_t* file, bool user, void* alloc_vmm, elf_prgload_t** load_result, size_t* load_result_len, uintptr_t* entry_ptr) {
+    /* load and check file header */
+    void* hdr; bool is_elf64;
+    enum elf_load_result result = elf_read_header(file, &hdr, &is_elf64);
+    if(result != LOAD_OK) return result; // failure
+
+    /* check file type */
+#if ELF_FORCE_CLASS == ELFCLASS64
+    if(((Elf64_Ehdr*)hdr)->e_type != ET_EXEC) {
+#elif ELF_FORCE_CLASS == ELFCLASS32
+    if(((Elf32_Ehdr*)hdr)->e_type != ET_EXEC) {
+#else
+    if((is_elf64 && ((Elf64_Ehdr*)hdr)->e_type != ET_EXEC) || (!is_elf64 && ((Elf32_Ehdr*)hdr)->e_type != ET_EXEC)) {
+#endif
+        kerror("not an executable binary (not ET_EXEC)");
+        kfree(hdr); return ERR_UNSUPPORTED_TYPE;
+    }
+
+    /* load program headers */
+    elf_prgload_t* prgload_result; size_t prgload_result_len;
+    result = elf_load_phdr(file, hdr, is_elf64, alloc_vmm, user, &prgload_result, &prgload_result_len);
+    if(result != LOAD_OK) {
+        kfree(hdr); return result;
+    }
+
+    /* return values to caller */
+    if(load_result != NULL) *load_result = prgload_result;
+    else kfree(prgload_result);
+    if(load_result_len != NULL) *load_result_len = prgload_result_len;
+    if(entry_ptr != NULL)
+#if ELF_FORCE_CLASS == ELFCLASS64
+        *entry_ptr = ((Elf64_Ehdr*)hdr)->e_entry;
+#elif ELF_FORCE_CLASS == ELFCLASS32
+        *entry_ptr = ((Elf32_Ehdr*)hdr)->e_entry;
+#else
+        *entry_ptr = (is_elf64) ? ((Elf64_Ehdr*)hdr)->e_entry : ((Elf32_Ehdr*)hdr)->e_entry;
+#endif
+
+    kinfo("executable binary loading is complete");
+    kfree(hdr);
+    return LOAD_OK;
+}
+
 enum elf_load_result elf_load_ksym(vfs_node_t* file) {
     /* load and check file header */
     void* hdr; bool is_elf64;
@@ -741,6 +943,8 @@ enum elf_load_result elf_load_ksym(vfs_node_t* file) {
 
     /* save symbols */
     result = elf_load_syms(file, shdr, is_elf64, true, e_shentsize, e_shnum, NULL, 0, kernel_syms, NULL, NULL);
+
+    kinfo("kernel symbols loading is complete");
     kfree(shdr); kfree(hdr); kfree(shstrtab_data);
     return result;
 }

@@ -40,7 +40,7 @@ enum elf_load_result {
 
 /* program loading result entry */
 typedef struct {
-    size_t idx; // section header entry index
+    size_t idx; // section/program header entry index
     uintptr_t vaddr; // starting virtual address
     size_t size; // section size
 } elf_prgload_t;
@@ -67,5 +67,12 @@ enum elf_load_result elf_load_kmod(vfs_node_t* file, elf_prgload_t** load_result
  *  Returns an elf_load_result value depending on the error/success status.
  */
 enum elf_load_result elf_load_ksym(vfs_node_t* file);
+
+/*
+ * enum elf_load_result elf_load_exec(vfs_node_t* file, bool user, void* alloc_vmm, elf_prgload_t** load_result, size_t* load_result_len, uintptr_t* entry_ptr)
+ *  Loads the specified ELF executable binary file.
+ *  Returns an elf_load_result value depending on the error/success status.
+ */
+enum elf_load_result elf_load_exec(vfs_node_t* file, bool user, void* alloc_vmm, elf_prgload_t** load_result, size_t* load_result_len, uintptr_t* entry_ptr);
 
 #endif

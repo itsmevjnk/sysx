@@ -156,14 +156,43 @@ typedef struct {
 
 /* relocation entries */
 typedef struct {
-    Elf32_Addr r_offset;
-    Elf32_Word r_info;
+    Elf32_Addr      r_offset;
+    Elf32_Word      r_info;
 } __attribute__((packed)) Elf32_Rel;
 
 typedef struct {
-    Elf32_Addr r_offset;
-    Elf32_Word r_info;
-    Elf32_Sword r_addend;
+    Elf32_Addr      r_offset;
+    Elf32_Word      r_info;
+    Elf32_Sword     r_addend;
 } __attribute__((packed)) Elf32_Rela;
+
+/* program header */
+typedef struct {
+    Elf32_Word      p_type;
+    Elf32_Off       p_offset;
+    Elf32_Addr      p_vaddr;
+    Elf32_Addr      p_paddr;
+    Elf32_Word      p_filesz;
+    Elf32_Word      p_memsz;
+    Elf32_Word      p_flags;
+    Elf32_Word      p_align;
+} __attribute__((packed)) Elf32_Phdr;
+
+/* p_type values */
+#define PT_NULL                 0
+#define PT_LOAD                 1
+#define PT_DYNAMIC              2
+#define PT_INTERP               3
+#define PT_NOTE                 4
+#define PT_SHLIB                5
+#define PT_PHDR                 6
+#define PT_LOPROC               0x70000000
+#define PT_HIPROC               0x7FFFFFFF
+
+/* p_flags bitmasks */
+#define PF_X                    (1 << 0)
+#define PF_W                    (1 << 1)
+#define PF_R                    (1 << 2)
+#define PF_MASKPROC             0xFF000000
 
 #endif

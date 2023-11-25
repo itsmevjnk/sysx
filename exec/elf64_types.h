@@ -95,14 +95,33 @@ typedef struct {
 
 /* relocation entries */
 typedef struct {
-    Elf64_Addr r_offset;
-    Elf64_Xword r_info;
+    Elf64_Addr      r_offset;
+    Elf64_Xword     r_info;
 } __attribute__((packed)) Elf64_Rel;
 
 typedef struct {
-    Elf64_Addr r_offset;
-    Elf64_Xword r_info;
-    Elf64_Sxword r_addend;
+    Elf64_Addr      r_offset;
+    Elf64_Xword     r_info;
+    Elf64_Sxword    r_addend;
 } __attribute__((packed)) Elf64_Rela;
+
+/* program header */
+typedef struct {
+    Elf64_Word      p_type;
+    Elf64_Word      p_flags;
+    Elf64_Off       p_offset;
+    Elf64_Addr      p_vaddr;
+    Elf64_Addr      p_paddr;
+    Elf64_Xword     p_filesz;
+    Elf64_Xword     p_memsz;
+    Elf64_Xword     p_align;
+} __attribute__((packed)) Elf64_Phdr;
+
+/* p_type values */
+#define PT_LOOS                 0x60000000
+#define PT_HIOS                 0x6FFFFFFF
+
+/* p_flags bitmasks */
+#define PF_MASKOS               0x00FF0000
 
 #endif
