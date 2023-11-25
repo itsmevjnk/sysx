@@ -90,10 +90,12 @@ static void task_do_delete(void* task) {
 
     /* de-allocate stack */
     proc_t* proc = proc_get(common->pid);
-    size_t framesz = pmm_framesz();
-    for(size_t i = 0; i < common->stack_size; i += framesz) {
-        uintptr_t vaddr = common->stack_bottom - framesz - i;
-        pmm_free(vmm_get_paddr(proc->vmm, vaddr) / framesz);
+    if(proc != NULL) {
+        size_t framesz = pmm_framesz();
+        for(size_t i = 0; i < common->stack_size; i += framesz) {
+            uintptr_t vaddr = common->stack_bottom - framesz - i;
+            pmm_free(vmm_get_paddr(proc->vmm, vaddr) / framesz);
+        }
     }
 
     task_delete_stub(task); // finally purge the task
@@ -104,7 +106,7 @@ void task_delete(void* task) {
     common->ready = 0;
     if(task_current == task) {
         common->type = TASK_TYPE_DELETE_PENDING;
-        while(1); // wait until we switch out of the task - then we'll delete it later
+        // while(1); // wait until we switch out of the task - then we'll delete it later
     } else task_do_delete(task); // delete right away
 }
 

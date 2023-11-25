@@ -22,6 +22,7 @@
 #include <exec/syms.h>
 #include <exec/usermode.h>
 #include <exec/task.h>
+#include <exec/syscall.h>
 
 extern int ktgtinit(); // must be defined somewhere in the target specific code
 
@@ -124,6 +125,9 @@ void kinit() {
 
     kinfo("creating kernel process and task");
     proc_init();
+
+    kinfo("initializing syscall");
+    syscall_init();
 
     kinfo("kernel init finished, current timer tick: %llu", (uint64_t)timer_tick);
 
