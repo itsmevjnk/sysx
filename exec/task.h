@@ -42,6 +42,11 @@ typedef struct {
 #define TASK_TYPE_USER_SYS                  2 // user task running kernel code (e.g. syscall in progress)
 #define TASK_TYPE_DELETE_PENDING            3 // pending deletion
 
+/* task kernel stack size (only allocated for user tasks) */
+#ifndef TASK_KERNEL_STACK_SIZE
+#define TASK_KERNEL_STACK_SIZE              2048
+#endif
+
 /* initial task stack size */
 #ifndef TASK_INITIAL_STACK_SIZE
 #define TASK_INITIAL_STACK_SIZE             4096

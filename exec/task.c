@@ -45,6 +45,7 @@ void* task_create(bool user, proc_t* proc, size_t stack_sz, uintptr_t entry) {
     task_common_t* common = task_common(task);
     
     /* allocate memory for stack */
+    if(user) stack_sz += TASK_KERNEL_STACK_SIZE; // allocate memory for kernel stack too
     size_t stack_frames = 0; // number of allocated stack frames
     size_t framesz = pmm_framesz();
     common->stack_bottom = vmm_first_free(proc->vmm, 0, kernel_start, stack_sz, true) + stack_sz;
@@ -60,7 +61,7 @@ void* task_create(bool user, proc_t* proc, size_t stack_sz, uintptr_t entry) {
         // pmm_alloc(frame);
         vmm_pgmap(proc->vmm, frame * framesz, common->stack_bottom - stack_frames * framesz, VMM_FLAGS_PRESENT | VMM_FLAGS_RW | VMM_FLAGS_CACHE | ((user) ? VMM_FLAGS_USER : 0));
     }
-    if(!stack_frames) {
+    if(stack_frames * framesz <= ((user) ? TASK_KERNEL_STACK_SIZE : 0)) {
         kerror("cannot allocate memory for task stack");
         task_delete_stub(task);
         return NULL;
@@ -69,7 +70,7 @@ void* task_create(bool user, proc_t* proc, size_t stack_sz, uintptr_t entry) {
 
     /* set instruction and stack pointers */
     task_set_iptr(task, entry);
-    task_set_sptr(task, common->stack_bottom);
+    task_set_sptr(task, common->stack_bottom - ((user) ? TASK_KERNEL_STACK_SIZE : 0));
 
     /* set task type and activate task */
     common->type = (user) ? TASK_TYPE_USER : TASK_TYPE_KERNEL;
