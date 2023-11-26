@@ -139,20 +139,61 @@ void kinit() {
     task_set_ready(task_kernel, true);
 }
 
-void task_main() {
-    void* task_parent = task_current;
-    char buf[100];
-    ksprintf(buf, "Hello, World! (from PID %u) - now with proc_fd_write!\n", task_get_pid(task_current));
-    proc_fd_write(proc_get(task_get_pid(task_current)), 1, strlen(buf), buf);
-    void* task = task_fork();
-    if(task_current == task) kprintf("...from the forked task.\n");
-    else kprintf("...from the parent task.\n");
-    while(1);
-}
-
 void kmain() {
     kinfo("kernel task (kmain), PID %u", task_get_pid(task_current));
-    struct proc* task_proc = proc_create(task_kernel, vmm_kernel);
-    task_create(false, task_proc, TASK_INITIAL_STACK_SIZE, (uintptr_t) &task_main);
-    while(1);
+    vfs_node_t* bin_node = vfs_traverse_path(BIN_ROOT);
+    if(bin_node == NULL) {
+        kerror(BIN_ROOT " not found");
+        while(1);
+    }
+
+    kprintf("Available binaries: ");
+    for(size_t i = 0; ; i++) {
+        struct dirent* ent = vfs_readdir(bin_node, i);
+        if(ent == NULL) {
+            kprintf(".\n");
+            break;
+        }
+        if(i > 0) kprintf(", ");
+        kprintf("%s", ent->name);
+    }
+
+    while(1) {
+        kputchar('>');
+        char buf[100]; term_gets(buf);
+        if(buf[0] == '\0') continue; // quicker than strlen(buf) == 0
+        
+        vfs_node_t* file = vfs_finddir(bin_node, buf);
+        if(file == NULL) {
+            kprintf("Binary %s not found\n\n");
+            continue;
+        }
+        
+        // kputs(buf);
+
+        kinfo("creating new process");
+        proc_t* proc = proc_create(proc_kernel, vmm_kernel);
+        if(proc == NULL) {
+            kprintf("Cannot create process\n\n");
+            continue;
+        }
+
+        kinfo("loading ELF executable");
+        elf_prgload_t* load_result; size_t load_result_len; uintptr_t entry;
+        enum elf_load_result result = elf_load_exec(file, true, proc->vmm, &load_result, &load_result_len, &entry);
+        if(result != LOAD_OK) {
+            kprintf("Cannot load file (elf_load_exec() returned %d)", result);
+            proc_delete(proc);
+            continue;
+        } else kinfo("loaded %u segment(s), entry point: 0x%x", load_result_len, entry);
+        proc->elf_segments = load_result; proc->num_elf_segments = load_result_len;
+
+        kinfo("creating new task");
+        void* task = task_create(true, proc, TASK_INITIAL_STACK_SIZE, entry);
+        if(task == NULL) {
+            kprintf("Cannot create task");
+            proc_delete(proc);
+            continue;
+        }
+    }
 }

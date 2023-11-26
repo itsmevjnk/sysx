@@ -48,6 +48,7 @@ void* task_create(bool user, struct proc* proc, size_t stack_sz, uintptr_t entry
     if(user) stack_sz += TASK_KERNEL_STACK_SIZE; // allocate memory for kernel stack too
     size_t stack_frames = 0; // number of allocated stack frames
     size_t framesz = pmm_framesz();
+    if(stack_sz % framesz) stack_sz += framesz - stack_sz % framesz; // frame-align stack size
     common->stack_bottom = vmm_first_free(proc->vmm, 0, kernel_start, stack_sz, true) + stack_sz;
     if(common->stack_bottom == 0) {
         kerror("cannot allocate virtual address space for task");
