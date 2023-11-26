@@ -5,7 +5,7 @@
 void syscall_handler(uint8_t vector, idt_context_t* context) {
     switch(context->eax) {
         default:
-            syscall_handler_stub(&context->eax, &context->ebx, &context->ecx, &context->edx, &context->esi, &context->edi);
+            syscall_handler_stub(&context->eax, &context->ecx, &context->edx, &context->ebx, &context->esi, &context->edi);
             break;
     }
 }

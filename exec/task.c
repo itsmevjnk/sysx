@@ -28,7 +28,7 @@ void task_insert(void* task, void* target) {
     task_yield_enable = true;
 }
 
-void* task_create(bool user, proc_t* proc, size_t stack_sz, uintptr_t entry) {
+void* task_create(bool user, struct proc* proc, size_t stack_sz, uintptr_t entry) {
     /* allocate memory for new task */
     void* task = task_create_stub();
     if(task == NULL) {
@@ -90,7 +90,7 @@ static void task_do_delete(void* task) {
     task_common(common->next)->prev = common->prev;
 
     /* de-allocate stack */
-    proc_t* proc = proc_get(common->pid);
+    struct proc* proc = proc_get(common->pid);
     if(proc != NULL) {
         size_t framesz = pmm_framesz();
         for(size_t i = 0; i < common->stack_size; i += framesz) {
@@ -163,7 +163,7 @@ void task_yield(void* context) {
 void* task_fork_stub() {
     /* create blank task */
     task_common_t* common_current = task_common(task_current);
-    proc_t* proc_current = proc_get(common_current->pid);
+    struct proc* proc_current = proc_get(common_current->pid);
     void* task = task_create((common_current->type == TASK_TYPE_USER || common_current->type == TASK_TYPE_USER_SYS), proc_current, common_current->stack_size, 0);
     if(task == NULL) return NULL;
 

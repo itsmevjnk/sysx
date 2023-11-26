@@ -23,6 +23,8 @@ bool syscall_handler_stub(size_t* func_ret, size_t* arg1, size_t* arg2, size_t* 
 
 /* syscall function numbers */
 #define SYSCALL_EXIT                            0 // arg1 = return code
+#define SYSCALL_READ                            1 // arg1 = size, arg2 = buffer ptr, arg3 = fd
+#define SYSCALL_WRITE                           2 // arg1 = size, arg2 = buffer ptr, arg3 = fd
 #define SYSCALL_ARCH_LO                         0xF0000000 // start of architecture-specific syscall functions
 #define SYSCALL_ARCH_HI                         0xFFFFFFFF
 

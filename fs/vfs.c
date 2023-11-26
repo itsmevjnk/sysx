@@ -56,9 +56,9 @@ uint64_t vfs_write(vfs_node_t* node, uint64_t offset, uint64_t size, const uint8
     return 0;
 }
 
-bool vfs_open(vfs_node_t* node, bool write) {
+bool vfs_open(vfs_node_t* node, bool read, bool write) {
     node = vfs_traverse_symlink(node);
-    if(node != NULL && node->hook->open != NULL) return node->hook->open((void*)node, write);
+    if(node != NULL && node->hook->open != NULL) return node->hook->open((void*)node, read, write);
     return true;
 }
 

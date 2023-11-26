@@ -141,7 +141,9 @@ void kinit() {
 
 void task_main() {
     void* task_parent = task_current;
-    kprintf("Hello, World! (from PID %u)\n", task_get_pid(task_current));
+    char buf[100];
+    ksprintf(buf, "Hello, World! (from PID %u) - now with proc_fd_write!\n", task_get_pid(task_current));
+    proc_fd_write(proc_get(task_get_pid(task_current)), 1, strlen(buf), buf);
     void* task = task_fork();
     if(task_current == task) kprintf("...from the forked task.\n");
     else kprintf("...from the parent task.\n");
@@ -150,7 +152,7 @@ void task_main() {
 
 void kmain() {
     kinfo("kernel task (kmain), PID %u", task_get_pid(task_current));
-    proc_t* task_proc = proc_create(task_kernel, vmm_kernel);
+    struct proc* task_proc = proc_create(task_kernel, vmm_kernel);
     task_create(false, task_proc, TASK_INITIAL_STACK_SIZE, (uintptr_t) &task_main);
     while(1);
 }

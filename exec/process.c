@@ -4,12 +4,13 @@
 #include <kernel/log.h>
 #include <mm/vmm.h>
 #include <mm/pmm.h>
+#include <fs/devfs.h>
 
-proc_t** proc_pidtab = NULL; // array of PID to process struct mappings
+struct proc** proc_pidtab = NULL; // array of PID to process struct mappings
 size_t proc_pidtab_len = 0;
 static mutex_t proc_mutex = {0}; // mutex for PID table-related operations
 
-proc_t* proc_kernel = NULL; // kernel process
+struct proc* proc_kernel = NULL; // kernel process
 
 #ifndef PROC_PIDTAB_ALLOCSZ
 #define PROC_PIDTAB_ALLOCSZ         4 // number of process entries to be allocated at once
@@ -19,9 +20,13 @@ proc_t* proc_kernel = NULL; // kernel process
 #define PROC_TASK_ALLOCSZ           4 // number of task entries to be allocated at once
 #endif
 
+#ifndef PROC_FDS_ALLOCSZ
+#define PROC_FDS_ALLOCSZ            4 // number of file descriptor table entries to be allocated at once
+#endif
+
 /* PID ALLOCATION/DEALLOCATION */
 
-static size_t proc_pid_alloc(proc_t* proc) {
+static size_t proc_pid_alloc(struct proc* proc) {
     mutex_acquire(&proc_mutex);
     size_t pid = 0;
     for(; pid < proc_pidtab_len; pid++) {
@@ -55,13 +60,13 @@ static void proc_pid_free(size_t pid) {
     mutex_release(&proc_mutex);
 }
 
-proc_t* proc_get(size_t pid) {
+struct proc* proc_get(size_t pid) {
     if(pid < proc_pidtab_len) return proc_pidtab[pid];
     else return NULL;
 }
 
-proc_t* proc_create(proc_t* parent, void* vmm) {
-    proc_t* proc = kcalloc(1, sizeof(proc_t));
+struct proc* proc_create(struct proc* parent, void* vmm) {
+    struct proc* proc = kcalloc(1, sizeof(struct proc));
     if(proc == NULL) {
         kerror("cannot allocate memory for new process");
         return NULL;
@@ -83,12 +88,20 @@ proc_t* proc_create(proc_t* parent, void* vmm) {
         return NULL;
     }
 
+    /* open stdin, stdout and stderr */
+    size_t fd = proc_fd_open(proc, dev_console, true, true, false, false, false);
+    if(fd != 0) kerror("cannot open stdin (proc_fd_open() returned unexpected value %u)", fd);
+    fd = proc_fd_open(proc, dev_console, true, false, true, false, false);
+    if(fd != 1) kerror("cannot open stdout (proc_fd_open() returned unexpected value %u)", fd);
+    fd = proc_fd_open(proc, dev_console, true, false, true, false, false);
+    if(fd != 2) kerror("cannot open stderr (proc_fd_open() returned unexpected value %u)", fd);
+
     if(parent != NULL) proc->parent_pid = parent->pid;
     return proc;
 }
 
-void proc_delete(proc_t* proc) {
-    mutex_acquire(&proc->mutex); // make sure nobody else is holding the process
+void proc_delete(struct proc* proc) {
+    mutex_acquire(&proc->mu_tasks); mutex_acquire(&proc->mu_fds); // make sure nobody else is holding the process
 
     /* delete all tasks */
     for(size_t i = 0; i < proc->num_tasks; i++) {
@@ -114,13 +127,13 @@ void proc_delete(proc_t* proc) {
     kfree(proc);
 }
 
-size_t proc_add_task(proc_t* proc, void* task) {
-    mutex_acquire(&proc->mutex);
+size_t proc_add_task(struct proc* proc, void* task) {
+    mutex_acquire(&proc->mu_tasks);
     size_t i = 0;
     for(; i < proc->num_tasks; i++) {
         if(proc->tasks[i] == task) {
             /* attempting to insert an already existing task */
-            mutex_release(&proc->mutex);
+            mutex_release(&proc->mu_tasks);
             return i;
         }
         if(proc->tasks[i] == NULL) break;
@@ -129,7 +142,7 @@ size_t proc_add_task(proc_t* proc, void* task) {
         void** new_tasks = krealloc(proc->tasks, (proc->num_tasks + PROC_TASK_ALLOCSZ) * sizeof(void*));
         if(new_tasks == NULL) {
             kerror("insufficient memory to add task to process 0x%x", proc);
-            mutex_release(&proc->mutex);
+            mutex_release(&proc->mu_tasks);
             return (size_t)-1;
         }
         proc->tasks = new_tasks;
@@ -139,19 +152,19 @@ size_t proc_add_task(proc_t* proc, void* task) {
     proc->tasks[i] = task;
     task_common(task)->pid = proc->pid;
 
-    mutex_release(&proc->mutex);
+    mutex_release(&proc->mu_tasks);
     return i;
 }
 
-void proc_delete_task(proc_t* proc, void* task) {
-    mutex_acquire(&proc->mutex);
+void proc_delete_task(struct proc* proc, void* task) {
+    mutex_acquire(&proc->mu_tasks);
     for(size_t i = 0; i < proc->num_tasks; i++) {
         if(proc->tasks[i] == task) {
             proc->tasks[i] = NULL;
             break;
         }
     }
-    mutex_release(&proc->mutex);
+    mutex_release(&proc->mu_tasks);
     task_delete(task);
 }
 
@@ -161,4 +174,93 @@ void proc_init() {
     proc_kernel->vmm = vmm_kernel;
     task_init();
     proc_add_task(proc_kernel, task_kernel);
+}
+
+size_t proc_fd_open(struct proc* proc, vfs_node_t* node, bool duplicate, bool read, bool write, bool append, bool excl) {
+    /* open the file in the file table (or return its entry in the file table) */
+    struct ftab* ftab = ftab_open(node, proc, read, write, excl);
+    if(ftab == NULL) {
+        kerror("ftab_open() failed, cannot open file");
+        return (size_t)-1;
+    }
+
+    mutex_acquire(&proc->mu_fds);
+    size_t i = 0;
+    for(; i < proc->num_fds; i++) {
+        if(proc->fds[i].ftab == NULL || (!duplicate && proc->fds[i].ftab == ftab)) break;
+    }
+    if(i == proc->num_fds) {
+        fd_t* new_fds = krealloc(proc->fds, (proc->num_fds + PROC_FDS_ALLOCSZ) * sizeof(fd_t));
+        if(new_fds == NULL) {
+            kerror("insufficient memory to add fd entry to process 0x%x", proc);
+            mutex_release(&proc->mu_fds);
+            return (size_t)-1;
+        }
+        proc->fds = new_fds;
+        proc->num_fds += PROC_FDS_ALLOCSZ;
+        memset(&proc->fds[i], 0, PROC_TASK_ALLOCSZ * sizeof(fd_t));
+    }
+    mutex_release(&proc->mu_fds);
+
+    mutex_acquire(&proc->fds[i].mutex);
+    proc->fds[i].ftab = ftab;
+    proc->fds[i].read = (read) ? 1 : 0;
+    proc->fds[i].write = (write) ? 1 : 0;
+    proc->fds[i].append = (append) ? 1 : 0;
+    proc->fds[i].offset = 0; // reset offset
+    mutex_release(&proc->fds[i].mutex);
+
+    return i;
+}
+
+bool proc_fd_check(struct proc* proc, size_t fd) {
+    mutex_acquire(&proc->mu_fds);
+    bool ret = (fd < proc->num_fds);
+    mutex_release(&proc->mu_fds);
+    if(ret) {
+        mutex_acquire(&proc->fds[fd].mutex);
+        ret = (proc->fds[fd].ftab != NULL);
+        mutex_release(&proc->fds[fd].mutex);
+    }
+    return ret;
+}
+
+void proc_fd_close(struct proc* proc, size_t fd) {
+    if(!proc_fd_check(proc, fd)) return;
+
+    mutex_acquire(&proc->fds[fd].mutex);
+    ftab_close(proc->fds[fd].ftab, proc);
+    memset(&proc->fds[fd], 0, sizeof(fd_t));
+    mutex_release(&proc->fds[fd].mutex); // this might not be necessary
+}
+
+uint64_t proc_fd_read(struct proc* proc, size_t fd, uint64_t size, uint8_t* buf) {
+    if(!proc_fd_check(proc, fd)) return 0; // invalid fd
+
+    mutex_acquire(&proc->fds[fd].mutex);
+
+    uint64_t ret = 0;
+    if(proc->fds[fd].read) {
+        ret = ftab_read(proc->fds[fd].ftab, proc, proc->fds[fd].offset, size, buf);
+        proc->fds[fd].offset += ret;
+    }
+
+    mutex_release(&proc->fds[fd].mutex);
+    return ret;
+}
+
+uint64_t proc_fd_write(struct proc* proc, size_t fd, uint64_t size, const uint8_t* buf) {
+    if(!proc_fd_check(proc, fd)) return 0; // invalid fd
+
+    mutex_acquire(&proc->fds[fd].mutex);
+
+    uint64_t ret = 0;
+    if(proc->fds[fd].write) {
+        if(proc->fds[fd].append) proc->fds[fd].offset = proc->fds[fd].ftab->node->length; // seek to end before writing
+        ret = ftab_write(proc->fds[fd].ftab, proc, proc->fds[fd].offset, size, buf);
+        proc->fds[fd].offset += ret;
+    }
+
+    mutex_release(&proc->fds[fd].mutex);
+    return ret;
 }

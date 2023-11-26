@@ -89,7 +89,7 @@ void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 					if(task_kernel != NULL && va >= kernel_start) {
 						/* map kernel pages to all tasks' VMM configs */
 						task_t* task = task_kernel;
-						proc_t* proc = proc_get(task_common(task)->pid);
+						struct proc* proc = proc_get(task_common(task)->pid);
 						do {
 							if(proc->vmm != vmm && ((vmm_t*)proc->vmm)->pt[pde] != cfg->pt[pde]) {
 								/* copy PT pointer and PDE */

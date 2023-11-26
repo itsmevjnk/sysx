@@ -64,4 +64,11 @@ bool vfs_is_valid(vfs_node_t* root);
  */
 void devfs_std_init(vfs_node_t* root);
 
+/* standard device nodes */
+extern vfs_node_t* dev_console;
+extern vfs_node_t* dev_zero;
+extern vfs_node_t* dev_null;
+extern vfs_node_t* dev_random;
+extern vfs_node_t* dev_urandom;
+
 #endif

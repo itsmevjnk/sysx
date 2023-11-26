@@ -103,7 +103,7 @@ void task_init();
 void* task_create_stub();
 
 /*
- * void* task_create(bool user, proc_t* proc, size_t stack_sz, uintptr_t entry)
+ * void* task_create(bool user, struct proc* proc, size_t stack_sz, uintptr_t entry)
  *  Creates a new kernel/user task belonging to the specified process,
  *  then set the task's entry point to the specified pointer and allocate
  *  stack space for it.
@@ -111,7 +111,7 @@ void* task_create_stub();
  *  space (start of kernel address space).
  *  This is a common-defined function to be called in ring 0.
  */
-void* task_create(bool user, proc_t* proc, size_t stack_sz, uintptr_t entry);
+void* task_create(bool user, struct proc* proc, size_t stack_sz, uintptr_t entry);
 
 /*
  * void task_delete_stub(void* task)

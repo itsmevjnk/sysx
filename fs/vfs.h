@@ -22,7 +22,7 @@ struct dirent {
 typedef struct vfs_hook {
     uint64_t (*read)(struct vfs_node*, uint64_t, uint64_t, uint8_t*); // node, offset, size, buffer -> num of bytes read
     uint64_t (*write)(struct vfs_node*, uint64_t, uint64_t, const uint8_t*); // node, offset, size, buffer -> num of bytes written
-    bool (*open)(struct vfs_node*, bool); // node, write access enable -> true on success, false on failure
+    bool (*open)(struct vfs_node*, bool, bool); // node, read access enable, write access enable -> true on success, false on failure
     void (*close)(struct vfs_node*); // node -> void
     struct dirent* (*readdir)(struct vfs_node*, uint64_t); // node, index -> ptr to child node's dirent struct
     struct vfs_node* (*finddir)(struct vfs_node*, const char*); // node, file name -> ptr to file's node
@@ -80,14 +80,14 @@ uint64_t vfs_read(vfs_node_t* node, uint64_t offset, uint64_t size, uint8_t* buf
 uint64_t vfs_write(vfs_node_t* node, uint64_t offset, uint64_t size, const uint8_t* buffer);
 
 /*
- * bool vfs_open(vfs_node_t* node, bool write)
- *  Opens a node for read or read+write access.
+ * bool vfs_open(vfs_node_t* node, bool read, bool write)
+ *  Opens a node for read, write or read + write access.
  *  Returns true on success, or false otherwise.
  *  Note that if the open hook is not provided, this will return true.
  *  This is so that simpler file systems can omit the implementation of
  *  this feature if not needed.
  */
-bool vfs_open(vfs_node_t* node, bool write);
+bool vfs_open(vfs_node_t* node, bool read, bool write);
 
 /*
  * void vfs_close(vfs_node_t* node)
