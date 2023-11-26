@@ -1,6 +1,7 @@
 #include <arch/x86cpu/gdt.h>
 #include <arch/x86cpu/idt.h>
 #include <kernel/log.h>
+#include <kernel/cmdline.h>
 #include <arch/x86/i8259.h>
 #include <arch/x86/i8253.h>
 #include <arch/x86/multiboot.h>
@@ -20,6 +21,10 @@ int ktgtinit() {
     kdebug("Multiboot information structure address: 0x%08x", mb_info);
 
     if(mb_info->flags & MULTIBOOT_INFO_MEMORY) kdebug("memory size: lo %uK, hi %uK", mb_info->mem_lower, mb_info->mem_upper);
+    if(mb_info->flags & MULTIBOOT_INFO_CMDLINE) {
+        cmdline_init((char*)mb_info->cmdline);
+        kdebug("cmdline: %s (argc = %u)", (char*)mb_info->cmdline, kernel_argc);
+    }
 
     kinfo("initializing GDT"); gdt_init();
     kinfo("initializing IDT"); idt_init();
