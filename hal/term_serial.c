@@ -55,15 +55,15 @@ void serterm_clear(term_hook_t* impl) {
 #ifndef TERM_NO_XY
 void serterm_get_dimensions(term_hook_t* impl, size_t* width, size_t* height) {
     size_t x, y; // for saving the current cursor position
-    term_get_xy(&x, &y);
-    term_set_xy(1000, 1000); // move the cursor to some outrageous position
-    term_get_xy(width, height); // then retrieve the bottom right corner's coordinates
+    serterm_get_xy(impl, &x, &y);
+    ser_puts(TERM_SER_PORT, "\x1B[1000;1000H"); // move the cursor to some outrageous position
+    serterm_get_xy(impl, width, height); // then retrieve the bottom right corner's coordinates
     (*width)++; (*height)++;
-    term_set_xy(x, y); // restore cursor position
+    char buf[16]; ksprintf(buf, "\x1B[%u;%uH", y, x); ser_puts(TERM_SER_PORT, buf); // restore cursor position
 }
 
 void serterm_set_xy(term_hook_t* impl, size_t x, size_t y) {
-    kprintf("\x1B[%u;%uH", y, x); // since kstdout is set to the terminal, we can use kprintf normally
+    char buf[16]; ksprintf(buf, "\x1B[%u;%uH", y, x); ser_puts(TERM_SER_PORT, buf); // we already have exclusive access
 }
 
 void serterm_get_xy(term_hook_t* impl, size_t* x, size_t* y) {
@@ -97,6 +97,35 @@ void serterm_get_xy(term_hook_t* impl, size_t* x, size_t* y) {
 }
 #endif
 
+#ifndef TERM_NO_COLOR
+static size_t serterm_fgcolor = 7, serterm_bgcolor = 0; // light gray on black
+bool serterm_setfg_idx(term_hook_t* impl, size_t idx) {
+    char buf[16];
+    if(idx < 16) ksprintf(buf, "\x1B[%um", (idx < 8) ? (idx + 30) : (idx - 8 + 90)); // use 4-bit color for maximum compatibility
+    else ksprintf(buf, "\x1B[38;5;%um", idx);
+    ser_puts(TERM_SER_PORT, buf);
+    serterm_fgcolor = idx;
+    return true;
+}
+
+bool serterm_setbg_idx(term_hook_t* impl, size_t idx) {
+    char buf[16];
+    if(idx < 16) ksprintf(buf, "\x1B[%um", (idx < 8) ? (idx + 40) : (idx - 8 + 100)); // use 4-bit color for maximum compatibility
+    else ksprintf(buf, "\x1B[48;5;%um", idx);
+    ser_puts(TERM_SER_PORT, buf);
+    serterm_bgcolor = idx;
+    return true;
+}
+
+size_t serterm_getfg_idx(term_hook_t* impl) {
+    return serterm_fgcolor;
+}
+
+size_t serterm_getbg_idx(term_hook_t* impl) {
+    return serterm_bgcolor;
+}
+#endif
+
 term_hook_t serterm_hook = {
     &serterm_putc,
     NULL,
@@ -124,6 +153,23 @@ term_hook_t serterm_hook = {
     NULL,
 #endif
 
+#ifndef TERM_NO_COLOR
+    &serterm_setfg_idx,
+    &serterm_getfg_idx,
+    &serterm_setbg_idx,
+    &serterm_getbg_idx,
+#else
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+#endif
+
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+
     {0},
     {0},
     
@@ -134,6 +180,10 @@ void term_init() {
     ser_init(TERM_SER_PORT, TERM_SER_DBIT, TERM_SER_SBIT, TERM_SER_PARITY, TERM_SER_BAUD);
 #ifndef TERM_NO_CLEAR // to save space and time
     serterm_clear(NULL);
+#endif
+#ifndef TERM_NO_COLOR
+    serterm_setfg_idx(NULL, serterm_fgcolor);
+    serterm_setbg_idx(NULL, serterm_bgcolor);
 #endif
 
     term_impl = &serterm_hook;

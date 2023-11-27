@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <exec/mutex.h>
 
 #define TERM_LINE_TERMINATION                   '\n' // line termination character, used by term_gets
@@ -17,8 +18,16 @@ typedef struct term_hook {
     void (*get_dimensions)(const struct term_hook*, size_t*, size_t*);
     void (*set_xy)(const struct term_hook*, size_t, size_t);
     void (*get_xy)(const struct term_hook*, size_t*, size_t*);
+    bool (*setfg_indexed)(const struct term_hook*, size_t); // set indexed foreground color
+    size_t (*getfg_indexed)(const struct term_hook*); // get indexed foreground color
+    bool (*setbg_indexed)(const struct term_hook*, size_t); // set indexed background color
+    size_t (*getbg_indexed)(const struct term_hook*); // get indexed background color
+    bool (*setfg_rgb)(const struct term_hook*, uint32_t); // set RGB foreground color
+    uint32_t (*getfg_rgb)(const struct term_hook*); // get RGB foreground color
+    bool (*setbg_rgb)(const struct term_hook*, uint32_t); // set RGB background color
+    uint32_t (*getbg_rgb)(const struct term_hook*); // get RGB background color
     mutex_t mutex_in; // mutex for input operations (available/getc)
-    mutex_t mutex_out; // mutex for output operations (putc/puts/clear/get_dimensions/set_xy/get_xy)
+    mutex_t mutex_out; // mutex for output operations (putc/puts/clear/get_dimensions/set_xy/get_xy/set(get)bg(fg))
     void* data; // other data if needed
 } __attribute__((packed)) term_hook_t;
 extern term_hook_t* term_impl; // terminal implementation
@@ -120,5 +129,73 @@ void term_gets_noecho(char* s);
  *  this will not do anything.
  */
 void term_gets(char* s);
+
+/*
+ * bool term_setbg_indexed(size_t idx)
+ *  Set the background color to the specified indexed (256 color palette)
+ *  color.
+ *  Returns whether the operation is successful (i.e. if it's supported
+ *  and the provided color is valid).
+ */
+bool term_setbg_indexed(size_t idx);
+
+/*
+ * bool term_setfg_indexed(size_t idx)
+ *  Set the foreground color to the specified indexed (256 color palette)
+ *  color.
+ *  Returns whether the operation is successful (i.e. if it's supported
+ *  and the provided color is valid).
+ */
+bool term_setfg_indexed(size_t idx);
+
+/*
+ * size_t term_getbg_indexed()
+ *  Gets the background indexed (256 color palette) color.
+ *  Returns the color index, or -1 if the operation is unsupported or
+ *  the color has been set to an RGB value.
+ */
+size_t term_getbg_indexed();
+
+/*
+ * size_t term_getfg_indexed()
+ *  Gets the foreground indexed (256 color palette) color.
+ *  Returns the color index, or -1 if the operation is unsupported or
+ *  the color has been set to an RGB value.
+ */
+size_t term_getfg_indexed();
+
+/*
+ * bool term_setbg_rgb(uint32_t color)
+ *  Set the background color to the specified RGB (0x00RRGGBB) color.
+ *  Returns whether the operation is successful (i.e. if it's supported
+ *  and the provided color is valid).
+ */
+bool term_setbg_rgb(uint32_t color);
+
+/*
+ * bool term_setfg_rgb(uint32_t color)
+ *  Set the background color to the specified RGB (0x00RRGGBB) color.
+ *  Returns whether the operation is successful (i.e. if it's supported
+ *  and the provided color is valid).
+ */
+bool term_setfg_rgb(uint32_t color);
+
+/*
+ * uint32_t term_getbg_rgb()
+ *  Gets the background RGB (0x00RRGGBB) color.
+ *  Returns the color, or -1 if the operation is unsupported. If the
+ *  terminal's color has been set to an indexed color, the function will
+ *  convert the color to RGB for returning.
+ */
+uint32_t term_getbg_rgb();
+
+/*
+ * uint32_t term_getfg_rgb()
+ *  Gets the foreground RGB (0x00RRGGBB) color.
+ *  Returns the color, or -1 if the operation is unsupported. If the
+ *  terminal's color has been set to an indexed color, the function will
+ *  convert the color to RGB for returning.
+ */
+uint32_t term_getfg_rgb();
 
 #endif

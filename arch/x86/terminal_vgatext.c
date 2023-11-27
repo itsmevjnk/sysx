@@ -30,13 +30,43 @@ static void vgaterm_update_cursor() {
 }
 #endif
 
+#ifndef TERM_NO_COLOR
+static uint8_t vgaterm_attr = 0x07; // light gray on black
+static const uint8_t vgaterm_idxmap[16] = {0, 4, 2, 6, 1, 5, 3, 7, 8, 12, 10, 14, 9, 13, 11, 15}; // for both index to attr and vice versa
+
+bool vgaterm_setfg_idx(term_hook_t* impl, size_t idx) {
+    if(idx >= 16) return false; // 16 color palette only
+    vgaterm_attr = (vgaterm_attr & 0xF0) | vgaterm_idxmap[idx];
+    return true;
+}
+
+bool vgaterm_setbg_idx(term_hook_t* impl, size_t idx) {
+    if(idx >= 8) return false; // textmode terminal only has 8 background colors; bit 7 is used for blinking
+    vgaterm_attr = (vgaterm_attr & 0x0F) | ((vgaterm_idxmap[idx] & 0x7) << 4);
+    return true;
+}
+
+size_t vgaterm_getfg_idx(term_hook_t* impl) {
+    return vgaterm_idxmap[vgaterm_attr & 0x0F];
+}
+
+size_t vgaterm_getbg_idx(term_hook_t* impl) {
+    return vgaterm_idxmap[(vgaterm_attr >> 4) & 0x7];
+}
+#endif
+
 static void vgaterm_newline() {
     vgaterm_x = 0;
     vgaterm_y++;
     if(vgaterm_y == 25) {
         /* shift entire buffer upward */
         memmove(vgaterm_buffer, &vgaterm_buffer[1 * 80], 24 * 80 * 2);
-        for(uint8_t x = 0; x < 80; x++) vgaterm_buffer[24 * 80 + x] = 0x0700;
+        for(uint8_t x = 0; x < 80; x++)
+#ifndef TERM_NO_COLOR
+            vgaterm_buffer[24 * 80 + x] = ((uint16_t)vgaterm_attr << 8);
+#else
+            vgaterm_buffer[24 * 80 + x] = 0x0700;
+#endif
         vgaterm_y = 24;
     }
 }
@@ -58,13 +88,21 @@ static void vgaterm_putc_stub(char c) {
             break;
         case '\t': // horizontal tab
             do {
+#ifndef TERM_NO_COLOR
+                vgaterm_buffer[vgaterm_y * 80 + vgaterm_x] = ((uint16_t)vgaterm_attr << 8);
+#else
                 vgaterm_buffer[vgaterm_y * 80 + vgaterm_x] = 0x0700;
+#endif
                 vgaterm_x++;
             } while(vgaterm_x < 80 && vgaterm_x % TERM_VGATEXT_HTAB_LENGTH != 0);
             if(vgaterm_x == 80) vgaterm_newline();
             break;
         default: // normal character
+#ifndef TERM_NO_COLOR
+            vgaterm_buffer[vgaterm_y * 80 + vgaterm_x] = ((uint8_t)c) | ((uint16_t)vgaterm_attr << 8);
+#else
             vgaterm_buffer[vgaterm_y * 80 + vgaterm_x] = ((uint8_t)c) | 0x0700; // light grey on black
+#endif
             vgaterm_x++;
             if(vgaterm_x == 80) vgaterm_newline();
             break;
@@ -91,7 +129,12 @@ void vgaterm_puts(term_hook_t* impl, const char* s) {
 void vgaterm_clear(term_hook_t* impl) {
     (void) impl;
     for(uint8_t y = 0; y < 25; y++) {
-        for(uint8_t x = 0; x < 80; x++) vgaterm_buffer[y * 80 + x] = 0x0700;
+        for(uint8_t x = 0; x < 80; x++)
+#ifndef TERM_NO_COLOR
+            vgaterm_buffer[y * 80 + x] = ((uint16_t)vgaterm_attr << 8);
+#else
+            vgaterm_buffer[y * 80 + x] = 0x0700;
+#endif
     }
     vgaterm_x = 0; vgaterm_y = 0; // also remember to reset coordinates
 #ifndef TERM_VGATEXT_NO_CURSOR
@@ -119,6 +162,7 @@ void vgaterm_get_xy(term_hook_t* impl, size_t* x, size_t* y) {
     (void) impl;
     *x = vgaterm_x; *y = vgaterm_y;
 }
+#endif
 
 term_hook_t vgaterm_hook = {
     &vgaterm_putc,
@@ -146,6 +190,23 @@ term_hook_t vgaterm_hook = {
     NULL,
     NULL,
 #endif
+
+#ifndef TERM_NO_COLOR
+    &vgaterm_setfg_idx,
+    &vgaterm_getfg_idx,
+    &vgaterm_setbg_idx,
+    &vgaterm_getbg_idx,
+#else
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+#endif
+
+    NULL,
+    NULL,
+    NULL,
+    NULL,
 
     {0},
     {0},
@@ -175,7 +236,5 @@ void term_init() {
 
     term_impl = &vgaterm_hook;
 }
-
-#endif
 
 #endif
