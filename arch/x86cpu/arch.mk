@@ -6,4 +6,6 @@ $(ARCHDIR_ARCH)/vmm.o \
 $(ARCHDIR_ARCH)/string.o \
 $(ARCHDIR_ARCH)/usermode.o \
 $(ARCHDIR_ARCH)/task_lowlevel.o \
-$(ARCHDIR_ARCH)/task.o
+$(ARCHDIR_ARCH)/task.o \
+$(ARCHDIR_ARCH)/int32.o \
+$(ARCHDIR_ARCH)/int32_init.o

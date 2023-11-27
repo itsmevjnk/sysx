@@ -6,6 +6,7 @@
 #include <arch/x86/i8253.h>
 #include <arch/x86/multiboot.h>
 #include <string.h>
+#include <arch/x86cpu/int32.h>
 
 #include <fs/vfs.h>
 #include <fs/tarfs.h>
@@ -29,6 +30,7 @@ int ktgtinit() {
     kinfo("initializing GDT"); gdt_init();
     kinfo("initializing IDT"); idt_init();
     kinfo("initializing PIC"); pic_init();
+    kinfo("initializing int32 capabilities"); int32_init();
     kinfo("initializing PIT as system timer source"); pit_systimer_init();
 
     if(mb_info->flags & MULTIBOOT_INFO_MODS && mb_info->mods_count > 0) {

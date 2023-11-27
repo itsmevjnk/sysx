@@ -21,7 +21,7 @@ gdt_load:
   mov ss, ax
   jmp 0x08:.flush ; set CS and flush cache
 .flush:
-  mov ax, 0x28 ; TSS segment
+  mov ax, 0x38 ; TSS segment
   ltr ax ; flush TSS
 
   pop eax ; restore EAX

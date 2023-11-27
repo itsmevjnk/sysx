@@ -72,13 +72,15 @@ void gdt_init() {
   gdt_add_entry(2, 0, 0xfffff, true, false, false, true, 0, true, true); // ring 0 data segment (0x10)
   gdt_add_entry(3, 0, 0xfffff, true, false, true, true, 3, true, true); // ring 3 code segment (0x18)
   gdt_add_entry(4, 0, 0xfffff, true, false, false, true, 3, true, true); // ring 3 data segment (0x20)
+  gdt_add_entry(5, 0, 0xfffff, true, false, true, true, 0, false, false); // ring 0 16-bit code segment (0x28)
+  gdt_add_entry(6, 0, 0xfffff, true, false, false, true, 0, false, false); // ring 0 16-bit data segment (0x30)
   
   /* set up TSS */
   memset(&tss_entry, 0, sizeof(tss_t));
   tss_entry.ss0 = 0x10;
   asm volatile("mov %%esp, %0" : "=r"(tss_entry.esp0)); // it does not really matter how far this is off from the actual stack bottom
-  gdt_add_entry(5, (uintptr_t)&tss_entry, sizeof(tss_t), false, false, true, false, 0, false, false); // TSS (0x28)
-  gdt_entries[5].accessed = 1; // set accessed bit too
+  gdt_add_entry(7, (uintptr_t)&tss_entry, sizeof(tss_t), false, false, true, false, 0, false, false); // TSS (0x38)
+  gdt_entries[7].accessed = 1; // set accessed bit too
 
   /* load the GDT descriptor and flush the cache :flushed: */
   kinfo("loading GDT descriptor and flushing CPU cache");
