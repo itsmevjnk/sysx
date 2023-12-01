@@ -26,10 +26,37 @@ void* memmove(void* dest, const void* src, size_t n) {
 }
 #endif
 
-#ifndef ARCH_MEMCPY
+#ifndef ARCH_MEMSET
 void* memset(void* str, int c, size_t n) {
     for(size_t i = 0; i < n; i++) {
         *(uint8_t*)((uintptr_t) str + i) = (uint8_t) c;
+    }
+    return str;
+}
+#endif
+
+#ifndef ARCH_MEMSET16
+void* memset16(void* str, uint16_t c, size_t n) {
+    for(size_t i = 0; i < n; i++) {
+        *(uint16_t*)((uintptr_t) str + i) = c;
+    }
+    return str;
+}
+#endif
+
+#ifndef ARCH_MEMSET32
+void* memset32(void* str, uint32_t c, size_t n) {
+    for(size_t i = 0; i < n; i++) {
+        *(uint32_t*)((uintptr_t) str + i) = c;
+    }
+    return str;
+}
+#endif
+
+#ifndef ARCH_MEMSET64
+void* memset64(void* str, uint64_t c, size_t n) {
+    for(size_t i = 0; i < n; i++) {
+        *(uint64_t*)((uintptr_t) str + i) = c;
     }
     return str;
 }

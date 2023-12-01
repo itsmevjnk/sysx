@@ -30,6 +30,27 @@ void* memmove(void* dest, const void* src, size_t n);
 void* memset(void* str, int c, size_t n);
 
 /*
+ * void* memset16(void* str, uint16_t c, size_t n)
+ *  Copies the 16-bit character c to the first n 16-bit
+ *  characters of the string str, then returns str.
+ */
+void* memset16(void* str, uint16_t c, size_t n);
+
+/*
+ * void* memset32(void* str, uint32_t c, size_t n)
+ *  Copies the 32-bit character c to the first n 32-bit
+ *  characters of the string str, then returns str.
+ */
+void* memset32(void* str, uint32_t c, size_t n);
+
+/*
+ * void* memset64(void* str, uint64_t c, size_t n)
+ *  Copies the 64-bit character c to the first n 64-bit
+ *  characters of the string str, then returns str.
+ */
+void* memset64(void* str, uint64_t c, size_t n);
+
+/*
  * int memcmp(const void* ptr1, const void* ptr2, size_t n)
  *  Compares the first n bytes of ptr1 and ptr2 until they
  *  differ. Returns the difference at the stop point.
