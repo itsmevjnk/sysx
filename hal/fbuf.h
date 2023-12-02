@@ -1,0 +1,130 @@
+#ifndef HAL_FBUF_H
+#define HAL_FBUF_H
+
+#include <stddef.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <exec/mutex.h>
+#include <hal/terminal.h>
+
+enum fbuf_pixel_type {
+    FBUF_15BPP_RGB555,          // 0RRRRRGG GGGBBBBB, same endianness
+    FBUF_15BPP_RGB555_RE,       // 0RRRRRGG GGGBBBBB, different endianness 
+    FBUF_15BPP_BGR555,          // 0BBBBBGG GGGRRRRR
+    FBUF_15BPP_BGR555_RE,       
+    FBUF_16BPP_RGB565,          // RRRRRGGG GGGBBBBB
+    FBUF_16BPP_RGB565_RE,   
+    FBUF_16BPP_BGR565,          // BBBBBGGG GGGRRRRR
+    FBUF_16BPP_BGR565_RE,
+    FBUF_24BPP_RGB888,          // RRRRRRRR GGGGGGGG BBBBBBBB (as it is ordered in the memory)
+    FBUF_24BPP_BGR888,          // BBBBBBBB GGGGGGGG RRRRRRRR (as it is ordered in the memory)
+    FBUF_32BPP_RGB888,          // 00000000 RRRRRRRR GGGGGGGG BBBBBBBB
+    FBUF_32BPP_RGB888_RE,
+    FBUF_32BPP_BGR888,          // 00000000 BBBBBBBB GGGGGGGG RRRRRRRR
+    FBUF_32BPP_BGR888_RE,
+};
+
+typedef struct fbuf {
+    size_t width;
+    size_t height;
+    enum fbuf_pixel_type type;
+    size_t pitch;
+    void* framebuffer;
+    void* backbuffer; // NULL if not using double buffer
+    void (*flip)(struct fbuf*); // accelerated double buffer flipping function (optional)
+} fbuf_t;
+extern fbuf_t* fbuf_impl;
+
+typedef struct fbuf_font {
+    size_t width;
+    size_t height;
+    void* data;
+    void (*draw)(struct fbuf_font*, size_t, size_t, char, uint32_t, uint32_t, bool); // font, x, y, character, fg color, bg color, transparent
+} fbuf_font_t;
+extern fbuf_font_t* fbuf_font;
+
+extern term_hook_t fbterm_hook; // framebuffer terminal hooks
+
+#define FBUF_RGB(r, g, b)                       (((r) << 16) | ((g) << 8) | ((b) << 0)) // RGB layout: 0xRRGGBB
+#define FBUF_R(color)                           (((color) >> 16) & 0xFF)
+#define FBUF_G(color)                           (((color) >> 8) & 0xFF)
+#define FBUF_B(color)                           (((color) >> 0) & 0xFF)
+
+/*
+ * void fbuf_putpixel(size_t x, size_t y, size_t n, uint32_t color)
+ *  Draws n pixel(s) on the framebuffer, starting at the specified coordinate.
+ *  The pixels will be drawn from left to right, then top to bottom.
+ */
+void fbuf_putpixel(size_t x, size_t y, size_t n, uint32_t color);
+
+/*
+ * void fbuf_getpixel(size_t x, size_t y, size_t n, uint32_t* color)
+ *  Gets the color of n pixel(s) on the framebuffer, starting at the specified
+ *  coordinate.
+ *  The pixels will be retrieved from left to right, then top to bottom.
+ */
+void fbuf_getpixel(size_t x, size_t y, size_t n, uint32_t* color);
+
+/*
+ * void fbuf_fill(uint32_t color)
+ *  Fills the framebuffer with the specified color.
+ */
+void fbuf_fill(uint32_t color);
+
+/*
+ * void fbuf_commit()
+ *  Commits all changes on the backbuffer to the framebuffer (if double
+ *  buffering is used).
+ */
+void fbuf_commit();
+
+/*
+ * void fbuf_putc_stub(size_t x, size_t y, char c, uint32_t fg, uint32_t bg, bool transparent)
+ *  Draws the specified character on the framebuffer without committing
+ *  it to the framebuffer (if double buffering is used).
+ *  If transparent is set, the function will not overwrite blank spaces
+ *  in the character with the background color.
+ */
+void fbuf_putc_stub(size_t x, size_t y, char c, uint32_t fg, uint32_t bg, bool transparent);
+
+/*
+ * void fbuf_putc(size_t x, size_t y, char c, uint32_t fg, uint32_t bg, bool transparent)
+ *  Draws the specified character on the buffer and commit it to the
+ *  framebuffer immediately (if double buffering is used).
+ */
+void fbuf_putc(size_t x, size_t y, char c, uint32_t fg, uint32_t bg, bool transparent);
+
+/*
+ * void fbuf_puts_stub(size_t x, size_t y, char* s, uint32_t fg, uint32_t bg, bool transparent)
+ *  Draws the specified string on the framebuffer without committing it
+ *  to the framebuffer (if double buffering is used).
+ *  Text will be wrapped back to the first row (X = 0) at the end of the
+ *  line.
+ *  If transparent is set, the function will not overwrite blank spaces
+ *  in the character with the background color.
+ */
+void fbuf_puts_stub(size_t x, size_t y, char* s, uint32_t fg, uint32_t bg, bool transparent);
+
+/*
+ * void fbuf_puts(size_t x, size_t y, char* s, uint32_t fg, uint32_t bg, bool transparent)
+ *  Draws the specified string on the buffer and commit it to the
+ *  framebuffer immediately (if double buffering is used).
+ */
+void fbuf_puts(size_t x, size_t y, char* s, uint32_t fg, uint32_t bg, bool transparent);
+
+/*
+ * void fbuf_scroll_up(size_t lines, uint32_t color)
+ *  Scrolls the framebuffer up by the specified number of lines and fills
+ *  the empty space with the specified color.
+ */
+void fbuf_scroll_up(size_t lines, uint32_t color);
+
+/*
+ * void fbuf_scroll_down(size_t lines, uint32_t color)
+ *  Scrolls the framebuffer down by the specified number of lines and fills
+ *  the empty space with the specified color.
+ */
+void fbuf_scroll_down(size_t lines, uint32_t color);
+
+
+#endif

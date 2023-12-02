@@ -6,6 +6,8 @@
 #include <hal/serial.h>
 #include <hal/timer.h>
 #include <hal/keyboard.h>
+#include <hal/fbuf.h>
+#include <hal/fonts/font8x16.h>
 
 #include <mm/pmm.h>
 #include <mm/vmm.h>
@@ -47,6 +49,7 @@ void kinit() {
     vmm_init();
 #endif
     
+    fbuf_font = &font8x16;
     term_init();
     stdio_init();
 
