@@ -109,17 +109,7 @@ void proc_delete(struct proc* proc) {
     }
 
     /* unmap ELF segments (if there's any) */
-    if(proc->elf_segments != NULL) {
-        size_t pgsz = vmm_pgsz();
-        for(size_t i = 0; i < proc->num_elf_segments; i++) {
-            for(size_t j = 0; j < proc->elf_segments[i].size; j += pgsz) {
-                uintptr_t addr = proc->elf_segments[i].vaddr + j;
-                pmm_free(vmm_get_paddr(proc->vmm, addr) / pgsz);
-                vmm_pgunmap(proc->vmm, addr);
-            }
-        }
-        kfree(proc->elf_segments);
-    }
+    if(proc->elf_segments != NULL) elf_unload_prg(proc->vmm, proc->elf_segments, proc->num_elf_segments);
 
     vmm_free(proc->vmm); // delete VMM config
     

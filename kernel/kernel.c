@@ -101,6 +101,15 @@ void kinit() {
         kinfo("%u symbol(s) have been added to kernel symbol pool", kernel_syms->count);
     }
 
+    kinfo("seeding PRNG using timer tick"); // for architectures without hardware pseudorandom number generation capabilities and additional entropy for those that do
+    srand(timer_tick);
+
+    kinfo("creating kernel process and task");
+    proc_init();
+
+    kinfo("initializing syscall");
+    syscall_init();
+
     /* load kernel modules */
     kinfo("loading kernel modules from " KMOD_PATH);
     vfs_node_t* kmods_node = vfs_traverse_path(KMOD_PATH);
@@ -115,22 +124,18 @@ void kinit() {
         }
         kinfo("loading %s (ino %llu)", mod->name, mod->inode);
         int32_t (*kmod_init)() = NULL;
-        elf_load_kmod(mod, NULL, NULL, (uintptr_t*) &kmod_init);
+        elf_prgload_t* load_result; size_t load_result_len;
+        elf_load_kmod(mod, &load_result, &load_result_len, (uintptr_t*) &kmod_init);
         if(kmod_init != NULL) {
             kinfo(" - calling module's " ELF_KMOD_INIT_FUNC " function at 0x%x", (uintptr_t)kmod_init);
             int32_t ret = (*kmod_init)();
             kinfo(" - " ELF_KMOD_INIT_FUNC " returned %d", ret);
+            if(ret < 0) {
+                kinfo("   unloading module");
+                elf_unload_prg(vmm_kernel, load_result, load_result_len);
+            } else kfree(load_result); // save kernel heap and free the loading result (since we'll discard it anyway)
         } else kwarn(" - module does not have an init function");
     }
-
-    kinfo("seeding PRNG using timer tick"); // for architectures without hardware pseudorandom number generation capabilities and additional entropy for those that do
-    srand(timer_tick);
-
-    kinfo("creating kernel process and task");
-    proc_init();
-
-    kinfo("initializing syscall");
-    syscall_init();
 
     kinfo("kernel init finished, current timer tick: %llu", (uint64_t)timer_tick);
 

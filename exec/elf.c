@@ -781,13 +781,8 @@ enum elf_load_result elf_load_phdr(vfs_node_t* file, void* hdr, bool is_elf64, v
             copy_dst = (void*) vmm_first_free(vmm_current, 0, kernel_start, pgsz, false); // TODO: will mapping and unmapping the entire segment be more efficient than mapping individual pages?
             if(copy_dst == NULL) {
                 kerror("cannot find space to map segment for copying data");
-                for(size_t j = 0; j < *prgload_result_len; j++) {
-                    for(size_t k = 0; k < (*prgload_result)[j].size; k += pgsz) {
-                        pmm_free(vmm_get_paddr(alloc_vmm, (*prgload_result)[j].vaddr + k) / pgsz);
-                        vmm_pgunmap(alloc_vmm, (*prgload_result)[j].vaddr + k);
-                    }
-                }
-                kfree(*prgload_result); return ERR_ALLOC;
+                elf_unload_prg(alloc_vmm, *prgload_result, *prgload_result_len);
+                return ERR_ALLOC;
             }
             vmm_pgmap(vmm_current, 0, (uintptr_t) copy_dst, VMM_FLAGS_PRESENT | VMM_FLAGS_RW); // we'll fill in the physical address later
         }
@@ -800,17 +795,8 @@ enum elf_load_result elf_load_phdr(vfs_node_t* file, void* hdr, bool is_elf64, v
                 size_t frame = pmm_alloc_free(1);
                 if(frame == (size_t)-1) {
                     kerror("cannot allocate memory for segment frame");
-                    for(size_t k = 0; k < *prgload_result_len; k++) {
-                        for(size_t l = 0; l < (*prgload_result)[k].size; l += pgsz) {
-                            pmm_free(vmm_get_paddr(alloc_vmm, (*prgload_result)[k].vaddr + l) / pgsz);
-                            vmm_pgunmap(alloc_vmm, (*prgload_result)[k].vaddr + l);
-                        }
-                    }
-                    for(size_t k = 0; k < j; k++) {
-                        pmm_free(vmm_get_paddr(alloc_vmm, p_vaddr - p_vaddr % pgsz + k * pgsz) / pgsz);
-                        vmm_pgunmap(alloc_vmm, p_vaddr - p_vaddr % pgsz + k * pgsz);
-                    }
-                    kfree(*prgload_result); return ERR_ALLOC;
+                    elf_unload_prg(alloc_vmm, *prgload_result, *prgload_result_len);
+                    return ERR_ALLOC;
                 }
                 vmm_pgmap(alloc_vmm, frame * pgsz, vaddr, VMM_FLAGS_PRESENT | ((user) ? VMM_FLAGS_USER : 0) | VMM_FLAGS_CACHE | ((p_flags & PF_W) ? VMM_FLAGS_RW : 0));
             } else if(p_flags & PF_W) {
@@ -848,17 +834,8 @@ enum elf_load_result elf_load_phdr(vfs_node_t* file, void* hdr, bool is_elf64, v
         *prgload_result = krealloc(*prgload_result, *prgload_result_len * sizeof(elf_prgload_t));
         if(*prgload_result == NULL) {
             kerror("cannot allocate memory for program loading result");
-            for(size_t j = 0; j < *prgload_result_len; j++) {
-                for(size_t k = 0; k < (*prgload_result)[j].size; k += pgsz) {
-                    pmm_free(vmm_get_paddr(alloc_vmm, (*prgload_result)[j].vaddr + k) / pgsz);
-                    vmm_pgunmap(alloc_vmm, (*prgload_result)[j].vaddr + k);
-                }
-            }
-            for(size_t j = 0; j < p_memsz; j += pgsz) {
-                pmm_free(vmm_get_paddr(alloc_vmm, p_vaddr + j) / pgsz);
-                vmm_pgunmap(alloc_vmm, p_vaddr + j);
-            }
-            kfree(prgload_result_old); return ERR_ALLOC;
+            elf_unload_prg(alloc_vmm, prgload_result_old, prgload_result_len - 1);
+            return ERR_ALLOC;
         }
 
         (*prgload_result)[*prgload_result_len - 1].idx = i;
@@ -1006,4 +983,17 @@ enum elf_load_result elf_load_kmod(vfs_node_t* file, elf_prgload_t** load_result
     kfree(shdr);
     kfree(hdr);
     return LOAD_OK;
+}
+
+void elf_unload_prg(void* alloc_vmm, elf_prgload_t* load_result, size_t load_result_len) {
+    size_t framesz = pmm_framesz();
+    for(size_t i = 0; i < load_result_len; i++) {
+        size_t vaddr = load_result[i].vaddr;
+        for(size_t off = 0; off < load_result[i].size; off += framesz, vaddr += framesz) {
+            size_t paddr = vmm_get_paddr(alloc_vmm, vaddr);
+            if(paddr != 0) pmm_free(paddr / framesz);
+            vmm_pgunmap(alloc_vmm, vaddr);
+        }
+    }
+    kfree(load_result);
 }
