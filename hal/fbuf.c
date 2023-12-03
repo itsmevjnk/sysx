@@ -1,4 +1,5 @@
 #include <hal/fbuf.h>
+#include <mm/vmm.h>
 #include <string.h>
 
 fbuf_t* fbuf_impl = NULL;
@@ -283,4 +284,15 @@ void fbuf_scroll_down(size_t lines, uint32_t color) {
     uintptr_t ptr = (uintptr_t) ((fbuf_impl->backbuffer != NULL) ? fbuf_impl->backbuffer : fbuf_impl->framebuffer);
     memmove((void*) (ptr + lines * fbuf_impl->pitch), (void*) ptr, (fbuf_impl->height - lines) * fbuf_impl->pitch);
     fbuf_fill_stub(0, lines, color);
+}
+
+void fbuf_unload() {
+    if(fbuf_impl == NULL) return; // nothing to unload
+
+    fbuf_t* fbuf_impl_old = fbuf_impl;
+    fbuf_impl = NULL; // say no more
+
+    bool unload_seg = true;
+    if(fbuf_impl_old->unload != NULL) unload_seg = fbuf_impl_old->unload(fbuf_impl_old); // do pre-unload tasks
+    if(unload_seg && fbuf_impl_old->elf_segments != NULL) elf_unload_prg(vmm_kernel, fbuf_impl_old->elf_segments, fbuf_impl_old->num_elf_segments); // unload kernel module from memory
 }

@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <exec/mutex.h>
 #include <hal/terminal.h>
+#include <exec/elf.h>
 
 enum fbuf_pixel_type {
     FBUF_15BPP_RGB555,          // 0RRRRRGG GGGBBBBB, same endianness
@@ -32,6 +33,11 @@ typedef struct fbuf {
     void* framebuffer;
     void* backbuffer; // NULL if not using double buffer
     void (*flip)(struct fbuf*); // accelerated double buffer flipping function (optional)
+
+    /* associated driver information */
+    elf_prgload_t* elf_segments; // ELF segments list - if the driver is a kernel module
+    size_t num_elf_segments;
+    bool (*unload)(struct fbuf*); // function to be called prior to unloading (optional) - returns false if the ELF segments are to be ignored (i.e. no unloading from memory)
 } fbuf_t;
 extern fbuf_t* fbuf_impl;
 
@@ -126,5 +132,10 @@ void fbuf_scroll_up(size_t lines, uint32_t color);
  */
 void fbuf_scroll_down(size_t lines, uint32_t color);
 
+/*
+ * void fbuf_unload()
+ *  Unloads the current framebuffer implementation.
+ */
+void fbuf_unload();
 
 #endif
