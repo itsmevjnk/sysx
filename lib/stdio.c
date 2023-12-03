@@ -72,6 +72,9 @@ static uint8_t kstderr_read(struct ptstream* stream) {
 
 static int kstderr_write(struct ptstream* stream, uint8_t c) {
     (void) stream;
+#ifndef KSTDERR_SER_NO_CRNL
+    if(c == '\n') ser_putc(KSTDERR_SER_PORT, '\r'); // add CR to NL
+#endif
     ser_putc(KSTDERR_SER_PORT, (uint8_t) c);
     return 0;
 }
