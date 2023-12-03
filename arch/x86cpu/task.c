@@ -3,6 +3,7 @@
 #include <arch/x86cpu/gdt.h>
 #include <hal/intr.h>
 #include <mm/vmm.h>
+#include <mm/kheap.h>
 #include <stdlib.h>
 #include <string.h>
 

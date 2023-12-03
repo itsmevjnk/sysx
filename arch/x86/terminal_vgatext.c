@@ -34,23 +34,27 @@ static void vgaterm_update_cursor() {
 static uint8_t vgaterm_attr = 0x07; // light gray on black
 static const uint8_t vgaterm_idxmap[16] = {0, 4, 2, 6, 1, 5, 3, 7, 8, 12, 10, 14, 9, 13, 11, 15}; // for both index to attr and vice versa
 
-bool vgaterm_setfg_idx(term_hook_t* impl, size_t idx) {
+bool vgaterm_setfg_idx(const term_hook_t* impl, size_t idx) {
+    (void) impl;
     if(idx >= 16) return false; // 16 color palette only
     vgaterm_attr = (vgaterm_attr & 0xF0) | vgaterm_idxmap[idx];
     return true;
 }
 
-bool vgaterm_setbg_idx(term_hook_t* impl, size_t idx) {
+bool vgaterm_setbg_idx(const term_hook_t* impl, size_t idx) {
+    (void) impl;
     if(idx >= 8) return false; // textmode terminal only has 8 background colors; bit 7 is used for blinking
     vgaterm_attr = (vgaterm_attr & 0x0F) | ((vgaterm_idxmap[idx] & 0x7) << 4);
     return true;
 }
 
-size_t vgaterm_getfg_idx(term_hook_t* impl) {
+size_t vgaterm_getfg_idx(const term_hook_t* impl) {
+    (void) impl;
     return vgaterm_idxmap[vgaterm_attr & 0x0F];
 }
 
-size_t vgaterm_getbg_idx(term_hook_t* impl) {
+size_t vgaterm_getbg_idx(const term_hook_t* impl) {
+    (void) impl;
     return vgaterm_idxmap[(vgaterm_attr >> 4) & 0x7];
 }
 #endif
@@ -109,7 +113,7 @@ static void vgaterm_putc_stub(char c) {
     }
 }
 
-void vgaterm_putc(term_hook_t* impl, char c) {
+void vgaterm_putc(const term_hook_t* impl, char c) {
     (void) impl;
     vgaterm_putc_stub(c);
 #ifndef TERM_VGATEXT_NO_CURSOR
@@ -117,7 +121,7 @@ void vgaterm_putc(term_hook_t* impl, char c) {
 #endif
 }
 
-void vgaterm_puts(term_hook_t* impl, const char* s) {
+void vgaterm_puts(const term_hook_t* impl, const char* s) {
     (void) impl;
     for(size_t i = 0; s[i] != 0; i++) vgaterm_putc_stub(s[i]);
 #ifndef TERM_VGATEXT_NO_CURSOR
@@ -126,7 +130,7 @@ void vgaterm_puts(term_hook_t* impl, const char* s) {
 }
 
 #ifndef TERM_NO_CLEAR
-void vgaterm_clear(term_hook_t* impl) {
+void vgaterm_clear(const term_hook_t* impl) {
     (void) impl;
     for(uint8_t y = 0; y < 25; y++) {
         for(uint8_t x = 0; x < 80; x++)
@@ -144,13 +148,13 @@ void vgaterm_clear(term_hook_t* impl) {
 #endif
 
 #ifndef TERM_NO_XY
-void vgaterm_get_dimensions(term_hook_t* impl, size_t* width, size_t* height) {
+void vgaterm_get_dimensions(const term_hook_t* impl, size_t* width, size_t* height) {
     (void) impl;
     *width = 80;
     *height = 25;
 }
 
-void vgaterm_set_xy(term_hook_t* impl, size_t x, size_t y) {
+void vgaterm_set_xy(const term_hook_t* impl, size_t x, size_t y) {
     (void) impl;
     vgaterm_x = x; vgaterm_y = y;
 #ifndef TERM_VGATEXT_NO_CURSOR
@@ -158,7 +162,7 @@ void vgaterm_set_xy(term_hook_t* impl, size_t x, size_t y) {
 #endif
 }
 
-void vgaterm_get_xy(term_hook_t* impl, size_t* x, size_t* y) {
+void vgaterm_get_xy(const term_hook_t* impl, size_t* x, size_t* y) {
     (void) impl;
     *x = vgaterm_x; *y = vgaterm_y;
 }

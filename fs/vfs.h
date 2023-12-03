@@ -54,10 +54,10 @@ typedef struct vfs_node {
 extern const vfs_node_t* vfs_root; // root node
 
 /*
- * vfs_node_t* vfs_traverse_symlink(vfs_node_t* node)
+ * vfs_node_t* vfs_traverse_symlink(const vfs_node_t* node)
  *  Traverses a symlink VFS node to the final target node.
  */
-vfs_node_t* vfs_traverse_symlink(vfs_node_t* node);
+vfs_node_t* vfs_traverse_symlink(const vfs_node_t* node);
 
 /*
  * vfs_node_t* vfs_traverse_path(const char* path)
@@ -96,35 +96,35 @@ bool vfs_open(vfs_node_t* node, bool read, bool write);
 void vfs_close(vfs_node_t* node);
 
 /*
- * struct dirent* vfs_readdir(vfs_node_t* node, uint64_t idx)
+ * struct dirent* vfs_readdir(const vfs_node_t* node, uint64_t idx)
  *  Obtains information on a directory node's child item given its index.
  *  Returns a POSIX-compliant dirent struct pointer if such an item
  *  exists.
  */
-struct dirent* vfs_readdir(vfs_node_t* node, uint64_t idx);
+struct dirent* vfs_readdir(const vfs_node_t* node, uint64_t idx);
 
 /*
- * struct dirent* vfs_finddir(vfs_node_t* node, uint64_t idx)
+ * struct dirent* vfs_finddir(const vfs_node_t* node, uint64_t idx)
  *  Finds a child node of a directory given its name.
  *  Returns the node on success, or NULL otherwise.
  */
-struct vfs_node* vfs_finddir(vfs_node_t* node, const char* name);
+struct vfs_node* vfs_finddir(const vfs_node_t* node, const char* name);
 
 /*
- * struct vfs_node* vfs_create(vfs_node_t* node, const char* name, uint16_t mask)
+ * struct vfs_node* vfs_create(const vfs_node_t* node, const char* name, uint16_t mask)
  *  Creates a file node with the specified name and permissions
  *  in a directory node.
  *  Returns the node on success, or NULL otherwise.
  */
-struct vfs_node* vfs_create(vfs_node_t* node, const char* name, uint16_t mask);
+struct vfs_node* vfs_create(const vfs_node_t* node, const char* name, uint16_t mask);
 
 /*
- * struct vfs_node* vfs_mkdir(vfs_node_t* node, const char* name, uint16_t mask)
+ * struct vfs_node* vfs_mkdir(const vfs_node_t* node, const char* name, uint16_t mask)
  *  Creates a directory node with the specified name and
  *  permissions in a directory node.
  *  Returns the node on success, or NULL otherwise.
  */
-struct vfs_node* vfs_mkdir(vfs_node_t* node, const char* name, uint16_t mask);
+struct vfs_node* vfs_mkdir(const vfs_node_t* node, const char* name, uint16_t mask);
 
 /*
  * bool vfs_remove(vfs_node_t* node)

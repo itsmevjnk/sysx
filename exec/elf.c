@@ -77,7 +77,7 @@ enum elf_check_result elf_check_header(void* buf) {
     bool is_elf64 = (hdr->e_ident[EI_CLASS] == ELFCLASS64); // this may come in handy later
     kdebug("ELF file is %u-bit", (is_elf64) ? 64 : 32);
 
-    if(hdr->e_type != ET_NONE && hdr->e_type != ET_REL && hdr->e_type != ET_EXEC && hdr->e_type != ET_DYN && hdr->e_type != ET_CORE && !(hdr->e_type >= ET_LOPROC && hdr->e_type <= ET_HIPROC) && !(!is_elf64 || (hdr->e_type >= ET_LOOS && hdr->e_type <= ET_HIOS))) {
+    if(hdr->e_type != ET_NONE && hdr->e_type != ET_REL && hdr->e_type != ET_EXEC && hdr->e_type != ET_DYN && hdr->e_type != ET_CORE && hdr->e_type < ET_LOPROC && !(!is_elf64 || (hdr->e_type >= ET_LOOS && hdr->e_type <= ET_HIOS))) {
         kerror("invalid ELF type %u", hdr->e_type);
         return ERR_TYPE;
     }
@@ -143,8 +143,9 @@ enum elf_load_result elf_read_header(vfs_node_t* file, void** bufptr, bool* is_e
 }
 
 enum elf_load_result elf_read_shdr(vfs_node_t* file, void* hdr, bool is_elf64, void** shdr_bufptr, char** shstrtab_bufptr, size_t* e_shentsize, size_t* e_shnum) {
-    Elf64_Ehdr* hdr_64 = hdr; Elf32_Ehdr* hdr_32 = hdr;
-#ifndef ELF_FORCE_CLASS
+#ifdef ELF_FORCE_CLASS
+    (void) is_elf64;
+#else
     if(is_elf64) {
 #endif
 #if !defined(ELF_FORCE_CLASS) || ELF_FORCE_CLASS == ELFCLASS64
@@ -227,6 +228,10 @@ enum elf_load_result elf_read_shdr(vfs_node_t* file, void* hdr, bool is_elf64, v
 }
 
 enum elf_load_result elf_load_rel(vfs_node_t* file, void* shdr, bool is_elf64, size_t e_shentsize, size_t e_shnum, void* alloc_vmm, elf_prgload_t** prgload_result, size_t* prgload_result_len) {
+#ifdef ELF_FORCE_CLASS
+    (void) is_elf64;
+#endif
+
     *prgload_result = NULL; *prgload_result_len = 0;
 
     /* relocatable file - handle file loading based on ALLOC flag of sections */
@@ -234,19 +239,19 @@ enum elf_load_result elf_load_rel(vfs_node_t* file, void* shdr, bool is_elf64, s
     for(size_t i = 0; i < e_shnum; i++, shdr_ent = (void*) ((uintptr_t) shdr_ent + e_shentsize)) {
         /* retrieve section header information */
 #if ELF_FORCE_CLASS == ELFCLASS64
-        size_t sh_name = ((Elf64_Shdr*) shdr_ent)->sh_name;
+        // size_t sh_name = ((Elf64_Shdr*) shdr_ent)->sh_name;
         size_t sh_type = ((Elf64_Shdr*) shdr_ent)->sh_type;
         size_t sh_flags = ((Elf64_Shdr*) shdr_ent)->sh_flags;
         uintptr_t sh_off = ((Elf64_Shdr*) shdr_ent)->sh_offset;
         size_t sh_size = ((Elf64_Shdr*) shdr_ent)->sh_size;
 #elif ELF_FORCE_CLASS == ELFCLASS32
-        size_t sh_name = ((Elf32_Shdr*) shdr_ent)->sh_name;
+        // size_t sh_name = ((Elf32_Shdr*) shdr_ent)->sh_name;
         size_t sh_type = ((Elf32_Shdr*) shdr_ent)->sh_type;
         size_t sh_flags = ((Elf32_Shdr*) shdr_ent)->sh_flags;
         uintptr_t sh_off = ((Elf32_Shdr*) shdr_ent)->sh_offset;
         size_t sh_size = ((Elf32_Shdr*) shdr_ent)->sh_size;
 #else
-        size_t sh_name = (is_elf64) ? ((Elf64_Shdr*) shdr_ent)->sh_name : ((Elf32_Shdr*) shdr_ent)->sh_name;
+        // size_t sh_name = (is_elf64) ? ((Elf64_Shdr*) shdr_ent)->sh_name : ((Elf32_Shdr*) shdr_ent)->sh_name;
         size_t sh_type = (is_elf64) ? ((Elf64_Shdr*) shdr_ent)->sh_type : ((Elf32_Shdr*) shdr_ent)->sh_type;
         size_t sh_flags = (is_elf64) ? ((Elf64_Shdr*) shdr_ent)->sh_flags : ((Elf32_Shdr*) shdr_ent)->sh_flags;
         uintptr_t sh_off = (is_elf64) ? ((Elf64_Shdr*) shdr_ent)->sh_offset : ((Elf32_Shdr*) shdr_ent)->sh_offset;
@@ -580,6 +585,10 @@ enum elf_load_result elf_do_reloc(vfs_node_t* file, void* hdr, void* shdr, bool 
 }
 
 enum elf_load_result elf_load_syms(vfs_node_t* file, void* shdr, bool is_elf64, bool is_rel, size_t e_shentsize, size_t e_shnum, elf_prgload_t* prgload_result, size_t prgload_result_len, sym_table_t* syms, char* entry_name, uintptr_t* entry_ptr) {
+#ifdef ELF_FORCE_CLASS
+    (void) is_elf64;
+#endif
+
     if(entry_ptr != NULL) *entry_ptr = 0; // return null pointer if entry point cannot be found
 
     void* shdr_ent = shdr;
@@ -717,7 +726,9 @@ enum elf_load_result elf_load_phdr(vfs_node_t* file, void* hdr, bool is_elf64, v
 
     /* load program header offset and sizes */
     size_t e_phentsize, e_phnum; uintptr_t e_phoff;
-#ifndef ELF_FORCE_CLASS
+#ifdef ELF_FORCE_CLASS
+    (void) is_elf64;
+#else
     if(is_elf64) {
 #endif
 #if !defined(ELF_FORCE_CLASS) || ELF_FORCE_CLASS == ELFCLASS64
@@ -834,7 +845,7 @@ enum elf_load_result elf_load_phdr(vfs_node_t* file, void* hdr, bool is_elf64, v
         *prgload_result = krealloc(*prgload_result, *prgload_result_len * sizeof(elf_prgload_t));
         if(*prgload_result == NULL) {
             kerror("cannot allocate memory for program loading result");
-            elf_unload_prg(alloc_vmm, prgload_result_old, prgload_result_len - 1);
+            elf_unload_prg(alloc_vmm, prgload_result_old, (*prgload_result_len) - 1);
             return ERR_ALLOC;
         }
 

@@ -260,7 +260,9 @@ static const uint8_t font8x16_bitmap[256][16] = {
 };
 
 void font8x16_draw(fbuf_font_t* font, size_t x, size_t y, char c, uint32_t fg, uint32_t bg, bool transparent) {
-    uint8_t* bitmap = &font8x16_bitmap[(uint8_t) c];
+    (void) font;
+
+    const uint8_t* bitmap = (const uint8_t*) &font8x16_bitmap[(uint8_t) c];
     for(size_t row = 0; row < 16; row++) {
         uint8_t rbm = *bitmap; bitmap++;
         for(size_t col = 0; col < 8; col++) {

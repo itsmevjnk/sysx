@@ -40,7 +40,7 @@ uint64_t ser_devfs_write(vfs_node_t* node, uint64_t offset, uint64_t size, const
 
 void ser_devfs_init(vfs_node_t* root) {
     size_t ports = ser_getports();
-    for(size_t i = 0; i < ser_getports(); i++) {
+    for(size_t i = 0; i < ports; i++) {
         vfs_node_t* node = devfs_create(root, &ser_devfs_read, &ser_devfs_write, NULL, NULL, NULL, false, 0, "ttyS%u", i);
         if(node == NULL) kerror("cannot create device for serial port %u", i);
         else node->impl = i; // we'll use the impl field for storing the serial port number

@@ -46,14 +46,14 @@ static void fbterm_putc_stub(char c) {
     }
 }
 
-void fbterm_putc(term_hook_t* impl, char c) {
+void fbterm_putc(const term_hook_t* impl, char c) {
     (void) impl;
     if(fbuf_impl == NULL || fbuf_font == NULL) return;
     fbterm_putc_stub(c);
     fbuf_commit();
 }
 
-void fbterm_puts(term_hook_t* impl, const char* s) {
+void fbterm_puts(const term_hook_t* impl, const char* s) {
     (void) impl;
     if(fbuf_impl == NULL || fbuf_font == NULL) return;
     while(*s != '\0') {
@@ -64,7 +64,7 @@ void fbterm_puts(term_hook_t* impl, const char* s) {
 }
 
 #ifndef TERM_NO_CLEAR
-void fbterm_clear(term_hook_t* impl) {
+void fbterm_clear(const term_hook_t* impl) {
     (void) impl;
     fbterm_x = 0; fbterm_y = 0;
     fbuf_fill(fbterm_bg);
@@ -73,7 +73,7 @@ void fbterm_clear(term_hook_t* impl) {
 #endif
 
 #ifndef TERM_NO_XY
-void fbterm_get_dimensions(term_hook_t* impl, size_t* width, size_t* height) {
+void fbterm_get_dimensions(const term_hook_t* impl, size_t* width, size_t* height) {
     (void) impl;
     if(fbuf_impl != NULL && fbuf_font != NULL) {
         *width = fbuf_impl->width / fbuf_font->width;
@@ -84,36 +84,36 @@ void fbterm_get_dimensions(term_hook_t* impl, size_t* width, size_t* height) {
     }
 }
 
-void fbterm_set_xy(term_hook_t* impl, size_t x, size_t y) {
+void fbterm_set_xy(const term_hook_t* impl, size_t x, size_t y) {
     (void) impl;
     fbterm_x = x; fbterm_y = y;
 }
 
-void fbterm_get_xy(term_hook_t* impl, size_t* x, size_t* y) {
+void fbterm_get_xy(const term_hook_t* impl, size_t* x, size_t* y) {
     (void) impl;
     *x = fbterm_x; *y = fbterm_y;
 }
 #endif
 
 #ifndef TERM_NO_COLOR
-bool fbterm_setfg_rgb(term_hook_t* impl, uint32_t color) {
+bool fbterm_setfg_rgb(const term_hook_t* impl, uint32_t color) {
     (void) impl;
     fbterm_fg = color;
     return true;
 }
 
-bool fbterm_setbg_rgb(term_hook_t* impl, uint32_t color) {
+bool fbterm_setbg_rgb(const term_hook_t* impl, uint32_t color) {
     (void) impl;
     fbterm_bg = color;
     return true;
 }
 
-uint32_t fbterm_getfg_rgb(term_hook_t* impl) {
+uint32_t fbterm_getfg_rgb(const term_hook_t* impl) {
     (void) impl;
     return fbterm_fg;
 }
 
-uint32_t fbterm_getbg_rgb(term_hook_t* impl) {
+uint32_t fbterm_getbg_rgb(const term_hook_t* impl) {
     (void) impl;
     return fbterm_bg;
 }

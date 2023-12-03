@@ -80,16 +80,16 @@ char kbd_char_read(size_t id);
 #include <hal/terminal.h>
 
 /*
- * size_t kbd_term_available(term_hook_t* impl)
+ * size_t kbd_term_available(const term_hook_t* impl)
  *  Terminal HAL available() handler using keyboard.
  */
-size_t kbd_term_available(term_hook_t* impl);
+size_t kbd_term_available(const term_hook_t* impl);
 
 /*
- * char kbd_term_getc(term_hook_t* impl)
+ * char kbd_term_getc(const term_hook_t* impl)
  *  Terminal HAL getc() handler using keyboard.
  */
-char kbd_term_getc(term_hook_t* impl);
+char kbd_term_getc(const term_hook_t* impl);
 
 #endif
 

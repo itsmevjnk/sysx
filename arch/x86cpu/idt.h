@@ -22,7 +22,7 @@ typedef struct {
   uint32_t edi, esi, ebp, esp, ebx, edx, ecx, eax;
   uint32_t vector, exc_code; // exc_code is for exceptions
   uint32_t eip, cs, eflags, esp_usr, ss_usr;
-} __attribute__((packed)) idt_context_t;
+} idt_context_t;
 
 /*
  * void idt_add_gate(uint8_t vector, uint16_t selector, uintptr_t offset, uint8_t type, uint8_t dpl)

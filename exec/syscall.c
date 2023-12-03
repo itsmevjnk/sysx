@@ -10,7 +10,8 @@ void syscall_exit(size_t pid, proc_t* proc, size_t retval) {
 }
 
 bool syscall_handler_stub(size_t* func_ret, size_t* arg1, size_t* arg2, size_t* arg3, size_t* arg4, size_t* arg5) {
-    size_t pid = task_common(task_current)->pid; proc_t* proc = proc_get(pid);
+    (void) arg4; (void) arg5; // unused args (as of now)
+    size_t pid = task_common((void*) task_current)->pid; proc_t* proc = proc_get(pid);
     switch(*func_ret) {
         case SYSCALL_EXIT:
             syscall_exit(pid, proc, *arg1);

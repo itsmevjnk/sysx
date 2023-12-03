@@ -3,6 +3,8 @@
 #include <arch/x86cpu/idt.h>
 
 void syscall_handler(uint8_t vector, idt_context_t* context) {
+    (void) vector;
+    
     switch(context->eax) {
         default:
             syscall_handler_stub(&context->eax, &context->ecx, &context->edx, &context->ebx, &context->esi, &context->edi);

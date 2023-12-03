@@ -5,6 +5,7 @@
 #include <mm/vmm.h>
 #include <mm/pmm.h>
 #include <fs/devfs.h>
+#include <string.h>
 
 struct proc** proc_pidtab = NULL; // array of PID to process struct mappings
 size_t proc_pidtab_len = 0;
@@ -38,7 +39,7 @@ static size_t proc_pid_alloc(struct proc* proc) {
             mutex_release(&proc_mutex);
             return (size_t)-1;
         }
-        void** new_pidtab = krealloc(proc_pidtab, (proc_pidtab_len + PROC_PIDTAB_ALLOCSZ) * sizeof(void*));
+        proc_t** new_pidtab = krealloc(proc_pidtab, (proc_pidtab_len + PROC_PIDTAB_ALLOCSZ) * sizeof(void*));
         if(new_pidtab == NULL) {
             kerror("insufficient memory for PID allocation");
             mutex_release(&proc_mutex);

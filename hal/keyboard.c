@@ -3,7 +3,7 @@
 #include <kernel/log.h>
 #include <string.h>
 
-kbd_info_t kbd_list[KBD_MAXNUM] = {{NULL, 0}};
+kbd_info_t kbd_list[KBD_MAXNUM] = {{NULL, 0, 0}};
 
 size_t kbd_register(char* keymap) {
     for(size_t i = 0; i < KBD_MAXNUM; i++) {

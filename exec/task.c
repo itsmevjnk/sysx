@@ -138,21 +138,21 @@ void task_yield(void* context) {
             task_switch(task_kernel, context); // switch into kernel task
         }
     } else {
-        void* task = task_current;
+        void* task = (void*) task_current;
         do {
             task = task_common(task)->next;
             if(task_common(task)->type == TASK_TYPE_DELETE_PENDING) {
                 /* this task is to be deleted - delete it now */
-                void* next_task = task_common(task_common(task)->next)->next; // go to the task after this one
+                void* next_task = task_common((void*) task_common(task)->next)->next; // go to the task after this one
                 task_do_delete(task);
                 task = next_task;
             }
         } while(!task_common(task)->ready && task != task_current); // find a ready task to switch to, while making sure that we don't get stuck in a loop if no tasks are ready
         if(task == task_current) return; // no tasks to switch to
         else {
-            if(task_common(task_current)->type == TASK_TYPE_DELETE_PENDING) {
+            if(task_common((void*) task_current)->type == TASK_TYPE_DELETE_PENDING) {
                 /* current task is waiting to be deleted - let's do it now */
-                task_do_delete(task_current);
+                task_do_delete((void*) task_current);
                 task_current = NULL;
             }
             task_switch_tick = timer_tick;
@@ -163,7 +163,7 @@ void task_yield(void* context) {
 
 void* task_fork_stub() {
     /* create blank task */
-    task_common_t* common_current = task_common(task_current);
+    task_common_t* common_current = task_common((void*) task_current);
     struct proc* proc_current = proc_get(common_current->pid);
     void* task = task_create((common_current->type == TASK_TYPE_USER || common_current->type == TASK_TYPE_USER_SYS), proc_current, common_current->stack_size, 0);
     if(task == NULL) return NULL;

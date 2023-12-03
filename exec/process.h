@@ -40,7 +40,7 @@ struct proc {
     mutex_t mu_fds; // mutex for adding/deleting file descriptors
     size_t num_fds; // number of entries (used + free) for file descriptors
     fd_t* fds; // file descriptor table (maps to file table)
-} __attribute__((packed));
+};
 typedef struct proc proc_t;
 
 extern struct proc* proc_kernel; // kernel process

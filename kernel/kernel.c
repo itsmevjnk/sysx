@@ -29,7 +29,7 @@
 extern int ktgtinit(); // must be defined somewhere in the target specific code
 
 /* VFS directory listing */
-void vfs_dirlist(vfs_node_t* node, size_t tab) {
+void vfs_dirlist(const vfs_node_t* node, size_t tab) {
     char tab_str[10]; // should be enough
     memset(tab_str, '\t', tab);
     tab_str[tab] = 0;
@@ -148,7 +148,7 @@ void kinit() {
 }
 
 void kmain() {
-    kinfo("kernel task (kmain), PID %u", task_get_pid(task_current));
+    kinfo("kernel task (kmain), PID %u", task_get_pid((void*) task_current));
     vfs_node_t* bin_node = vfs_traverse_path(BIN_ROOT);
     if(bin_node == NULL) {
         kerror(BIN_ROOT " not found");

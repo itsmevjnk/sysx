@@ -156,7 +156,7 @@ uintptr_t task_get_sptr(void* task);
 void task_set_sptr(void* task, uintptr_t sptr);
 
 /*
- * task_common_t* task_common(void* task)
+ * task_common_t* task_common(volatile void* task)
  *  Returns the pointer to the common task description fields struct of
  *  the given task.
  *  This is an architecture-specific function.
