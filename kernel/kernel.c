@@ -123,12 +123,12 @@ void kinit() {
             continue;
         }
         kinfo("loading %s (ino %llu)", mod->name, mod->inode);
-        int32_t (*kmod_init)() = NULL;
+        int32_t (*kmod_init)(elf_prgload_t*, size_t) = NULL;
         elf_prgload_t* load_result; size_t load_result_len;
         elf_load_kmod(mod, &load_result, &load_result_len, (uintptr_t*) &kmod_init);
         if(kmod_init != NULL) {
             kinfo(" - calling module's " ELF_KMOD_INIT_FUNC " function at 0x%x", (uintptr_t)kmod_init);
-            int32_t ret = (*kmod_init)();
+            int32_t ret = (*kmod_init)(load_result, load_result_len);
             kinfo(" - " ELF_KMOD_INIT_FUNC " returned %d", ret);
             if(ret < 0) {
                 kinfo("   unloading module");
