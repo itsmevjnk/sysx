@@ -278,6 +278,7 @@ enum elf_load_result elf_load_rel(vfs_node_t* file, void* shdr, bool is_elf64, s
                 vmm_pgmap(vmm_current, frame * pmm_framesz(), vaddr + j * pmm_framesz(), VMM_FLAGS_PRESENT | VMM_FLAGS_RW | VMM_FLAGS_CACHE | VMM_FLAGS_GLOBAL);
             }
             if(sh_type != SHT_NOBITS) vfs_read(file, sh_off, sh_size, (uint8_t*) vaddr); // copy data from file
+            else memset((void*) vaddr, 0, sh_size);
             (*prgload_result_len)++;
             elf_prgload_t* prgload_result_old = *prgload_result;
             *prgload_result = krealloc(*prgload_result, *prgload_result_len * sizeof(elf_prgload_t));
