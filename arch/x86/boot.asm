@@ -16,7 +16,7 @@ section .bss
 align 16
 stack:
 .top:
-resb 4096 ; 4K of stack, probably enough to get us started
+resb 16384 ; 16K of stack because 4K is not enough for LAI
 .bottom:
 
 global x86ext_on

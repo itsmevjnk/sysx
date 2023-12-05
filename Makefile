@@ -17,6 +17,7 @@ include mm/objs.mk
 include fs/objs.mk
 include exec/objs.mk
 include drivers/objs.mk
+include drivers/objs_lai.mk
 
 OBJS=\
 $(TARGET_OBJS) \
@@ -29,6 +30,11 @@ $(MM_OBJS) \
 $(FS_OBJS) \
 $(EXEC_OBJS) \
 $(DRIVERS_OBJS)
+
+ifneq (,$(findstring FEAT_ACPI_LAI,$(CFLAGS)))
+	OBJS := $(OBJS) $(ACPI_LAI_OBJS)
+	CFLAGS := $(CFLAGS) -isystem drivers/lai/include
+endif
 
 .PHONY: all clean
 .SUFFIXES: .o .c .s .asm

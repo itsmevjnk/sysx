@@ -8,4 +8,5 @@ $(ARCHDIR)/terminal_vgatext.o \
 $(ARCHDIR)/i8259.o \
 $(ARCHDIR)/i8253.o \
 $(ARCHDIR)/syscall.o \
-$(ARCHDIR)/pci.o
+$(ARCHDIR)/pci.o \
+$(ARCHDIR)/acpi_lai.o

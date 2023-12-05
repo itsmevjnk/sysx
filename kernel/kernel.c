@@ -26,9 +26,8 @@
 #include <exec/task.h>
 #include <exec/syscall.h>
 
-#ifdef FEAT_PCI
 #include <drivers/pci.h>
-#endif
+#include <drivers/acpi.h>
 
 extern int ktgtinit(); // must be defined somewhere in the target specific code
 
@@ -144,6 +143,11 @@ void kinit() {
 #ifdef FEAT_PCI
     kinfo("scanning PCI buses");
     pci_scan();
+#endif
+
+#ifdef FEAT_ACPI
+    kinfo("initializing ACPI");
+    acpi_init();
 #endif
 
     kinfo("kernel init finished, current timer tick: %llu", (uint64_t)timer_tick);
