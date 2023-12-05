@@ -1,6 +1,6 @@
 #ifdef FEAT_PCI
 
-#include <hal/pci.h>
+#include <drivers/pci.h>
 #include <kernel/log.h>
 
 #define PCI_CONFIG_ADDRESS                          0xCF8
@@ -60,7 +60,7 @@ static bool pci_scan_func(uint8_t bus, uint8_t dev, uint8_t func) {
     uint16_t cs = pci_cfg_read_word(bus, dev, func, PCI_CFG_SUBCLASS); // read subclass and class at the same time
     uint8_t* class_sub = (uint8_t*) &cs; // class_sub[0] = subclass, class_sub[1] = class
 
-    kinfo("PCI device %02x:%02x.%x: ID %04x:%04x, class %02x:%02x, prog IF %02x", bus, dev, func, vid_pid[0], vid_pid[1], class_sub[1], class_sub[0], pci_read_progif(bus, dev, func));
+    kinfo("device %02x:%02x.%x: ID %04x:%04x, class %02x:%02x, prog IF %02x", bus, dev, func, vid_pid[0], vid_pid[1], class_sub[1], class_sub[0], pci_read_progif(bus, dev, func));
 
     if(class_sub[1] == PCI_CLASS_BRIDGE && (class_sub[0] == PCI_BRG_PCI_BRIDGE || class_sub[0] == PCI_BRG_PCI_BRIDGE_ALT)) {
         /* scan devices behind the bridge - TODO: set up secondary buses */

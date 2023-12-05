@@ -16,6 +16,7 @@ include hal/objs.mk
 include mm/objs.mk
 include fs/objs.mk
 include exec/objs.mk
+include drivers/objs.mk
 
 OBJS=\
 $(TARGET_OBJS) \
@@ -26,7 +27,8 @@ $(LIB_OBJS) \
 $(HAL_OBJS) \
 $(MM_OBJS) \
 $(FS_OBJS) \
-$(EXEC_OBJS)
+$(EXEC_OBJS) \
+$(DRIVERS_OBJS)
 
 .PHONY: all clean
 .SUFFIXES: .o .c .s .asm

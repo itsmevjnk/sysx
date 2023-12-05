@@ -1,5 +1,5 @@
-#ifndef HAL_PCI_DEFS_H
-#define HAL_PCI_DEFS_H
+#ifndef DRIVERS_PCI_DEFS_H
+#define DRIVERS_PCI_DEFS_H
 
 #include <stddef.h>
 #include <stdint.h>

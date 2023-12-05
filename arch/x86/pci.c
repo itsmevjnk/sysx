@@ -1,6 +1,6 @@
 #ifdef FEAT_PCI
 
-#include <hal/pci.h>
+#include <drivers/pci.h>
 #include <arch/x86cpu/asm.h>
 
 #define PCI_CONFIG_ADDRESS                          0xCF8

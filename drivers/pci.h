@@ -1,10 +1,10 @@
-#ifndef HAL_PCI_H
-#define HAL_PCI_H
+#ifndef DRIVERS_PCI_H
+#define DRIVERS_PCI_H
 
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <hal/pci_defs.h>
+#include <drivers/pci_defs.h>
 
 #ifdef FEAT_PCI // -DFEAT_PCI must be in CFLAGS to enable PCI support
 
