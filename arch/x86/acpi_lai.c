@@ -20,22 +20,16 @@ static acpi_header_t** acpi_sdttab = NULL;
 static size_t acpi_sdttab_sz = 0; // number of SDT table entries
 
 static void* acpi_map_sdthdr(uintptr_t paddr) {
-    size_t paddr_off = paddr % vmm_pgsz();
-    vmm_map(vmm_kernel, paddr, acpi_sdthdr_vaddr, sizeof(acpi_header_t), VMM_FLAGS_PRESENT);
-    return (void*) (acpi_sdthdr_vaddr + paddr_off);
+    return (void*) vmm_map(vmm_kernel, paddr, acpi_sdthdr_vaddr, sizeof(acpi_header_t), VMM_FLAGS_PRESENT);
 }
 
 static void acpi_add_sdt(acpi_header_t* header, size_t idx) {
     /* map the entire SDT */
-    uintptr_t paddr = vmm_get_paddr(vmm_kernel, (uintptr_t) header);
-    size_t off = paddr % vmm_pgsz();
-    uintptr_t vaddr = vmm_first_free(vmm_kernel, kernel_end, UINTPTR_MAX, off + header->length, false);
-    if(!vaddr) {
+    acpi_sdttab[idx] = (acpi_header_t*) vmm_alloc_map(vmm_kernel, vmm_get_paddr(vmm_kernel, (uintptr_t) header), header->length, kernel_end, UINTPTR_MAX, false, VMM_FLAGS_PRESENT | VMM_FLAGS_CACHE); // no need for RW access (since we're not supposed to write into this)
+    if(acpi_sdttab[idx] == NULL) {
         kerror("cannot find empty space to map SDT with signature %c%c%c%c (%u bytes)", header->signature[0], header->signature[1], header->signature[2], header->signature[3], header->length);
         return;
     }
-    vmm_map(vmm_kernel, paddr, vaddr, header->length, VMM_FLAGS_PRESENT | VMM_FLAGS_CACHE); // no need for RW access (since we're not supposed to write into this)
-    acpi_sdttab[idx] = (acpi_header_t*) (vaddr + off);
     kdebug("mapped SDT with signature %c%c%c%c to 0x%x", acpi_sdttab[idx]->signature[0], acpi_sdttab[idx]->signature[1], acpi_sdttab[idx]->signature[2], acpi_sdttab[idx]->signature[3], acpi_sdttab[idx]);
 }
 
@@ -72,8 +66,8 @@ bool acpi_arch_init() {
         return false;
     }
     // kdebug("SDT headers will be temporarily mapped to 0x%x", acpi_sdthdr_vaddr);
-    vmm_map(vmm_kernel, 0xDEADB000, acpi_sdthdr_vaddr, vmm_pgsz(), VMM_FLAGS_PRESENT | VMM_FLAGS_CACHE); // reserve space - we'll fill in the location later
-    vmm_map(vmm_kernel, 0xDEADB000, acpi_sdthdr_vaddr + vmm_pgsz(), vmm_pgsz(), VMM_FLAGS_PRESENT | VMM_FLAGS_CACHE);
+    vmm_pgmap(vmm_kernel, 0xDEADB000, acpi_sdthdr_vaddr, VMM_FLAGS_PRESENT | VMM_FLAGS_CACHE); // reserve space - we'll fill in the location later
+    vmm_pgmap(vmm_kernel, 0xDEADB000, acpi_sdthdr_vaddr + vmm_pgsz(), VMM_FLAGS_PRESENT | VMM_FLAGS_CACHE);
 
     /* map RSDT/XSDT */
     acpi_header_t* rsdt_header = acpi_map_sdthdr(rsdt_address);

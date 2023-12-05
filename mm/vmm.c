@@ -9,12 +9,13 @@
 void* vmm_current = NULL;
 void* vmm_kernel = NULL;
 
-void vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, size_t flags) {
-	size_t delta = 0;
+uintptr_t vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, size_t flags) {
+	size_t delta = 0, off = 0;
 	if(pa % vmm_pgsz()) {
 		delta = pa;
 		pa = (pa / vmm_pgsz()) * vmm_pgsz();
-		delta -= pa;
+		off = delta - pa;
+		delta -= off;
 	}
 	if(va % vmm_pgsz()) {
 		size_t d = va;
@@ -25,6 +26,8 @@ void vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, size_t flags) {
 	sz += delta;
 	for(size_t i = 0; i < (sz + vmm_pgsz() - 1) / vmm_pgsz(); i++)
 		vmm_pgmap(vmm, pa + i * vmm_pgsz(), va + i * vmm_pgsz(), flags);
+	
+	return (va + off);
 }
 
 void vmm_unmap(void* vmm, uintptr_t va, size_t sz) {
@@ -59,6 +62,15 @@ uintptr_t vmm_first_free(void* vmm, uintptr_t va_start, uintptr_t va_end, size_t
 		if(blk_sz == sz) return result * pgsz; // we've reached our target
 	}
 	return 0; // cannot find block
+}
+
+uintptr_t vmm_alloc_map(void* vmm, uintptr_t pa, size_t sz, uintptr_t va_start, uintptr_t va_end, bool reverse, size_t flags) {
+	size_t off = pa % vmm_pgsz();
+	pa -= off; sz += off;
+	uintptr_t vaddr = vmm_first_free(vmm, va_start, va_end, sz, reverse);
+	if(!vaddr) return 0; // cannot find space
+	vmm_map(vmm, pa, vaddr, sz, flags);
+	return (vaddr + off);
 }
 
 static vmm_trap_t* vmm_traps = NULL;

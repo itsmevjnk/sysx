@@ -16,6 +16,7 @@ size_t vmm_pgsz();
 /*
  * void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, size_t flags)
  *  Maps a single page from pa to va.
+ *  pa and va are assumed to be page-aligned addresses.
  */
 void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, size_t flags);
 
@@ -30,6 +31,7 @@ void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, size_t flags);
 /*
  * void vmm_pgunmap(void* vmm, uintptr_t va)
  *  Unmaps a single page corresponding to virtual address va.
+ *  pa and va are assumed to be page-aligned addresses.
  */
 void vmm_pgunmap(void* vmm, uintptr_t va);
 
@@ -101,11 +103,12 @@ extern void* vmm_current;
 extern void* vmm_kernel;
 
 /*
- * void vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, size_t flags)
+ * uintptr_t vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, size_t flags)
  *  Maps sz byte(s) starting from linear address pa to virtual
  *  address va with the specified properties.
+ *  Returns the mapped address for pa.
  */
-void vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, size_t flags);
+uintptr_t vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, size_t flags);
 
 /*
  * void vmm_unmap(void* vmm, uintptr_t va, size_t sz)
@@ -123,6 +126,16 @@ void vmm_unmap(void* vmm, uintptr_t va, size_t sz);
  *  can be found.
  */
 uintptr_t vmm_first_free(void* vmm, uintptr_t va_start, uintptr_t va_end, size_t sz, bool reverse);
+
+/*
+ * uintptr_t vmm_alloc_map(void* vmm, uintptr_t pa, size_t sz, uintptr_t va_start, uintptr_t va_end, bool reverse, size_t flags)
+ *  Finds a contiguous address space sufficient for mapping the
+ *  physical memory range specified by pa and sz and maps the
+ *  range.
+ *  Returns the space's starting virtual address, corresponding
+ *  to pa, or 0 if such a space cannot be found.
+ */
+uintptr_t vmm_alloc_map(void* vmm, uintptr_t pa, size_t sz, uintptr_t va_start, uintptr_t va_end, bool reverse, size_t flags);
 
 /* list of page traps (pages destined to cause a fault and to be handled by the kernel) */
 enum vmm_trap_type {

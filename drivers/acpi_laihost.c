@@ -41,15 +41,12 @@ void laihost_free(void* ptr, size_t size) {
 }
 
 void* laihost_map(size_t address, size_t count) {
-    size_t addr_off = address % vmm_pgsz();
-    uintptr_t vaddr = vmm_first_free(vmm_kernel, kernel_end, UINTPTR_MAX, count + addr_off, false);
-    if(!vaddr) {
+    uintptr_t ret = vmm_alloc_map(vmm_kernel, address, count, kernel_end, UINTPTR_MAX, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW);
+    if(!ret) {
         kerror("cannot allocate virtual address space of size %u", count);
         return NULL;
     }
-
-    vmm_map(vmm_kernel, address, vaddr, count, VMM_FLAGS_PRESENT | VMM_FLAGS_RW); // no caching for safety (i.e. we could be mapping MMIO stuff)
-    return (void*) (vaddr + addr_off); // don't forget to return the offset too!
+    return (void*) ret;
 }
 
 void laihost_unmap(void* pointer, size_t count) {
