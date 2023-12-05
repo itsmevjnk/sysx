@@ -88,16 +88,15 @@ bool acpi_arch_init() {
     kdebug("SDT pointer table starts at 0x%x", ptr);
     static acpi_fadt_t* acpi_fadt = NULL; // FADT
     for(size_t i = 2; i < acpi_sdttab_sz; i++, ptr = (void*) ((uintptr_t) ptr + ((acpi_version == 2) ? 8 : 4))) {
-        uintptr_t paddr = (acpi_version == 2) ? *((uint64_t*) ptr) : *((uint32_t*) ptr);
-        acpi_header_t* header = acpi_map_sdthdr((acpi_header_t*) ((acpi_version == 2) ? *((uint64_t*) ptr) : *((uint32_t*) ptr)));
+        acpi_header_t* header = acpi_map_sdthdr((acpi_version == 2) ? *((uint64_t*) ptr) : *((uint32_t*) ptr));
         acpi_add_sdt(header, i);
-        if(acpi_fadt == NULL && !memcmp(header->signature, "FACP", 4)) acpi_fadt = acpi_sdttab[i];
+        if(acpi_fadt == NULL && !memcmp(header->signature, "FACP", 4)) acpi_fadt = (acpi_fadt_t*) acpi_sdttab[i];
     }
 
     /* add DSDT to lookup table */
     if(acpi_fadt == NULL) kwarn("FADT not found");
     else {
-        acpi_header_t* header = acpi_map_sdthdr((acpi_header_t*) ((acpi_version == 2) ? acpi_fadt->x_dsdt : acpi_fadt->dsdt));
+        acpi_header_t* header = acpi_map_sdthdr((acpi_version == 2) ? acpi_fadt->x_dsdt : acpi_fadt->dsdt);
         acpi_add_sdt(header, 1);
     }
 
