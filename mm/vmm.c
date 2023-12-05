@@ -14,12 +14,12 @@ void vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, size_t flags) {
 	if(pa % vmm_pgsz()) {
 		delta = pa;
 		pa = (pa / vmm_pgsz()) * vmm_pgsz();
-		delta = pa - delta;
+		delta -= pa;
 	}
 	if(va % vmm_pgsz()) {
 		size_t d = va;
 		va = (va / vmm_pgsz()) * vmm_pgsz();
-		d = va - delta;
+		d = delta - va;
 		if(delta < d) delta = d;
 	}
 	sz += delta;
