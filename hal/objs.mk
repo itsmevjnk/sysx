@@ -7,4 +7,5 @@ hal/keyboard.o \
 hal/term_kbd.o \
 hal/fbuf.o \
 hal/term_fbuf.o \
-hal/fonts/font8x16.o
+hal/fonts/font8x16.o \
+hal/pci.o

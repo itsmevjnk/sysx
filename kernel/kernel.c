@@ -26,6 +26,10 @@
 #include <exec/task.h>
 #include <exec/syscall.h>
 
+#ifdef FEAT_PCI
+#include <hal/pci.h>
+#endif
+
 extern int ktgtinit(); // must be defined somewhere in the target specific code
 
 /* VFS directory listing */
@@ -136,6 +140,11 @@ void kinit() {
             } else kfree(load_result); // save kernel heap and free the loading result (since we'll discard it anyway)
         } else kwarn(" - module does not have an init function");
     }
+
+#ifdef FEAT_PCI
+    kinfo("scanning PCI buses");
+    pci_scan();
+#endif
 
     kinfo("kernel init finished, current timer tick: %llu", (uint64_t)timer_tick);
 
