@@ -52,7 +52,7 @@ int ktgtinit() {
             if(!strcmp((char*)modules[i].cmdline, INITRD_PATH)) {
                 /* we've found the initrd file - let's load it as VFS root */
                 vfs_root = tar_init((void*) modules[i].mod_start, modules[i].mod_end - modules[i].mod_start, NULL);
-                memfs_mount(vfs_traverse_path("/boot/initrd.tar"), (void*) modules[i].mod_start, modules[i].mod_end - modules[i].mod_start, false);
+                memfs_mount(vfs_traverse_path(NULL, "/boot/initrd.tar"), (void*) modules[i].mod_start, modules[i].mod_end - modules[i].mod_start, false);
             }
         }
     } else kwarn("kernel has been loaded without any modules");

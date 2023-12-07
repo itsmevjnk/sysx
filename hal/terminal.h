@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <exec/mutex.h>
+#include <helpers/mutex.h>
 
 #define TERM_LINE_TERMINATION                   '\n' // line termination character, used by term_gets
 

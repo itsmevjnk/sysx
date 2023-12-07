@@ -60,10 +60,12 @@ extern const vfs_node_t* vfs_root; // root node
 vfs_node_t* vfs_traverse_symlink(const vfs_node_t* node);
 
 /*
- * vfs_node_t* vfs_traverse_path(const char* path)
- *  Traverses an absolute path and returns the final node if one exists.
+ * vfs_node_t* vfs_traverse_path(vfs_node_t* start_node, const char* path)
+ *  Traverses an absolute path (if starting node is NULL) or an absolute/
+ *  relative path (if starting node is specifed) and returns the final
+ *  node if one exists.
  */
-vfs_node_t* vfs_traverse_path(const char* path);
+vfs_node_t* vfs_traverse_path(vfs_node_t* start_node, const char* path);
 
 /*
  * uint64_t vfs_read(vfs_node_t* node, uint64_t offset, uint64_t size, uint8_t* buffer)

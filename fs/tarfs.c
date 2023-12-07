@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <kernel/log.h>
+#include <helpers/path.h>
 
 #define TAR_INFO_MAGIC                  0x52415453 // 'RATS' on big-endian, 'STAR' on little-endian
 
@@ -146,7 +147,7 @@ vfs_node_t* tar_init(void* buffer, size_t size, vfs_node_t* root) {
         name[0] = 0; // quick and dirty way to clear string
         if(is_ustar) strcpy(name, header->name_prefix); // copy name prefix
         strcpy(&name[strlen(name)], header->name); // append it with the rest of the path
-        name[strlen(name) + 1] = 0; // this will be needed later
+        // name[strlen(name) + 1] = 0; // this will be needed later
         
         vfs_node_t* node = kmalloc(sizeof(vfs_node_t)); // new node
         if(node == NULL) {
@@ -192,13 +193,13 @@ vfs_node_t* tar_init(void* buffer, size_t size, vfs_node_t* root) {
 
         /* traverse path */
         vfs_node_t* parent = root; // parent node
-        char* path_element = name;
+        char* path = name;
         while(1) {
             size_t len = 0; // path element length
-            for(; path_element[len] != '/' && path_element[len] != 0; len++);
-            path_element[len] = 0; // terminate path element
+            const char* path_element = path;
+            path = path_traverse(path, &len);
 
-            if(path_element[len + 1] == 0) {
+            if(*path == '\0') {
                 /* end of path */
                 memcpy(node->name, path_element, len); node->name[len] = 0; // copy name
                 root_info->hierarchy[node->inode].parent = parent;
@@ -207,7 +208,7 @@ vfs_node_t* tar_init(void* buffer, size_t size, vfs_node_t* root) {
                 /* find next parent */
                 bool found = false;
                 for(size_t i = 1; i < node->inode; i++) { // ignore first (root) node and this node
-                    if((uintptr_t) root_info->hierarchy[i].parent == (uintptr_t) parent && !strcmp(root_info->hierarchy[i].node->name, path_element)) {
+                    if((uintptr_t) root_info->hierarchy[i].parent == (uintptr_t) parent && !strncmp(root_info->hierarchy[i].node->name, path_element, len) && root_info->hierarchy[i].node->name[len] == '\0') {
                         /* found it */
                         found = true;
                         parent = root_info->hierarchy[i].node;
@@ -215,10 +216,8 @@ vfs_node_t* tar_init(void* buffer, size_t size, vfs_node_t* root) {
                     }
                 }
                 if(!found)
-                kerror("cannot find child node of %s (inode %llu) with name %s", parent->name, parent->inode, path_element);
+                kerror("cannot find child node of %s (inode %llu) with name %s", parent->name, parent->inode, path);
             }
-
-            path_element += len + 1; // next element
         }
 
         kdebug("inode %llu (node @ 0x%x): name %s, flags 0x%02x, size %llu, child of inode %u", node->inode, (uintptr_t) node, node->name, node->flags, node->length, parent->inode);

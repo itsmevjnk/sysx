@@ -18,6 +18,7 @@ include fs/objs.mk
 include exec/objs.mk
 include drivers/objs.mk
 include drivers/objs_lai.mk
+include helpers/objs.mk
 
 OBJS=\
 $(TARGET_OBJS) \
@@ -29,7 +30,8 @@ $(HAL_OBJS) \
 $(MM_OBJS) \
 $(FS_OBJS) \
 $(EXEC_OBJS) \
-$(DRIVERS_OBJS)
+$(DRIVERS_OBJS) \
+$(HELPERS_OBJS)
 
 ifneq (,$(findstring FEAT_ACPI_LAI,$(CFLAGS)))
 	OBJS := $(OBJS) $(ACPI_LAI_OBJS)

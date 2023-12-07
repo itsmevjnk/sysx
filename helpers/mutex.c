@@ -1,4 +1,4 @@
-#include <exec/mutex.h>
+#include <helpers/mutex.h>
 #include <exec/task.h>
 
 #ifndef ARCH_MUTEX
@@ -11,6 +11,10 @@ void mutex_acquire(mutex_t* m) {
 void mutex_release(mutex_t* m) {
     m->locked = 0;
     task_yield_noirq(); // so we don't starve other tasks
+}
+
+bool mutex_test(const mutex_t* m) {
+    return (m->locked);
 }
 
 #endif

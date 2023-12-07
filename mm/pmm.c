@@ -1,7 +1,7 @@
 #include <mm/pmm.h>
 #include <mm/vmm.h>
 #include <kernel/log.h>
-#include <exec/mutex.h>
+#include <helpers/mutex.h>
 
 uintptr_t* pmm_bitmap = NULL;
 size_t pmm_frames = 0;

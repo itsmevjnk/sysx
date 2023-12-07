@@ -4,7 +4,7 @@
 #include <arch/x86cpu/asm.h>
 #include <string.h>
 #include <exec/task.h>
-#include <exec/mutex.h>
+#include <helpers/mutex.h>
 
 #define TERM_VGATEXT_ADDR                   0xC00B8000 // the base address to map the textmode framebuffer to (must be 4K aligned)
 

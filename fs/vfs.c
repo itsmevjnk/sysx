@@ -2,6 +2,7 @@
 #include <kernel/log.h>
 #include <string.h>
 #include <stdlib.h>
+#include <helpers/path.h>
 
 const vfs_node_t* vfs_root = NULL;
 
@@ -17,27 +18,33 @@ vfs_node_t* vfs_traverse_symlink(const vfs_node_t* node) {
     return (vfs_node_t*) node;
 }
 
-vfs_node_t* vfs_traverse_path(const char* path) {
+vfs_node_t* vfs_traverse_path(vfs_node_t* start_node, const char* path) {
     if(path == NULL) {
         kerror("path is NULL");
         return NULL;
     }
 
-    if(path[0] != '/') {
-        kerror("first character of path is not /, indicating relative path");
+    const vfs_node_t* node;
+    if(start_node == NULL) {
+        if(path[0] != '/') {
+            kerror("first character of path is not /, indicating relative path");
+            return NULL;
+        }
+        node = vfs_root; // start from the root node
+    } else node = start_node;
+    
+    char* name = kmalloc(256);
+    if(name == NULL) {
+        kerror("cannot allocate temporary space for path element");
         return NULL;
     }
-
-    const vfs_node_t* node = vfs_root; // start from the root node
-    char *name = kmalloc(256); // path element
-    while(node != NULL) {
-        path++; // skip past the preceding slash
-        size_t name_len = 0;
-        for(; *path != '/' && *path != '\0'; path++, name_len++)
-            name[name_len] = *path; // copy file/directory name
-        name[name_len] = '\0'; // null terminate name
+    while(node != NULL && *path != '\0') {
+        size_t len; const char* e = path; // current path element and its length
+        path = path_traverse(path, &len);
+        if(!len || (len == 1 && *e == '.')) continue; // nothing to do
+        // TODO: support going back to the parent
+        memcpy(name, e, len); name[len] = '\0'; // copy element and terminate it
         node = vfs_finddir((vfs_node_t*) node, name); // try to find next node
-        if(*path == '\0') break; // we've reached the end of the path, exit now
     }
     kfree(name);
 

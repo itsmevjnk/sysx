@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <exec/mutex.h>
+#include <helpers/mutex.h>
 #include <hal/terminal.h>
 #include <exec/elf.h>
 

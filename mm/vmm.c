@@ -3,7 +3,7 @@
 #include <mm/addr.h>
 #include <stdlib.h>
 #include <kernel/log.h>
-#include <exec/mutex.h>
+#include <helpers/mutex.h>
 #include <string.h>
 
 void* vmm_current = NULL;

@@ -79,7 +79,7 @@ void kinit() {
     kinfo("terminal size: %u x %u", term_width, term_height);
 #endif
 
-    vfs_node_t* devfs_root = vfs_traverse_path(DEVFS_ROOT);
+    vfs_node_t* devfs_root = vfs_traverse_path(NULL, DEVFS_ROOT);
     if(devfs_root == NULL) kerror("cannot find " DEVFS_ROOT " for devfs mounting");
     else {
         kinfo("mounting devfs at " DEVFS_ROOT);
@@ -96,7 +96,7 @@ void kinit() {
     kinfo("creating kernel symbol table");
     kernel_syms = sym_new_table(KSYM_INITIAL_CNT);
     kinfo("locating kernel symbols file at " KSYM_PATH);
-    vfs_node_t* ksym_node = vfs_traverse_path(KSYM_PATH);
+    vfs_node_t* ksym_node = vfs_traverse_path(NULL, KSYM_PATH);
     if(ksym_node == NULL) kerror("cannot find kernel symbols file");
     else {
         kinfo("loading kernel symbols");
@@ -115,7 +115,7 @@ void kinit() {
 
     /* load kernel modules */
     kinfo("loading kernel modules from " KMOD_PATH);
-    vfs_node_t* kmods_node = vfs_traverse_path(KMOD_PATH);
+    vfs_node_t* kmods_node = vfs_traverse_path(NULL, KMOD_PATH);
     if(kmods_node == NULL) kerror("cannot find kernel modules directory");
     else for(size_t i = 0; ; i++) {
         struct dirent* ent = vfs_readdir(kmods_node, i);
@@ -162,7 +162,7 @@ void kinit() {
 
 void kmain() {
     kinfo("kernel task (kmain), PID %u", task_get_pid((void*) task_current));
-    vfs_node_t* bin_node = vfs_traverse_path(BIN_ROOT);
+    vfs_node_t* bin_node = vfs_traverse_path(NULL, BIN_ROOT);
     if(bin_node == NULL) {
         kerror(BIN_ROOT " not found");
         while(1);

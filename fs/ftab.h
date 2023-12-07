@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <fs/vfs.h>
-#include <exec/mutex.h>
+#include <helpers/mutex.h>
 #include <exec/process.h>
 
 struct proc;
