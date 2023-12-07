@@ -85,6 +85,7 @@ void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 					cfg->pd[pde].pt = vmm_krnlpt.pt[i].pa;
 
 					cfg->pt[pde] = (vmm_pt_t*) ((uintptr_t) &__krnlpt_start + (i << 12)); // 0xEFC00000 + i * 0x1000
+					memset(cfg->pt[pde], 0, sizeof(vmm_pt_t)); // clear page table so we can be sure there's no junk in here
 
 					if(task_kernel != NULL && va >= kernel_start) {
 						/* map kernel pages to all tasks' VMM configs */
