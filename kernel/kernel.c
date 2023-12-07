@@ -141,8 +141,8 @@ void kinit() {
     }
 
 #ifdef FEAT_PCI
-    kinfo("scanning PCI buses");
-    pci_scan();
+    kinfo("initializing PCI");
+    pci_init();
 #endif
 
 #ifdef FEAT_ACPI

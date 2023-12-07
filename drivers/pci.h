@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <drivers/pci_defs.h>
+#include <hal/devtree.h>
 
 #ifdef FEAT_PCI // -DFEAT_PCI must be in CFLAGS to enable PCI support
 
@@ -121,25 +122,26 @@ void pci_cfg_write_byte(uint8_t bus, uint8_t dev, uint8_t func, uint8_t offset, 
  */
 #define pci_read_progif(bus, dev, func)                         pci_cfg_read_byte((bus), (dev), (func), PCI_CFG_PROG_IF)
 
-/*
- * void pci_scan_dev(uint8_t bus, uint8_t dev)
- *  Scans the specified PCI device for its functions and prints them
- *  on the terminal.
- */
-void pci_scan_dev(uint8_t bus, uint8_t dev);
+extern devtree_t pci_devtree_root; // device tree root for PCI
+
+/* PCI device node structure */
+typedef struct {
+    devtree_t header;
+    uint16_t vid;
+    uint16_t pid;
+    uint8_t class;
+    uint8_t subclass;
+    uint8_t prog_if;
+    uint8_t bus;
+    uint8_t dev;
+    uint8_t func;
+} pci_devtree_t;
 
 /*
- * void pci_scan_bus(uint8_t bus)
- *  Scans the specified PCI bus for devices and prints their information
- *  on the terminal.
+ * void pci_init()
+ *  Detects devices on the PCI buses and add them to the device tree.
  */
-void pci_scan_bus(uint8_t bus);
-
-/*
- * void pci_scan()
- *  Scans all PCI buses and prints discovered devices on the terminal.
- */
-void pci_scan(); // TODO: make this a part of hardware detection
+void pci_init();
 
 #endif
 
