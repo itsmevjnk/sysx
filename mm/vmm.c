@@ -10,12 +10,11 @@ void* vmm_current = NULL;
 void* vmm_kernel = NULL;
 
 uintptr_t vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, size_t flags) {
-	size_t delta = 0, off = 0;
+	size_t delta = 0;
 	if(pa % vmm_pgsz()) {
 		delta = pa;
 		pa = (pa / vmm_pgsz()) * vmm_pgsz();
-		off = delta - pa;
-		delta -= off;
+		delta -= pa;
 	}
 	if(va % vmm_pgsz()) {
 		size_t d = va;
@@ -27,7 +26,7 @@ uintptr_t vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, size_t flags
 	for(size_t i = 0; i < (sz + vmm_pgsz() - 1) / vmm_pgsz(); i++)
 		vmm_pgmap(vmm, pa + i * vmm_pgsz(), va + i * vmm_pgsz(), flags);
 	
-	return (va + off);
+	return (va + delta);
 }
 
 void vmm_unmap(void* vmm, uintptr_t va, size_t sz) {
