@@ -6,7 +6,7 @@
 #include <exec/task.h>
 #include <exec/mutex.h>
 
-#define TERM_VGATEXT_ADDR                   0xB8000 // the base address to map the textmode framebuffer to (must be 4K aligned)
+#define TERM_VGATEXT_ADDR                   0xC00B8000 // the base address to map the textmode framebuffer to (must be 4K aligned)
 
 #define TERM_VGATEXT_CURSOR_START           14 // cursor starting scanline (0-15)
 #define TERM_VGATEXT_CURSOR_END             15 // cursor ending scanline (0-15)
