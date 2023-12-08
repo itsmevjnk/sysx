@@ -122,7 +122,9 @@ void pci_cfg_write_byte(uint8_t bus, uint8_t dev, uint8_t func, uint8_t offset, 
  */
 #define pci_read_progif(bus, dev, func)                         pci_cfg_read_byte((bus), (dev), (func), PCI_CFG_PROG_IF)
 
-extern devtree_t pci_devtree_root; // device tree root for PCI
+extern devtree_t pci_devtree_root;
+extern devtree_t pci_devtree_geo_root; // device tree root for PCI (geographically named)
+extern devtree_t pci_devtree_id_root; // device tree root for PCI (named by VID-PID)
 
 /* PCI device node structure */
 typedef struct {

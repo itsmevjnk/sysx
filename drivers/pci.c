@@ -51,11 +51,32 @@ void pci_cfg_write_byte(uint8_t bus, uint8_t dev, uint8_t func, uint8_t offset, 
     pci_cfg_write_dword_aligned(bus, dev, func, offset, (pci_cfg_read_dword_aligned(bus, dev, func, offset) & mask[offset_off]) | (val << (offset_off * 8)));
 }
 
+
 devtree_t pci_devtree_root = {
     sizeof(devtree_t),
     "pci",
     DEVTREE_NODE_BUS,
     NULL, // to be filled in
+    &pci_devtree_geo_root,
+    NULL,
+    {1}
+};
+
+devtree_t pci_devtree_geo_root = {
+    sizeof(devtree_t),
+    "by-geo",
+    DEVTREE_NODE_BUS,
+    &pci_devtree_root,
+    NULL,
+    &pci_devtree_id_root,
+    {1}
+};
+
+devtree_t pci_devtree_id_root = {
+    sizeof(devtree_t),
+    "by-id",
+    DEVTREE_NODE_BUS,
+    &pci_devtree_root,
     NULL,
     NULL,
     {1}
@@ -77,17 +98,29 @@ static bool pci_scan_func(uint8_t bus, uint8_t dev, uint8_t func) {
 
     kinfo("device %02x:%02x.%x: ID %04x:%04x, class %02x:%02x, prog IF %02x", bus, dev, func, vid_pid[0], vid_pid[1], class_sub[1], class_sub[0], prog_if);
 
-    pci_devtree_t* node = kcalloc(1, sizeof(pci_devtree_t));
-    if(node == NULL) kwarn("cannot allocate memory for PCI device node");
+    pci_devtree_t* node_geo = kcalloc(1, sizeof(pci_devtree_t));
+    if(node_geo == NULL) kwarn("cannot allocate memory for PCI device node");
     else {
-        node->header.size = sizeof(pci_devtree_t);
-        ksprintf(node->header.name, "%02x:%02x.%x", bus, dev, func);
-        node->header.type = DEVTREE_NODE_DEVICE;
-        node->vid = vid_pid[0]; node->pid = vid_pid[1];
-        node->class = class_sub[1]; node->subclass = class_sub[0]; node->prog_if = prog_if;
-        node->bus = bus; node->dev = dev; node->func = func;
-        devtree_add_child(&pci_devtree_root, (devtree_t*) node);
-        kdebug("created devtree node at 0x%x for device %s", node, node->header.name);
+        node_geo->header.size = sizeof(pci_devtree_t);
+        ksprintf(node_geo->header.name, "%02x:%02x.%x", bus, dev, func);
+        node_geo->header.type = DEVTREE_NODE_DEVICE;
+        node_geo->vid = vid_pid[0]; node_geo->pid = vid_pid[1];
+        node_geo->class = class_sub[1]; node_geo->subclass = class_sub[0]; node_geo->prog_if = prog_if;
+        node_geo->bus = bus; node_geo->dev = dev; node_geo->func = func;
+        devtree_add_child(&pci_devtree_geo_root, (devtree_t*) node_geo);
+        kdebug("created geo devtree node at 0x%x for device %s", node_geo, node_geo->header.name);
+    }
+    pci_devtree_t* node_id = kcalloc(1, sizeof(pci_devtree_t));
+    if(node_id == NULL) kwarn("cannot allocate memory for PCI device node");
+    else {
+        node_id->header.size = sizeof(pci_devtree_t);
+        ksprintf(node_id->header.name, "%04x:%04x", vid_pid[0], vid_pid[1]);
+        node_id->header.type = DEVTREE_NODE_DEVICE;
+        node_id->vid = vid_pid[0]; node_id->pid = vid_pid[1];
+        node_id->class = class_sub[1]; node_id->subclass = class_sub[0]; node_id->prog_if = prog_if;
+        node_id->bus = bus; node_id->dev = dev; node_id->func = func;
+        devtree_add_child(&pci_devtree_id_root, (devtree_t*) node_id);
+        kdebug("created ID devtree node at 0x%x for device %s", node_id, node_id->header.name);
     }
 
     if(class_sub[1] == PCI_CLASS_BRIDGE && (class_sub[0] == PCI_BRG_PCI_BRIDGE || class_sub[0] == PCI_BRG_PCI_BRIDGE_ALT)) {
