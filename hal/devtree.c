@@ -33,10 +33,12 @@ devtree_t* devtree_traverse_path(devtree_t* curr_node, const char* path) {
         if(!len || (len == 1 && *e == '.')) continue; // nothing to parse here
         else if(!strncmp(e, "..", len)) ret = ret->parent; // back to parent
         else {
+            ret = ret->first_child; // enter child node
+            if(ret == NULL) return NULL; // nothing to look for here
             while(1) {
-                ret = ret->next_sibling;
                 if(ret == NULL) return NULL; // we've reached the end, and we couldn't find the node
                 if(!strncmp(ret->name, e, len)) break; // we've found the next node
+                ret = ret->next_sibling;
             }
         }
     }
