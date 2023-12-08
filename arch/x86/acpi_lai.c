@@ -35,13 +35,22 @@ static void acpi_add_sdt(acpi_header_t* header, size_t idx) {
 
 void *laihost_scan(const char *sig, size_t index) {
     size_t hit = 0; // hit index
-    for(size_t i = 0; i < acpi_sdttab_sz; i++) {
-        if(acpi_sdttab[i] != NULL && !memcmp(acpi_sdttab[i]->signature, sig, 4)) {
-            if(index == hit) {
-                // kdebug("occurrence #%u of %c%c%c%c found at 0x%x", index + 1, sig[0], sig[1], sig[2], sig[3], acpi_sdttab[i]);
-                return acpi_sdttab[i];
+    if(!memcmp(sig, "DSDT", 4)) {
+        /* looking for DSDT */
+        if(index) {
+            kerror("there is only one DSDT table");
+            return NULL;
+        }
+        return acpi_sdttab[1];
+    } else {
+        for(size_t i = 0; i < acpi_sdttab_sz; i++) {
+            if(acpi_sdttab[i] != NULL && !memcmp(acpi_sdttab[i]->signature, sig, 4)) {
+                if(index == hit) {
+                    // kdebug("occurrence #%u of %c%c%c%c found at 0x%x", index + 1, sig[0], sig[1], sig[2], sig[3], acpi_sdttab[i]);
+                    return acpi_sdttab[i];
+                }
+                hit++;
             }
-            hit++;
         }
     }
     kwarn("cannot find occurrence #%u of SDT with signature %c%c%c%c", index + 1, sig[0], sig[1], sig[2], sig[3]);
@@ -96,7 +105,10 @@ bool acpi_arch_init() {
     /* add DSDT to lookup table */
     if(acpi_fadt == NULL) kwarn("FADT not found");
     else {
-        acpi_header_t* header = acpi_map_sdthdr((acpi_version == 2) ? acpi_fadt->x_dsdt : acpi_fadt->dsdt);
+        // kinfo("FADT size: %u, signature %c%c%c%c, dsdt = 0x%x, x_dsdt = 0x%x", acpi_fadt->header.length, acpi_fadt->header.signature[0], acpi_fadt->header.signature[1], acpi_fadt->header.signature[2], acpi_fadt->header.signature[3], acpi_fadt->dsdt, acpi_fadt->x_dsdt);
+        // uintptr_t paddr = (acpi_version == 2) ? acpi_fadt->x_dsdt : acpi_fadt->dsdt;
+        acpi_header_t* header = acpi_map_sdthdr(acpi_fadt->dsdt);
+        kinfo("DSDT found at paddr 0x%x (mapped to 0x%x), signature %c%c%c%c", acpi_fadt->dsdt, header, header->signature[0], header->signature[1], header->signature[2], header->signature[3]);
         acpi_add_sdt(header, 1);
     }
 
