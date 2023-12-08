@@ -107,8 +107,14 @@ bool acpi_arch_init() {
     else {
         // kinfo("FADT size: %u, signature %c%c%c%c, dsdt = 0x%x, x_dsdt = 0x%x", acpi_fadt->header.length, acpi_fadt->header.signature[0], acpi_fadt->header.signature[1], acpi_fadt->header.signature[2], acpi_fadt->header.signature[3], acpi_fadt->dsdt, acpi_fadt->x_dsdt);
         // uintptr_t paddr = (acpi_version == 2) ? acpi_fadt->x_dsdt : acpi_fadt->dsdt;
-        acpi_header_t* header = acpi_map_sdthdr(acpi_fadt->dsdt);
-        kinfo("DSDT found at paddr 0x%x (mapped to 0x%x), signature %c%c%c%c", acpi_fadt->dsdt, header, header->signature[0], header->signature[1], header->signature[2], header->signature[3]);
+        acpi_header_t* header = NULL;
+        if(acpi_version == 2) {
+            /* test X_Dsdt first */
+            header = acpi_map_sdthdr(acpi_fadt->x_dsdt);
+            if(memcmp(header->signature, "DSDT", 4)) header = NULL; // reject X_Dsdt
+        }
+        if(header == NULL) header = acpi_map_sdthdr(acpi_fadt->dsdt);
+        kinfo("DSDT mapped to 0x%x, signature %c%c%c%c", header, header->signature[0], header->signature[1], header->signature[2], header->signature[3]);
         acpi_add_sdt(header, 1);
     }
 
