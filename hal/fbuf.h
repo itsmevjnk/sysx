@@ -32,7 +32,11 @@ typedef struct fbuf {
     size_t pitch;
     void* framebuffer;
     void* backbuffer; // NULL if not using double buffer
-    void (*flip)(struct fbuf*); // accelerated double buffer flipping function (optional)
+
+    /* optional accelerated functions */
+    void (*flip)(struct fbuf*); // double buffer flipping function
+    void (*scroll_up)(struct fbuf*, size_t); // scroll up function (without filling bottom lines)
+    void (*scroll_down)(struct fbuf*, size_t); // scroll down function (without filling top lines)
 
     /* associated driver information */
     elf_prgload_t* elf_segments; // ELF segments list - if the driver is a kernel module
@@ -55,6 +59,13 @@ extern term_hook_t fbterm_hook; // framebuffer terminal hooks
 #define FBUF_R(color)                           (((color) >> 16) & 0xFF)
 #define FBUF_G(color)                           (((color) >> 8) & 0xFF)
 #define FBUF_B(color)                           (((color) >> 0) & 0xFF)
+
+/*
+ * size_t fbuf_process_color(uint32_t* color)
+ *  Translates the given color for the current implementation's color data type
+ *  and returns the number of bytes per pixel.
+ */
+size_t fbuf_process_color(uint32_t* color);
 
 /*
  * void fbuf_putpixel(size_t x, size_t y, size_t n, uint32_t color)

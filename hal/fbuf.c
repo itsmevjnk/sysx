@@ -4,7 +4,7 @@
 
 fbuf_t* fbuf_impl = NULL;
 
-static size_t fbuf_process_color(uint32_t* color) {
+size_t fbuf_process_color(uint32_t* color) {
     *color &= 0x00FFFFFF;
     switch(fbuf_impl->type) {
         case FBUF_15BPP_BGR555:
@@ -272,8 +272,11 @@ void fbuf_scroll_up(size_t lines, uint32_t color) {
     if(fbuf_impl == NULL || lines == 0) return;
     if(lines > fbuf_impl->height) lines = fbuf_impl->height;
 
-    uintptr_t ptr = (uintptr_t) ((fbuf_impl->backbuffer != NULL) ? fbuf_impl->backbuffer : fbuf_impl->framebuffer);
-    memmove((void*) ptr, (void*) (ptr + lines * fbuf_impl->pitch), (fbuf_impl->height - lines) * fbuf_impl->pitch);
+    if(fbuf_impl->scroll_up != NULL) fbuf_impl->scroll_up(fbuf_impl, lines);
+    else {
+        uintptr_t ptr = (uintptr_t) ((fbuf_impl->backbuffer != NULL) ? fbuf_impl->backbuffer : fbuf_impl->framebuffer);
+        memmove((void*) ptr, (void*) (ptr + lines * fbuf_impl->pitch), (fbuf_impl->height - lines) * fbuf_impl->pitch);
+    }
     fbuf_fill_stub(fbuf_impl->height - lines, lines, color);
 }
 
@@ -281,8 +284,11 @@ void fbuf_scroll_down(size_t lines, uint32_t color) {
     if(fbuf_impl == NULL || lines == 0) return;
     if(lines > fbuf_impl->height) lines = fbuf_impl->height;
 
-    uintptr_t ptr = (uintptr_t) ((fbuf_impl->backbuffer != NULL) ? fbuf_impl->backbuffer : fbuf_impl->framebuffer);
-    memmove((void*) (ptr + lines * fbuf_impl->pitch), (void*) ptr, (fbuf_impl->height - lines) * fbuf_impl->pitch);
+    if(fbuf_impl->scroll_down != NULL) fbuf_impl->scroll_down(fbuf_impl, lines);
+    else {
+        uintptr_t ptr = (uintptr_t) ((fbuf_impl->backbuffer != NULL) ? fbuf_impl->backbuffer : fbuf_impl->framebuffer);
+        memmove((void*) (ptr + lines * fbuf_impl->pitch), (void*) ptr, (fbuf_impl->height - lines) * fbuf_impl->pitch);
+    }
     fbuf_fill_stub(0, lines, color);
 }
 
