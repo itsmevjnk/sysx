@@ -113,6 +113,16 @@ void kinit() {
     kinfo("initializing syscall");
     syscall_init();
 
+#ifdef FEAT_PCI
+    kinfo("initializing PCI");
+    pci_init();
+#endif
+
+#ifdef FEAT_ACPI
+    kinfo("initializing ACPI");
+    acpi_init();
+#endif
+
     /* load kernel modules */
     kinfo("loading kernel modules from " KMOD_PATH);
     vfs_node_t* kmods_node = vfs_traverse_path(NULL, KMOD_PATH);
@@ -139,16 +149,6 @@ void kinit() {
             } else kfree(load_result); // save kernel heap and free the loading result (since we'll discard it anyway)
         } else kwarn(" - module does not have an init function");
     }
-
-#ifdef FEAT_PCI
-    kinfo("initializing PCI");
-    pci_init();
-#endif
-
-#ifdef FEAT_ACPI
-    kinfo("initializing ACPI");
-    acpi_init();
-#endif
 
     kinfo("kernel init finished, current timer tick: %llu", (uint64_t)timer_tick);
 
