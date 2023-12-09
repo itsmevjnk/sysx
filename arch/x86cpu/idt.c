@@ -4,6 +4,7 @@
 #include <arch/x86cpu/asm.h>
 #include <exec/syms.h>
 #include <mm/vmm.h>
+#include <hal/fbuf.h>
 
 //#define IDT_DEBUG // uncomment for log hell
 
@@ -55,21 +56,30 @@ void (*idt_handlers[256])(uint8_t vector, void* context) = {NULL};
 
 /* functions for intr.h */
 void intr_enable() {
-  asm("sti");
+	asm("sti");
 }
 
 void intr_disable() {
-  asm("cli");
+	asm("cli");
+}
+
+bool intr_test() {
+	uint32_t eflags;
+	asm("	pushf; \
+			pop %0;\
+			popf;" \
+			: "=r"(eflags));
+	return (eflags & (1 << 9));
 }
 
 void intr_handle(uint8_t vector, void (*handler)(uint8_t vector, void* context)) {
-  idt_handlers[vector] = handler;
+	idt_handlers[vector] = handler;
 }
 
 /* IDT handler stub to be called by the low level handler portion */
 void idt_stub(void* context) {
-  idt_context_t* ctxt = context;
-  if(idt_handlers[ctxt->vector]) idt_handlers[ctxt->vector](ctxt->vector, context);
+	idt_context_t* ctxt = context;
+	if(idt_handlers[ctxt->vector]) idt_handlers[ctxt->vector](ctxt->vector, context);
 }
 
 /* exception handler stub */
@@ -79,42 +89,44 @@ void idt_stub(void* context) {
  *  Stack frame structure for tracing.
  */
 struct stkframe {
-  struct stkframe* ebp;
-  uint32_t eip;
+	struct stkframe* ebp;
+	uint32_t eip;
 } __attribute__((packed));
 
 void exc_stub(uint8_t vector, idt_context_t* context) {
-  (void) vector;
-  
-  uint32_t t; // temporary register
-  switch(vector) {
+	(void) vector;
+
+	uint32_t t; // temporary register
+	switch(vector) {
 	case 0x0E: // page fault
 		asm volatile("mov %%cr2, %0" : "=r"(t));
 		if(vmm_handle_fault(t, context->exc_code & 0b111)) return;
 		break;
 	default:
 		break;
-  }
+	}
 
-  /* unhandled exception */
-  asm("cli"); // no more interrupts!
-  kerror("unhandled exception 0x%x (code 0x%x) @ 0x%x", context->vector, context->exc_code, context->eip);
-  kerror("eax=0x%08x ebx=0x%08x ecx=0x%08x edx=0x%08x", context->eax, context->ebx, context->ecx, context->edx);
-  kerror("esi=0x%08x edi=0x%08x esp=0x%08x ebp=0x%08x", context->esi, context->edi, context->esp, context->ebp);
-  kerror("cs=0x%04x ds=0x%04x es=0x%04x fs=0x%04x gs=0x%04x", context->cs, context->ds, context->es, context->fs, context->gs);
-  kerror("user ss=0x%04x user esp=0x%08x eflags=0x%08x", context->ss_usr, context->esp_usr, context->eflags);
+	/* unhandled exception */
+	asm("cli"); // no more interrupts!
+	kerror("unhandled exception 0x%x (code 0x%x) @ 0x%x", context->vector, context->exc_code, context->eip);
+	kerror("eax=0x%08x ebx=0x%08x ecx=0x%08x edx=0x%08x", context->eax, context->ebx, context->ecx, context->edx);
+	kerror("esi=0x%08x edi=0x%08x esp=0x%08x ebp=0x%08x", context->esi, context->edi, context->esp, context->ebp);
+	kerror("cs=0x%04x ds=0x%04x es=0x%04x fs=0x%04x gs=0x%04x", context->cs, context->ds, context->es, context->fs, context->gs);
+	kerror("user ss=0x%04x user esp=0x%08x eflags=0x%08x", context->ss_usr, context->esp_usr, context->eflags);
 #ifdef DEBUG
-  kdebug("stack trace:");
-  struct stkframe* stk = (struct stkframe*) context->ebp;
-  for(size_t i = 0; stk; i++) {
-  	struct sym_addr* sym = NULL;
-  	if(kernel_syms != NULL) sym = sym_addr2sym(kernel_syms, stk->eip);
+	kdebug("stack trace:");
+	struct stkframe* stk = (struct stkframe*) context->ebp;
+	for(size_t i = 0; stk; i++) {
+	struct sym_addr* sym = NULL;
+	if(kernel_syms != NULL) sym = sym_addr2sym(kernel_syms, stk->eip);
 	if(sym != NULL) kdebug("%-4u [0x%08x]: 0x%08x (%s + 0x%08x)", i, (uint32_t) stk, stk->eip, sym->sym->name, sym->delta);
-    else kdebug("%-4u [0x%08x]: 0x%08x", i, (uint32_t) stk, stk->eip);
-    stk = stk->ebp;
-  }
+	else kdebug("%-4u [0x%08x]: 0x%08x", i, (uint32_t) stk, stk->eip);
+	stk = stk->ebp;
+	}
 #endif
-  while(1); // halt now
+
+	if(term_impl == &fbterm_hook) fbuf_commit();
+	while(1); // halt now
 }
 
 /* giant bomb of code */
@@ -379,8 +391,8 @@ extern void idt_handler_254();
 extern void idt_handler_255();
 
 void idt_init() {
-  /* exception handlers */
-  idt_add_gate(0, 0x08, (uintptr_t) &exc_handler_0, IDT_386_INTR32, 0);
+	/* exception handlers */
+	idt_add_gate(0, 0x08, (uintptr_t) &exc_handler_0, IDT_386_INTR32, 0);
 	idt_add_gate(1, 0x08, (uintptr_t) &exc_handler_1, IDT_386_INTR32, 0);
 	idt_add_gate(2, 0x08, (uintptr_t) &exc_handler_2, IDT_386_INTR32, 0);
 	idt_add_gate(3, 0x08, (uintptr_t) &exc_handler_3, IDT_386_INTR32, 0);
@@ -396,25 +408,25 @@ void idt_init() {
 	idt_add_gate(13, 0x08, (uintptr_t) &exc_handler_13, IDT_386_INTR32, 0);
 	idt_add_gate(14, 0x08, (uintptr_t) &exc_handler_14, IDT_386_INTR32, 0);
 	idt_add_gate(15, 0x08, (uintptr_t) &exc_handler_15, IDT_386_INTR32, 0);
-  idt_add_gate(16, 0x08, (uintptr_t) &exc_handler_16, IDT_386_INTR32, 0);
-  idt_add_gate(17, 0x08, (uintptr_t) &exc_handler_17, IDT_386_INTR32, 0);
-  idt_add_gate(18, 0x08, (uintptr_t) &exc_handler_18, IDT_386_INTR32, 0);
-  idt_add_gate(19, 0x08, (uintptr_t) &exc_handler_19, IDT_386_INTR32, 0);
-  idt_add_gate(20, 0x08, (uintptr_t) &exc_handler_20, IDT_386_INTR32, 0);
-  idt_add_gate(21, 0x08, (uintptr_t) &exc_handler_21, IDT_386_INTR32, 0);
-  idt_add_gate(22, 0x08, (uintptr_t) &exc_handler_22, IDT_386_INTR32, 0);
-  idt_add_gate(23, 0x08, (uintptr_t) &exc_handler_23, IDT_386_INTR32, 0);
-  idt_add_gate(24, 0x08, (uintptr_t) &exc_handler_24, IDT_386_INTR32, 0);
-  idt_add_gate(25, 0x08, (uintptr_t) &exc_handler_25, IDT_386_INTR32, 0);
-  idt_add_gate(26, 0x08, (uintptr_t) &exc_handler_26, IDT_386_INTR32, 0);
-  idt_add_gate(27, 0x08, (uintptr_t) &exc_handler_27, IDT_386_INTR32, 0);
-  idt_add_gate(28, 0x08, (uintptr_t) &exc_handler_28, IDT_386_INTR32, 0);
-  idt_add_gate(29, 0x08, (uintptr_t) &exc_handler_29, IDT_386_INTR32, 0);
-  idt_add_gate(30, 0x08, (uintptr_t) &exc_handler_30, IDT_386_INTR32, 0);
-  idt_add_gate(31, 0x08, (uintptr_t) &exc_handler_31, IDT_386_INTR32, 0);
-  for(uint8_t i = 0; i < 0x20; i++) idt_handlers[i] = (void*)&exc_stub;
+	idt_add_gate(16, 0x08, (uintptr_t) &exc_handler_16, IDT_386_INTR32, 0);
+	idt_add_gate(17, 0x08, (uintptr_t) &exc_handler_17, IDT_386_INTR32, 0);
+	idt_add_gate(18, 0x08, (uintptr_t) &exc_handler_18, IDT_386_INTR32, 0);
+	idt_add_gate(19, 0x08, (uintptr_t) &exc_handler_19, IDT_386_INTR32, 0);
+	idt_add_gate(20, 0x08, (uintptr_t) &exc_handler_20, IDT_386_INTR32, 0);
+	idt_add_gate(21, 0x08, (uintptr_t) &exc_handler_21, IDT_386_INTR32, 0);
+	idt_add_gate(22, 0x08, (uintptr_t) &exc_handler_22, IDT_386_INTR32, 0);
+	idt_add_gate(23, 0x08, (uintptr_t) &exc_handler_23, IDT_386_INTR32, 0);
+	idt_add_gate(24, 0x08, (uintptr_t) &exc_handler_24, IDT_386_INTR32, 0);
+	idt_add_gate(25, 0x08, (uintptr_t) &exc_handler_25, IDT_386_INTR32, 0);
+	idt_add_gate(26, 0x08, (uintptr_t) &exc_handler_26, IDT_386_INTR32, 0);
+	idt_add_gate(27, 0x08, (uintptr_t) &exc_handler_27, IDT_386_INTR32, 0);
+	idt_add_gate(28, 0x08, (uintptr_t) &exc_handler_28, IDT_386_INTR32, 0);
+	idt_add_gate(29, 0x08, (uintptr_t) &exc_handler_29, IDT_386_INTR32, 0);
+	idt_add_gate(30, 0x08, (uintptr_t) &exc_handler_30, IDT_386_INTR32, 0);
+	idt_add_gate(31, 0x08, (uintptr_t) &exc_handler_31, IDT_386_INTR32, 0);
+	for(uint8_t i = 0; i < 0x20; i++) idt_handlers[i] = (void*)&exc_stub;
 
-  /* other IDT handlers */
+	/* other IDT handlers */
 	idt_add_gate(32, 0x08, (uintptr_t) &idt_handler_32, IDT_386_INTR32, 3);
 	idt_add_gate(33, 0x08, (uintptr_t) &idt_handler_33, IDT_386_INTR32, 3);
 	idt_add_gate(34, 0x08, (uintptr_t) &idt_handler_34, IDT_386_INTR32, 3);

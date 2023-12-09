@@ -232,6 +232,7 @@ void fbuf_fill(uint32_t color) {
 
 void fbuf_commit() {
     if(fbuf_impl->backbuffer == NULL) return; // no back buffer - don't do anything
+    bool intr = intr_test();
     intr_disable();
     if(fbuf_impl->flip != NULL) fbuf_impl->flip(fbuf_impl); // use accelerated flip function
     else {
@@ -247,7 +248,7 @@ void fbuf_commit() {
             }
         }
     }
-    intr_enable();
+    if(intr) intr_enable(); // re-enable interrupts
     fbuf_impl->tick_flip = timer_tick;
 }
 
