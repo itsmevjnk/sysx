@@ -1,6 +1,7 @@
 #include <hal/fbuf.h>
 #include <mm/vmm.h>
 #include <string.h>
+#include <hal/intr.h>
 
 fbuf_t* fbuf_impl = NULL;
 
@@ -231,8 +232,23 @@ void fbuf_fill(uint32_t color) {
 
 void fbuf_commit() {
     if(fbuf_impl->backbuffer == NULL) return; // no back buffer - don't do anything
+    intr_disable();
     if(fbuf_impl->flip != NULL) fbuf_impl->flip(fbuf_impl); // use accelerated flip function
-    else memcpy(fbuf_impl->framebuffer, fbuf_impl->backbuffer, fbuf_impl->pitch * fbuf_impl->height); // generic implementation - might be slow!
+    else {
+        // memcpy(fbuf_impl->framebuffer, fbuf_impl->backbuffer, fbuf_impl->pitch * fbuf_impl->height); // generic implementation - might be slow!
+        size_t fb_size = fbuf_impl->pitch * fbuf_impl->height; // framebuffer size
+        size_t pgsz = vmm_pgsz(); // VMM page size
+        uintptr_t backbuf_ptr = (uintptr_t) fbuf_impl->backbuffer; // pointer into backbuffer
+        for(size_t off = 0; off < fb_size; off += pgsz, backbuf_ptr += pgsz) {
+            if(vmm_get_dirty(vmm_kernel, backbuf_ptr)) {
+                /* dirty (written) page - this needs to be copied over */
+                memcpy((void*) ((uintptr_t) fbuf_impl->framebuffer + off), (void*)backbuf_ptr, (fb_size - off < pgsz) ? (fb_size - off) : pgsz);
+                vmm_set_dirty(vmm_kernel, backbuf_ptr, false); // clear dirty bit as we've updated the buffer here
+            }
+        }
+    }
+    intr_enable();
+    fbuf_impl->tick_flip = timer_tick;
 }
 
 fbuf_font_t* fbuf_font = NULL;

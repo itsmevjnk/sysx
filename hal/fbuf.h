@@ -7,6 +7,7 @@
 #include <helpers/mutex.h>
 #include <hal/terminal.h>
 #include <exec/elf.h>
+#include <hal/timer.h>
 
 enum fbuf_pixel_type {
     FBUF_15BPP_RGB555,          // 0RRRRRGG GGGBBBBB, same endianness
@@ -31,7 +32,10 @@ typedef struct fbuf {
     enum fbuf_pixel_type type;
     size_t pitch;
     void* framebuffer;
+
+    /* double buffering */
     void* backbuffer; // NULL if not using double buffer
+    timer_tick_t tick_flip; // the timer tick when the framebuffer was last flipped
 
     /* optional accelerated functions */
     void (*flip)(struct fbuf*); // double buffer flipping function
@@ -59,6 +63,8 @@ extern term_hook_t fbterm_hook; // framebuffer terminal hooks
 #define FBUF_R(color)                           (((color) >> 16) & 0xFF)
 #define FBUF_G(color)                           (((color) >> 8) & 0xFF)
 #define FBUF_B(color)                           (((color) >> 0) & 0xFF)
+
+#define FBUF_FLIP_PERIOD                        20000 // framebuffer flipping period (in timer ticks)
 
 /*
  * size_t fbuf_process_color(uint32_t* color)

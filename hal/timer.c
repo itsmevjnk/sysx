@@ -1,10 +1,15 @@
 #include <hal/timer.h>
 #include <exec/task.h>
+#include <hal/fbuf.h>
 
 volatile timer_tick_t timer_tick = 0;
 
 void timer_handler(size_t delta, void* context) {
     timer_tick += delta;
+
+    if(fbuf_impl != NULL && fbuf_impl->backbuffer != NULL && timer_tick - fbuf_impl->tick_flip >= FBUF_FLIP_PERIOD) {
+        fbuf_commit();
+    }
 
     if(task_kernel != NULL && (task_current == NULL || timer_tick - task_switch_tick >= TASK_QUANTUM)) {
         task_yield(context);

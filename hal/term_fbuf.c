@@ -50,7 +50,7 @@ void fbterm_putc(const term_hook_t* impl, char c) {
     (void) impl;
     if(fbuf_impl == NULL || fbuf_font == NULL) return;
     fbterm_putc_stub(c);
-    fbuf_commit();
+    // fbuf_commit();
 }
 
 void fbterm_puts(const term_hook_t* impl, const char* s) {
@@ -60,7 +60,7 @@ void fbterm_puts(const term_hook_t* impl, const char* s) {
         fbterm_putc_stub(*s);
         s++;
     }
-    fbuf_commit();
+    // fbuf_commit();
 }
 
 #ifndef TERM_NO_CLEAR
@@ -68,7 +68,7 @@ void fbterm_clear(const term_hook_t* impl) {
     (void) impl;
     fbterm_x = 0; fbterm_y = 0;
     fbuf_fill(fbterm_bg);
-    fbuf_commit();
+    // fbuf_commit();
 }
 #endif
 
