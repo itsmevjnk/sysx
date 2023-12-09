@@ -235,16 +235,21 @@ void fbuf_commit() {
     bool intr = intr_test();
     intr_disable();
     if(fbuf_impl->flip != NULL) fbuf_impl->flip(fbuf_impl); // use accelerated flip function
-    else {
-        // memcpy(fbuf_impl->framebuffer, fbuf_impl->backbuffer, fbuf_impl->pitch * fbuf_impl->height); // generic implementation - might be slow!
+    else {        
         size_t fb_size = fbuf_impl->pitch * fbuf_impl->height; // framebuffer size
         size_t pgsz = vmm_pgsz(); // VMM page size
         uintptr_t backbuf_ptr = (uintptr_t) fbuf_impl->backbuffer; // pointer into backbuffer
-        for(size_t off = 0; off < fb_size; off += pgsz, backbuf_ptr += pgsz) {
-            if(vmm_get_dirty(vmm_kernel, backbuf_ptr)) {
-                /* dirty (written) page - this needs to be copied over */
-                memcpy((void*) ((uintptr_t) fbuf_impl->framebuffer + off), (void*)backbuf_ptr, (fb_size - off < pgsz) ? (fb_size - off) : pgsz);
-                vmm_set_dirty(vmm_kernel, backbuf_ptr, false); // clear dirty bit as we've updated the buffer here
+        if(fbuf_impl->flip_all) {
+            memcpy(fbuf_impl->framebuffer, fbuf_impl->backbuffer, fb_size);
+            for(size_t off = 0; off < fb_size; off += pgsz, backbuf_ptr += pgsz) vmm_set_dirty(vmm_kernel, backbuf_ptr, false); // clear dirty bit for all pages
+            fbuf_impl->flip_all = false;
+        } else {
+            for(size_t off = 0; off < fb_size; off += pgsz, backbuf_ptr += pgsz) {
+                if(vmm_get_dirty(vmm_kernel, backbuf_ptr)) {
+                    /* dirty (written) page - this needs to be copied over */
+                    memcpy((void*) ((uintptr_t) fbuf_impl->framebuffer + off), (void*)backbuf_ptr, (fb_size - off < pgsz) ? (fb_size - off) : pgsz);
+                    vmm_set_dirty(vmm_kernel, backbuf_ptr, false); // clear dirty bit as we've updated the buffer here
+                }
             }
         }
     }
@@ -293,6 +298,7 @@ void fbuf_scroll_up(size_t lines, uint32_t color) {
     else {
         uintptr_t ptr = (uintptr_t) ((fbuf_impl->backbuffer != NULL) ? fbuf_impl->backbuffer : fbuf_impl->framebuffer);
         memmove((void*) ptr, (void*) (ptr + lines * fbuf_impl->pitch), (fbuf_impl->height - lines) * fbuf_impl->pitch);
+        fbuf_impl->flip_all = true; // since we've modified the entire framebuffer
     }
     fbuf_fill_stub(fbuf_impl->height - lines, lines, color);
 }
@@ -305,6 +311,7 @@ void fbuf_scroll_down(size_t lines, uint32_t color) {
     else {
         uintptr_t ptr = (uintptr_t) ((fbuf_impl->backbuffer != NULL) ? fbuf_impl->backbuffer : fbuf_impl->framebuffer);
         memmove((void*) (ptr + lines * fbuf_impl->pitch), (void*) ptr, (fbuf_impl->height - lines) * fbuf_impl->pitch);
+        fbuf_impl->flip_all = true;
     }
     fbuf_fill_stub(0, lines, color);
 }
