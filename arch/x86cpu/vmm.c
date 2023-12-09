@@ -125,6 +125,7 @@ void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 	cfg->pt[pde]->pt[pte].ncache = (flags & VMM_FLAGS_CACHE) ? 0 : 1;
 	cfg->pt[pde]->pt[pte].wthru = (flags & VMM_FLAGS_CACHE_WTHRU) ? 1 : 0;
 	cfg->pt[pde]->pt[pte].pa = pa >> 12;
+	cfg->pt[pde]->pt[pte].accessed = 0; cfg->pt[pde]->pt[pte].dirty = 0;
 	if(vmm == vmm_current) asm volatile("invlpg (%0)" : : "r"(va) : "memory");
 }
 
@@ -255,5 +256,20 @@ void vmm_set_flags(void* vmm, uintptr_t va, size_t flags) {
 	cfg->pt[pde]->pt[pte].global = (flags & VMM_FLAGS_GLOBAL) ? 1 : 0;
 	cfg->pt[pde]->pt[pte].ncache = (flags & VMM_FLAGS_CACHE) ? 0 : 1;
 	cfg->pt[pde]->pt[pte].wthru = (flags & VMM_FLAGS_CACHE_WTHRU) ? 1 : 0;
+	if(vmm == vmm_current) asm volatile("invlpg (%0)" : : "r"(va) : "memory");
+}
+
+bool vmm_get_dirty(void* vmm, uintptr_t va) {
+	vmm_t* cfg = vmm;
+	size_t pde = va >> 22, pte = (va >> 12) & 0x3ff;
+	if(!cfg->pd[pde].present || cfg->pt[pde] == NULL || !cfg->pt[pde]->pt[pte].present) return false;
+	return (cfg->pt[pde]->pt[pte].dirty);
+}
+
+void vmm_set_dirty(void* vmm, uintptr_t va, bool dirty) {
+	vmm_t* cfg = vmm;
+	size_t pde = va >> 22, pte = (va >> 12) & 0x3ff;
+	if(!cfg->pd[pde].present || cfg->pt[pde] == NULL || !cfg->pt[pde]->pt[pte].present) return; // cannot operate on an address that's not mapped
+	cfg->pt[pde]->pt[pte].dirty = (dirty) ? 1 : 0;
 	if(vmm == vmm_current) asm volatile("invlpg (%0)" : : "r"(va) : "memory");
 }

@@ -88,6 +88,20 @@ void* vmm_clone(void* src);
  */
 void vmm_free(void* vmm);
 
+/*
+ * bool vmm_get_dirty(void* vmm, uintptr_t va)
+ *  Checks whether the page corresponding to the specified virtual
+ *  address is dirty (i.e. written to).
+ */
+bool vmm_get_dirty(void* vmm, uintptr_t va);
+
+/*
+ * void vmm_set_dirty(void* vmm, uintptr_t va, bool dirty)
+ *  Sets or reset the dirty (write accessed) flag for the page
+ *  corresponding to the specified virtual address.
+ */
+void vmm_set_dirty(void* vmm, uintptr_t va, bool dirty);
+
 /* generic code */
 
 /*
