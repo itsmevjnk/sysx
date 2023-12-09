@@ -63,15 +63,6 @@ void intr_disable() {
 	asm("cli");
 }
 
-bool intr_test() {
-	uint32_t eflags;
-	asm("	pushf; \
-			pop %0;\
-			popf;" \
-			: "=r"(eflags));
-	return (eflags & (1 << 9));
-}
-
 void intr_handle(uint8_t vector, void (*handler)(uint8_t vector, void* context)) {
 	idt_handlers[vector] = handler;
 }

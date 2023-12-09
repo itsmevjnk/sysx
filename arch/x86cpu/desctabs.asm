@@ -3,58 +3,74 @@
 ;  flushes the CPU GDT cache.
 global gdt_load
 gdt_load:
-  ; make call frame, probably not needed but it helps with debugging
-  push ebp
-  mov ebp, esp
+; make call frame, probably not needed but it helps with debugging
+push ebp
+mov ebp, esp
 
-  push eax ; retain EAX for good measures
+push eax ; retain EAX for good measures
 
-  mov eax, [esp + 12] ; skip past saved EAX, saved EBP and return addr
-  lgdt [eax] ; load into GDTR
+mov eax, [esp + 12] ; skip past saved EAX, saved EBP and return addr
+lgdt [eax] ; load into GDTR
 
-  ; set up selectors and flush
-  mov ax, 0x10
-  mov ds, ax
-  mov es, ax
-  mov fs, ax
-  mov gs, ax
-  mov ss, ax
-  jmp 0x08:.flush ; set CS and flush cache
+; set up selectors and flush
+mov ax, 0x10
+mov ds, ax
+mov es, ax
+mov fs, ax
+mov gs, ax
+mov ss, ax
+jmp 0x08:.flush ; set CS and flush cache
 .flush:
-  mov ax, 0x38 ; TSS segment
-  ltr ax ; flush TSS
+mov ax, 0x38 ; TSS segment
+ltr ax ; flush TSS
 
-  pop eax ; restore EAX
+pop eax ; restore EAX
 
-  ; restore call frame
-  mov esp, ebp
-  pop ebp
-  ret
+; restore call frame
+mov esp, ebp
+pop ebp
+ret
+
+; bool intr_test()
+;  Checks whether interrupts is enabled.
+global intr_test
+intr_test:
+push ebp
+mov ebp, esp
+pushf
+pop eax
+test eax, (1 << 9)
+mov eax, 0 ; so that flags are not affected
+jz .done
+inc eax
+.done:
+leave
+ret
 
 %macro IDT_HANDLER 1
 global idt_handler_%1
 idt_handler_%1:
-  cli
-  push 0
-  push %1
-  jmp idt_handler_stub
+cli
+push 0
+push %1
+jmp idt_handler_stub
 %endmacro
 
 %macro EXC_HANDLER 1
 global exc_handler_%1
 exc_handler_%1:
-  cli
-  push %1
-  jmp idt_handler_stub
+cli
+push %1
+jmp idt_handler_stub
 %endmacro
 
 %macro EXC_HANDLER_NOERR 1
 global exc_handler_%1
 exc_handler_%1:
-  cli
-  push 0
-  push %1
-  jmp idt_handler_stub
+cli
+push 0
+push %1
+jmp idt_handler_stub
 %endmacro
 
 EXC_HANDLER_NOERR 0
@@ -317,39 +333,39 @@ IDT_HANDLER 255
 
 extern idt_stub
 idt_handler_stub:
-  pusha
+pusha
 
-  xor eax, eax
-  mov ax, ds
-  push eax
-  mov ax, es
-  push eax
-  mov ax, fs
-  push eax
-  mov ax, gs
-  push eax
+xor eax, eax
+mov ax, ds
+push eax
+mov ax, es
+push eax
+mov ax, fs
+push eax
+mov ax, gs
+push eax
 
-  mov ax, 0x10
-  mov ds, ax
-  mov es, ax
-  mov fs, ax
-  mov gs, ax
+mov ax, 0x10
+mov ds, ax
+mov es, ax
+mov fs, ax
+mov gs, ax
 
-  sti ; once we've indicated that we're in ring 0, the interrupts can be turned back on
+sti ; once we've indicated that we're in ring 0, the interrupts can be turned back on
 
-  push esp
-  call idt_stub
-  add esp, 4
+push esp
+call idt_stub
+add esp, 4
 
-  pop eax
-  mov gs, ax
-  pop eax
-  mov fs, ax
-  pop eax
-  mov es, ax
-  pop eax
-  mov ds, ax
+pop eax
+mov gs, ax
+pop eax
+mov fs, ax
+pop eax
+mov es, ax
+pop eax
+mov ds, ax
 
-  popa
-  add esp, 8 ; skip vector and exception error code
-  iret
+popa
+add esp, 8 ; skip vector and exception error code
+iret
