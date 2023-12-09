@@ -197,7 +197,7 @@ vfs_node_t* tar_init(void* buffer, size_t size, vfs_node_t* root) {
         while(1) {
             size_t len = 0; // path element length
             const char* path_element = path;
-            path = path_traverse(path, &len);
+            path = (char*) path_traverse(path, &len);
 
             if(*path == '\0') {
                 /* end of path */
