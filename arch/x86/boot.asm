@@ -289,11 +289,12 @@ add ebp, PD(vmm_default) ; ptr to page directory's entry for kernel page table m
 mov eax, PHYS(vmm_krnlpt)
 or eax, (1 << 0) | (1 << 1) ; present, writable, supervisor
 mov [ebp], eax
+mov dword [ebp + 4096], vmm_krnlpt ; ptr to page table list
 ; we're ready to go, so let's enable paging
 mov eax, PD(vmm_default)
 mov cr3, eax
 mov eax, cr4
-or eax, (1 << 7) ; enable global paging
+or eax, (1 << 7) | (1 << 4) ; enable global paging and PSE
 mov cr4, eax
 mov eax, cr0
 or eax, 0x80010000 ; enable paging as well as write protect enforcement

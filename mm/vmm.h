@@ -8,17 +8,26 @@
 /* to be implemented by CPU-specific code */
 
 /*
- * size_t vmm_pgsz()
- *  Returns the size of a MMU page.
+ * size_t vmm_pgsz_num()
+ *  Returns the number of page sizes available.
  */
-size_t vmm_pgsz();
+size_t vmm_pgsz_num();
 
 /*
- * void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, size_t flags)
- *  Maps a single page from pa to va.
+ * size_t vmm_pgsz(size_t idx)
+ *  Returns the specified supported page size index.
+ *  idx is a number ranging from 0 to vmm_pgsz_num() - 1,
+ *  and specifies a page size in an ascending list.
+ */
+size_t vmm_pgsz(size_t idx);
+
+/*
+ * void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, size_t pgsz_idx, size_t flags)
+ *  Maps a single page from pa to va. pgsz_idx specifies the page's
+ *  size, and is the index passed into vmm_pgsz().
  *  pa and va are assumed to be page-aligned addresses.
  */
-void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, size_t flags);
+void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, size_t pgsz_idx, size_t flags);
 
 /* flags for vmm_pgmap and vmm_map */
 #define VMM_FLAGS_PRESENT           (1 << 0) // set if page is present
@@ -29,11 +38,20 @@ void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, size_t flags);
 #define VMM_FLAGS_CACHE_WTHRU       (1 << 5) // set if page is write-through instead of write-back cached
 
 /*
- * void vmm_pgunmap(void* vmm, uintptr_t va)
+ * void vmm_pgunmap(void* vmm, uintptr_t va, size_t pgsz_idx)
  *  Unmaps a single page corresponding to virtual address va.
+ *  Similarly to vmm_pgunmap, the page's size is specified via
+ *  pgsz_idx.
  *  pa and va are assumed to be page-aligned addresses.
  */
-void vmm_pgunmap(void* vmm, uintptr_t va);
+void vmm_pgunmap(void* vmm, uintptr_t va, size_t pgsz_idx);
+
+/*
+ * size_t vmm_get_pgsz(void* vmm, uintptr_t va)
+ *  Gets the size of the page containing the specified virtual address.
+ *  Returns the size index, or -1 if the page is not mapped.
+ */
+size_t vmm_get_pgsz(void* vmm, uintptr_t va);
 
 /*
  * size_t vmm_get_flags(void* vmm, uintptr_t va)
@@ -58,7 +76,7 @@ uintptr_t vmm_get_paddr(void* vmm, uintptr_t va);
 
 /*
  * void vmm_set_paddr(void* vmm, uintptr_t va, uintptr_t pa)
- *  Sets the physical memory address of a given virtual
+ *  Sets the physical memory address of a given mapped virtual
  *  address.
  */
 void vmm_set_paddr(void* vmm, uintptr_t va, uintptr_t pa);
@@ -117,12 +135,13 @@ extern void* vmm_current;
 extern void* vmm_kernel;
 
 /*
- * uintptr_t vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, size_t flags)
+ * uintptr_t vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, size_t pgsz_max_idx, size_t flags)
  *  Maps sz byte(s) starting from linear address pa to virtual
- *  address va with the specified properties.
+ *  address va with the specified properties. The maximum page size
+ *  to be used is specified via pgsz_max_idx.
  *  Returns the mapped address for pa.
  */
-uintptr_t vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, size_t flags);
+uintptr_t vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, size_t pgsz_max_idx, size_t flags);
 
 /*
  * void vmm_unmap(void* vmm, uintptr_t va, size_t sz)
@@ -131,25 +150,29 @@ uintptr_t vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, size_t flags
 void vmm_unmap(void* vmm, uintptr_t va, size_t sz);
 
 /*
- * uintptr_t vmm_first_free(void* vmm, uintptr_t va_start, uintptr_t va_end, size_t sz, bool reverse)
+ * uintptr_t vmm_first_free(void* vmm, uintptr_t va_start, uintptr_t va_end, size_t sz, size_t align, bool reverse)
  *  Finds the first unmapped contiguous address space of size sz
  *  between va_start and va_end inclusive in the specified VMM
  *  configuration. If reverse is set, the function will attempt
- *  to find a space towards va_end.
+ *  to find a space towards va_end. The virtual address' boundary
+ *  alignment (which must be a multiple of the minimum page size)
+ *  can also be specified; if not, align must be set to 0.
  *  Returns the space's starting virtual address, or 0 if none
  *  can be found.
  */
-uintptr_t vmm_first_free(void* vmm, uintptr_t va_start, uintptr_t va_end, size_t sz, bool reverse);
+uintptr_t vmm_first_free(void* vmm, uintptr_t va_start, uintptr_t va_end, size_t sz, size_t align, bool reverse);
 
 /*
- * uintptr_t vmm_alloc_map(void* vmm, uintptr_t pa, size_t sz, uintptr_t va_start, uintptr_t va_end, bool reverse, size_t flags)
+ * uintptr_t vmm_alloc_map(void* vmm, uintptr_t pa, size_t sz, uintptr_t va_start, uintptr_t va_end, size_t va_align, size_t pgsz_max_idx, bool reverse, size_t flags) 
  *  Finds a contiguous address space sufficient for mapping the
  *  physical memory range specified by pa and sz and maps the
- *  range.
+ *  range. The virtual address' boundary alignment (which must be
+ *  a multiple of the minimum page size) can also be specified; if
+ *  not, va_align is to be set to 0.
  *  Returns the space's starting virtual address, corresponding
  *  to pa, or 0 if such a space cannot be found.
  */
-uintptr_t vmm_alloc_map(void* vmm, uintptr_t pa, size_t sz, uintptr_t va_start, uintptr_t va_end, bool reverse, size_t flags);
+uintptr_t vmm_alloc_map(void* vmm, uintptr_t pa, size_t sz, uintptr_t va_start, uintptr_t va_end, size_t va_align, size_t pgsz_max_idx, bool reverse, size_t flags);
 
 /* list of page traps (pages destined to cause a fault and to be handled by the kernel) */
 enum vmm_trap_type {

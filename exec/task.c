@@ -49,7 +49,7 @@ void* task_create(bool user, struct proc* proc, size_t stack_sz, uintptr_t entry
     size_t stack_frames = 0; // number of allocated stack frames
     size_t framesz = pmm_framesz();
     if(stack_sz % framesz) stack_sz += framesz - stack_sz % framesz; // frame-align stack size
-    common->stack_bottom = vmm_first_free(proc->vmm, 0, kernel_start, stack_sz, true) + stack_sz;
+    common->stack_bottom = vmm_first_free(proc->vmm, 0, kernel_start, stack_sz, 0, true) + stack_sz;
     if(common->stack_bottom == 0) {
         kerror("cannot allocate virtual address space for task");
         task_delete_stub(task);
@@ -60,7 +60,7 @@ void* task_create(bool user, struct proc* proc, size_t stack_sz, uintptr_t entry
         if(frame == (size_t)-1) break; // cannot allocate more
         stack_frames++;
         // pmm_alloc(frame);
-        vmm_pgmap(proc->vmm, frame * framesz, common->stack_bottom - stack_frames * framesz, VMM_FLAGS_PRESENT | VMM_FLAGS_RW | VMM_FLAGS_CACHE | ((user) ? VMM_FLAGS_USER : 0));
+        vmm_pgmap(proc->vmm, frame * framesz, common->stack_bottom - stack_frames * framesz, 0, VMM_FLAGS_PRESENT | VMM_FLAGS_RW | VMM_FLAGS_CACHE | ((user) ? VMM_FLAGS_USER : 0));
     }
     if(stack_frames * framesz <= ((user) ? TASK_KERNEL_STACK_SIZE : 0)) {
         kerror("cannot allocate memory for task stack");

@@ -41,7 +41,7 @@ void laihost_free(void* ptr, size_t size) {
 }
 
 void* laihost_map(size_t address, size_t count) {
-    uintptr_t ret = vmm_alloc_map(vmm_kernel, address, count, kernel_end, UINTPTR_MAX, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW);
+    uintptr_t ret = vmm_alloc_map(vmm_kernel, address, count, kernel_end, UINTPTR_MAX, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW);
     if(!ret) {
         kerror("cannot allocate virtual address space of size %u", count);
         return NULL;

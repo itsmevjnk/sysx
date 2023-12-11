@@ -261,21 +261,23 @@ enum elf_load_result elf_load_rel(vfs_node_t* file, void* shdr, bool is_elf64, s
         
         if((sh_flags & SHF_ALLOC) && sh_size > 0 && (sh_type == SHT_PROGBITS || sh_type == SHT_NOBITS)) {
             /* memory needs to be allocated for this section */
-            uintptr_t vaddr = vmm_first_free(alloc_vmm, ELF_LOAD_ADDR_START, ELF_LOAD_ADDR_END, sh_size, false);
+            uintptr_t vaddr = vmm_first_free(alloc_vmm, ELF_LOAD_ADDR_START, ELF_LOAD_ADDR_END, sh_size, 0, false);
             if(vaddr == 0) {
                 kerror("cannot find virtual memory space for loading section");
                 return ERR_ALLOC;
             }
-            for(size_t j = 0; j < (sh_size + pmm_framesz() - 1) / pmm_framesz(); j++) {
+            size_t framesz = pmm_framesz();
+            size_t rq_frames = (sh_size + framesz - 1) / framesz;
+            for(size_t j = 0; j < rq_frames; j++) {
                 size_t frame = pmm_alloc_free(1); // no need for contiguous memory
                 if(frame == (size_t)-1) {
                     kerror("cannot allocate memory for loading section");
-                    for(size_t k = 0; k < j; k++) pmm_free(vmm_get_paddr(alloc_vmm, vaddr) / pmm_framesz());
-                    vmm_unmap(vmm_current, vaddr, j * pmm_framesz());
+                    for(size_t k = 0; k < j; k++) pmm_free(vmm_get_paddr(alloc_vmm, vaddr) / framesz);
+                    vmm_unmap(vmm_current, vaddr, j * framesz);
                     return ERR_ALLOC;
                 }
                 // pmm_alloc(frame);
-                vmm_pgmap(vmm_current, frame * pmm_framesz(), vaddr + j * pmm_framesz(), VMM_FLAGS_PRESENT | VMM_FLAGS_RW | VMM_FLAGS_CACHE | VMM_FLAGS_GLOBAL);
+                vmm_pgmap(vmm_current, frame * framesz, vaddr + j * framesz, 0, VMM_FLAGS_PRESENT | VMM_FLAGS_RW | VMM_FLAGS_CACHE | VMM_FLAGS_GLOBAL);
             }
             if(sh_type != SHT_NOBITS) vfs_read(file, sh_off, sh_size, (uint8_t*) vaddr); // copy data from file
             else memset((void*) vaddr, 0, sh_size);
@@ -786,17 +788,16 @@ enum elf_load_result elf_load_phdr(vfs_node_t* file, void* hdr, bool is_elf64, v
 
         if(p_type != PT_LOAD) continue; // skip non-loading headers
 
-        size_t pgsz = vmm_pgsz();
+        size_t pgsz = pmm_framesz(); // TODO: implement hugepage support here?
 
         /* find a place in our address space to map segments to for copying */
         if(copy_dst == NULL) {
-            copy_dst = (void*) vmm_first_free(vmm_current, 0, kernel_start, pgsz, false); // TODO: will mapping and unmapping the entire segment be more efficient than mapping individual pages?
+            copy_dst = (void*) vmm_alloc_map(vmm_current, 0, pgsz, kernel_end, UINTPTR_MAX, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW); // TODO: will mapping and unmapping the entire segment be more efficient than mapping individual pages?
             if(copy_dst == NULL) {
                 kerror("cannot find space to map segment for copying data");
                 elf_unload_prg(alloc_vmm, *prgload_result, *prgload_result_len);
                 return ERR_ALLOC;
             }
-            vmm_pgmap(vmm_current, 0, (uintptr_t) copy_dst, VMM_FLAGS_PRESENT | VMM_FLAGS_RW); // we'll fill in the physical address later
         }
 
         /* allocate memory for the segment */
@@ -810,7 +811,7 @@ enum elf_load_result elf_load_phdr(vfs_node_t* file, void* hdr, bool is_elf64, v
                     elf_unload_prg(alloc_vmm, *prgload_result, *prgload_result_len);
                     return ERR_ALLOC;
                 }
-                vmm_pgmap(alloc_vmm, frame * pgsz, vaddr, VMM_FLAGS_PRESENT | ((user) ? VMM_FLAGS_USER : 0) | VMM_FLAGS_CACHE | ((p_flags & PF_W) ? VMM_FLAGS_RW : 0));
+                vmm_pgmap(alloc_vmm, frame * pgsz, vaddr, 0, VMM_FLAGS_PRESENT | ((user) ? VMM_FLAGS_USER : 0) | VMM_FLAGS_CACHE | ((p_flags & PF_W) ? VMM_FLAGS_RW : 0));
             } else if(p_flags & PF_W) {
                 /* page is currently mapped, so we only need to set the RW flag if we need it */
                 size_t pg_flags = vmm_get_flags(alloc_vmm, vaddr);
@@ -854,7 +855,7 @@ enum elf_load_result elf_load_phdr(vfs_node_t* file, void* hdr, bool is_elf64, v
         (*prgload_result)[*prgload_result_len - 1].vaddr = p_vaddr;
         (*prgload_result)[*prgload_result_len - 1].size = p_memsz;      
     }
-    if(copy_dst != NULL) vmm_pgunmap(vmm_current, (uintptr_t) copy_dst);
+    if(copy_dst != NULL) vmm_pgunmap(vmm_current, (uintptr_t) copy_dst, 0);
 
     kfree(phdr);
     return LOAD_OK;
@@ -1001,10 +1002,14 @@ void elf_unload_prg(void* alloc_vmm, elf_prgload_t* load_result, size_t load_res
     size_t framesz = pmm_framesz();
     for(size_t i = 0; i < load_result_len; i++) {
         size_t vaddr = load_result[i].vaddr;
-        for(size_t off = 0; off < load_result[i].size; off += framesz, vaddr += framesz) {
+        size_t pgsz;
+        for(size_t off = 0; off < load_result[i].size; off += pgsz, vaddr += pgsz) {
             size_t paddr = vmm_get_paddr(alloc_vmm, vaddr);
-            if(paddr != 0) pmm_free(paddr / framesz);
-            vmm_pgunmap(alloc_vmm, vaddr);
+            size_t pgsz_idx = vmm_get_pgsz(alloc_vmm, vaddr); pgsz = vmm_pgsz(pgsz_idx); // resolve for adding to variables
+            if(paddr != 0) {
+                for(size_t j = 0; j < pgsz / framesz; j++) pmm_free(paddr / framesz + j);
+            }
+            vmm_pgunmap(alloc_vmm, vaddr, pgsz_idx);
         }
     }
     kfree(load_result);

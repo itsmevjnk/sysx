@@ -7,7 +7,7 @@ uintptr_t* pmm_bitmap = NULL;
 size_t pmm_frames = 0;
 
 size_t pmm_framesz() {
-	return vmm_pgsz();
+	return vmm_pgsz(0);
 }
 
 int pmm_alloc(size_t frame) {

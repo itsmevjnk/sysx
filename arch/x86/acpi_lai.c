@@ -20,12 +20,12 @@ static acpi_header_t** acpi_sdttab = NULL;
 static size_t acpi_sdttab_sz = 0; // number of SDT table entries
 
 static void* acpi_map_sdthdr(uintptr_t paddr) {
-    return (void*) vmm_map(vmm_kernel, paddr, acpi_sdthdr_vaddr, sizeof(acpi_header_t), VMM_FLAGS_PRESENT);
+    return (void*) vmm_map(vmm_kernel, paddr, acpi_sdthdr_vaddr, sizeof(acpi_header_t), 0, VMM_FLAGS_PRESENT);
 }
 
 static void acpi_add_sdt(acpi_header_t* header, size_t idx) {
     /* map the entire SDT */
-    acpi_sdttab[idx] = (acpi_header_t*) vmm_alloc_map(vmm_kernel, vmm_get_paddr(vmm_kernel, (uintptr_t) header), header->length, kernel_end, UINTPTR_MAX, false, VMM_FLAGS_PRESENT | VMM_FLAGS_CACHE); // no need for RW access (since we're not supposed to write into this)
+    acpi_sdttab[idx] = (acpi_header_t*) vmm_alloc_map(vmm_kernel, vmm_get_paddr(vmm_kernel, (uintptr_t) header), header->length, kernel_end, UINTPTR_MAX, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_CACHE); // no need for RW access (since we're not supposed to write into this)
     if(acpi_sdttab[idx] == NULL) {
         kerror("cannot find empty space to map SDT with signature %c%c%c%c (%u bytes)", header->signature[0], header->signature[1], header->signature[2], header->signature[3], header->length);
         return;
@@ -69,14 +69,12 @@ bool acpi_arch_init() {
     lai_set_acpi_revision(acpi_version);
 
     /* allocate space for mapping SDT headers */
-    acpi_sdthdr_vaddr = vmm_first_free(vmm_kernel, kernel_end, UINTPTR_MAX, 2 * vmm_pgsz(), false);
+    acpi_sdthdr_vaddr = vmm_alloc_map(vmm_kernel, 0, 2 * 4096, kernel_end, UINTPTR_MAX, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_CACHE); // 4096 is the minimum page size for x86 - we use the actual value here instead of vmm_pgsz to reduce overhead
     if(!acpi_sdthdr_vaddr) {
         kerror("cannot find mapping location for SDT headers");
         return false;
     }
     // kdebug("SDT headers will be temporarily mapped to 0x%x", acpi_sdthdr_vaddr);
-    vmm_pgmap(vmm_kernel, 0xDEADB000, acpi_sdthdr_vaddr, VMM_FLAGS_PRESENT | VMM_FLAGS_CACHE); // reserve space - we'll fill in the location later
-    vmm_pgmap(vmm_kernel, 0xDEADB000, acpi_sdthdr_vaddr + vmm_pgsz(), VMM_FLAGS_PRESENT | VMM_FLAGS_CACHE);
 
     /* map RSDT/XSDT */
     acpi_header_t* rsdt_header = acpi_map_sdthdr(rsdt_address);
@@ -87,7 +85,7 @@ bool acpi_arch_init() {
     acpi_sdttab = kcalloc(acpi_sdttab_sz, sizeof(acpi_header_t*));
     if(acpi_sdttab == NULL) {
         kerror("cannot allocate SDT lookup table (%u entries)", acpi_sdttab_sz);
-        vmm_unmap(vmm_kernel, acpi_sdthdr_vaddr, 2 * vmm_pgsz());
+        vmm_unmap(vmm_kernel, acpi_sdthdr_vaddr, 2 * 4096);
         return false;
     }
     acpi_add_sdt(rsdt_header, 0); // add RSDT/XSDT to first entry
@@ -118,7 +116,7 @@ bool acpi_arch_init() {
         acpi_add_sdt(header, 1);
     }
 
-    vmm_unmap(vmm_kernel, acpi_sdthdr_vaddr, 2 * vmm_pgsz());
+    vmm_unmap(vmm_kernel, acpi_sdthdr_vaddr, 2 * 4096);
 
     return true;
 }

@@ -2,6 +2,7 @@
 #include <mm/vmm.h>
 #include <string.h>
 #include <hal/intr.h>
+#include <kernel/log.h>
 
 fbuf_t* fbuf_impl = NULL;
 
@@ -237,11 +238,16 @@ void fbuf_commit() {
     if(fbuf_impl->flip != NULL) fbuf_impl->flip(fbuf_impl); // use accelerated flip function
     else {        
         size_t fb_size = fbuf_impl->pitch * fbuf_impl->height; // framebuffer size
-        size_t pgsz = vmm_pgsz(); // VMM page size
+        size_t pgsz; // VMM page size - we'll set it according to the page in question later
         uintptr_t backbuf_ptr = (uintptr_t) fbuf_impl->backbuffer; // pointer into backbuffer
         if(fbuf_impl->flip_all) {
             memcpy(fbuf_impl->framebuffer, fbuf_impl->backbuffer, fb_size);
-            for(size_t off = 0; off < fb_size; off += pgsz, backbuf_ptr += pgsz) vmm_set_dirty(vmm_kernel, backbuf_ptr, false); // clear dirty bit for all pages
+            for(size_t off = 0; off < fb_size; off += pgsz, backbuf_ptr += pgsz) {
+                vmm_set_dirty(vmm_kernel, backbuf_ptr, false); // clear dirty bit for all pages
+                pgsz = vmm_get_pgsz(vmm_kernel, backbuf_ptr);
+                kassert(pgsz != (size_t)-1);
+                pgsz = vmm_pgsz(pgsz); // resolve pgsz index
+            }
             fbuf_impl->flip_all = false;
         } else {
             for(size_t off = 0; off < fb_size; off += pgsz, backbuf_ptr += pgsz) {
@@ -249,6 +255,9 @@ void fbuf_commit() {
                     /* dirty (written) page - this needs to be copied over */
                     memcpy((void*) ((uintptr_t) fbuf_impl->framebuffer + off), (void*)backbuf_ptr, (fb_size - off < pgsz) ? (fb_size - off) : pgsz);
                     vmm_set_dirty(vmm_kernel, backbuf_ptr, false); // clear dirty bit as we've updated the buffer here
+                    pgsz = vmm_get_pgsz(vmm_kernel, backbuf_ptr);
+                    kassert(pgsz != (size_t)-1);
+                    pgsz = vmm_pgsz(pgsz); // resolve pgsz index
                 }
             }
         }
