@@ -40,7 +40,7 @@ uintptr_t vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, size_t pgsz_
 		}
 	}
 	
-	return (va + delta);
+	return (va - sz + delta);
 }
 
 void vmm_unmap(void* vmm, uintptr_t va, size_t sz) {
