@@ -37,6 +37,7 @@ typedef struct fbuf {
     void* backbuffer; // NULL if not using double buffer
     timer_tick_t tick_flip; // the timer tick when the framebuffer was last flipped
     bool flip_all; // set to copy the entire backbuffer instead of only pages that have been modified
+    bool dbuf_direct_write; // set to write directly to framebuffer (i.e. without waiting for commit) and read from backbuffer
 
     /* optional accelerated functions */
     void (*flip)(struct fbuf*); // double buffer flipping function

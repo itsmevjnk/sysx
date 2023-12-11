@@ -7,7 +7,7 @@ volatile timer_tick_t timer_tick = 0;
 void timer_handler(size_t delta, void* context) {
     timer_tick += delta;
 
-    if(fbuf_impl != NULL && fbuf_impl->backbuffer != NULL && timer_tick - fbuf_impl->tick_flip >= FBUF_FLIP_PERIOD) {
+    if(fbuf_impl != NULL && fbuf_impl->backbuffer != NULL && !fbuf_impl->dbuf_direct_write && timer_tick - fbuf_impl->tick_flip >= FBUF_FLIP_PERIOD) {
         fbuf_commit();
     }
 

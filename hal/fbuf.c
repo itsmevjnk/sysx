@@ -72,46 +72,61 @@ size_t fbuf_process_color(uint32_t* color) {
     }
 }
 
+static void fbuf_putpixel_stub(void* ptr, size_t x, size_t y, size_t n, uint32_t color, size_t bytes_per_pixel) {
+    ptr = (void*) ((uintptr_t) ptr + y * fbuf_impl->pitch + x * bytes_per_pixel);
+    uintptr_t line_offset = fbuf_impl->pitch - fbuf_impl->width * bytes_per_pixel;
+
+    /* draw the pixels */
+    if(!line_offset && bytes_per_pixel != 3) {
+        /* accelerated write using memset16/memset32 */
+        switch(bytes_per_pixel) {
+            case 2: memset16(ptr, color, n); break;
+            case 4: memset32(ptr, color, n); break;
+        }
+    } else {
+        /* (slightly?) slower sequential write */
+        for(size_t i = 0; i < n; i++) {
+            switch(bytes_per_pixel) {
+                case 2:
+                    *((uint16_t*) ptr) = color;
+                    break;
+                case 3:
+                    if(fbuf_impl->type == FBUF_24BPP_BGR888) {
+                        ((uint8_t*) ptr)[0] = FBUF_R(color);
+                        ((uint8_t*) ptr)[1] = FBUF_G(color);
+                        ((uint8_t*) ptr)[2] = FBUF_B(color);
+                    } else {                    
+                        ((uint8_t*) ptr)[0] = FBUF_B(color);
+                        ((uint8_t*) ptr)[1] = FBUF_G(color);
+                        ((uint8_t*) ptr)[2] = FBUF_R(color);
+                    }
+                    break;
+                case 4:
+                    *((uint32_t*) ptr) = color;
+                    break;
+            }
+
+            ptr = (void*) ((uintptr_t) ptr + bytes_per_pixel);
+            x++;
+            if(x == fbuf_impl->width) {
+                x = 0;
+                y++;
+                if(y == fbuf_impl->height) return;
+                ptr = (void*) ((uintptr_t) ptr + line_offset);
+            }
+        }
+    }
+}
+
 void fbuf_putpixel(size_t x, size_t y, size_t n, uint32_t color) {
     if(fbuf_impl == NULL || n == 0 || x >= fbuf_impl->width || y >= fbuf_impl->height) return;
 
     size_t bytes_per_pixel = fbuf_process_color(&color); // find out number of bytes per pixel and do color data re-shuffling if needed
 
-    bool double_buf = (fbuf_impl->backbuffer != NULL);
-    void* ptr = (void*) ((uintptr_t)((double_buf) ? fbuf_impl->backbuffer : fbuf_impl->framebuffer) + y * fbuf_impl->pitch + x * bytes_per_pixel); // write to backbuffer if we have one
-    uintptr_t line_offset = fbuf_impl->pitch - fbuf_impl->width * bytes_per_pixel;
-    
-    /* draw the pixels */
-    for(size_t i = 0; i < n; i++) {
-        switch(bytes_per_pixel) {
-            case 2:
-                *((uint16_t*) ptr) = color;
-                break;
-            case 3:
-                if(fbuf_impl->type == FBUF_24BPP_BGR888) {
-                    ((uint8_t*) ptr)[0] = FBUF_R(color);
-                    ((uint8_t*) ptr)[1] = FBUF_G(color);
-                    ((uint8_t*) ptr)[2] = FBUF_B(color);
-                } else {                    
-                    ((uint8_t*) ptr)[0] = FBUF_B(color);
-                    ((uint8_t*) ptr)[1] = FBUF_G(color);
-                    ((uint8_t*) ptr)[2] = FBUF_R(color);
-                }
-                break;
-            case 4:
-                *((uint32_t*) ptr) = color;
-                break;
-        }
-
-        ptr = (void*) ((uintptr_t) ptr + bytes_per_pixel);
-        x++;
-        if(x == fbuf_impl->width) {
-            x = 0;
-            y++;
-            if(y == fbuf_impl->height) return;
-            ptr = (void*) ((uintptr_t) ptr + line_offset);
-        }
-    }
+    if(fbuf_impl->backbuffer != NULL)
+        fbuf_putpixel_stub(fbuf_impl->backbuffer, x, y, n, color, bytes_per_pixel); // write to backbuffer
+    if(fbuf_impl->dbuf_direct_write || fbuf_impl->backbuffer == NULL)
+        fbuf_putpixel_stub(fbuf_impl->framebuffer, x, y, n, color, bytes_per_pixel); // write to front buffer if backbuffer is not available or direct writing is enabled
 }
 
 void fbuf_getpixel(size_t x, size_t y, size_t n, uint32_t* color) {
@@ -198,14 +213,17 @@ void fbuf_getpixel(size_t x, size_t y, size_t n, uint32_t* color) {
     }
 }
 
-void fbuf_fill_stub(size_t y_start, size_t lines, uint32_t color) {
+void fbuf_fill_stub(void* ptr, size_t y_start, size_t lines, uint32_t color) {
     if(lines == 0) return;
 
     size_t bytes_per_pixel = fbuf_process_color(&color); 
 
-    if(bytes_per_pixel == 3) fbuf_putpixel(0, y_start, fbuf_impl->width * lines, color); // no other quicker way
-    else {
-        void* ptr = (void*) ((uintptr_t)((fbuf_impl->backbuffer != NULL) ? fbuf_impl->backbuffer : fbuf_impl->framebuffer) + y_start * fbuf_impl->pitch); // write to backbuffer if we have one
+    if(bytes_per_pixel == 3) {
+        /* no other quicker way than plain putpixel */
+        size_t bytes_per_pixel = fbuf_process_color(&color);
+        fbuf_putpixel_stub(ptr, 0, y_start, fbuf_impl->width * lines, color, bytes_per_pixel);
+    } else {
+        ptr = (void*) ((uintptr_t) ptr + y_start * fbuf_impl->pitch); // write to backbuffer if we have one
 
         if(fbuf_impl->pitch % bytes_per_pixel == 0) { // one single memset for the entire framebuffer
             switch(bytes_per_pixel) {
@@ -228,11 +246,14 @@ void fbuf_fill_stub(size_t y_start, size_t lines, uint32_t color) {
 
 void fbuf_fill(uint32_t color) {
     if(fbuf_impl == NULL) return;
-    fbuf_fill_stub(0, fbuf_impl->height, color);
+    if(fbuf_impl->backbuffer != NULL)
+        fbuf_fill_stub(fbuf_impl->backbuffer, 0, fbuf_impl->height, color);
+    if(fbuf_impl->dbuf_direct_write || fbuf_impl->backbuffer == NULL)
+        fbuf_fill_stub(fbuf_impl->framebuffer, 0, fbuf_impl->height, color);
 }
 
 void fbuf_commit() {
-    if(fbuf_impl->backbuffer == NULL) return; // no back buffer - don't do anything
+    if(fbuf_impl->dbuf_direct_write || fbuf_impl->backbuffer == NULL) return; // no back buffer or changes have already been committed - don't do anything
     bool intr = intr_test();
     intr_disable();
     if(fbuf_impl->flip != NULL) fbuf_impl->flip(fbuf_impl); // use accelerated flip function
@@ -299,30 +320,48 @@ void fbuf_puts(size_t x, size_t y, char* s, uint32_t fg, uint32_t bg, bool trans
     fbuf_commit();
 }
 
+static void fbuf_scroll_up_stub(void* ptr_dst, void* ptr_src, size_t lines, uint32_t color) {
+    memmove((void*) ptr_dst, (void*) ((uintptr_t) ptr_src + lines * fbuf_impl->pitch), (fbuf_impl->height - lines) * fbuf_impl->pitch);
+    fbuf_fill_stub(ptr_dst, fbuf_impl->height - lines, lines, color);
+}
+
 void fbuf_scroll_up(size_t lines, uint32_t color) {
     if(fbuf_impl == NULL || lines == 0) return;
     if(lines > fbuf_impl->height) lines = fbuf_impl->height;
 
-    if(fbuf_impl->scroll_up != NULL) fbuf_impl->scroll_up(fbuf_impl, lines);
-    else {
-        uintptr_t ptr = (uintptr_t) ((fbuf_impl->backbuffer != NULL) ? fbuf_impl->backbuffer : fbuf_impl->framebuffer);
-        memmove((void*) ptr, (void*) (ptr + lines * fbuf_impl->pitch), (fbuf_impl->height - lines) * fbuf_impl->pitch);
-        fbuf_impl->flip_all = true; // since we've modified the entire framebuffer
+    if(fbuf_impl->scroll_up != NULL) {
+        fbuf_impl->scroll_up(fbuf_impl, lines);
+        fbuf_fill_stub((fbuf_impl->backbuffer != NULL) ? fbuf_impl->backbuffer : fbuf_impl->framebuffer, fbuf_impl->height - lines, lines, color);
+    } else {
+        if(fbuf_impl->dbuf_direct_write || fbuf_impl->backbuffer == NULL)
+            fbuf_scroll_up_stub(fbuf_impl->framebuffer, fbuf_impl->backbuffer, lines, color);
+        if(fbuf_impl->backbuffer != NULL) {
+            fbuf_scroll_up_stub(fbuf_impl->backbuffer, fbuf_impl->backbuffer, lines, color);
+            fbuf_impl->flip_all = true; // since we've modified the entire framebuffer
+        }
     }
-    fbuf_fill_stub(fbuf_impl->height - lines, lines, color);
+}
+
+static void fbuf_scroll_down_stub(void* ptr_dst, void* ptr_src, size_t lines, uint32_t color) {
+    memmove((void*) ((uintptr_t) ptr_dst + lines * fbuf_impl->pitch), ptr_src, (fbuf_impl->height - lines) * fbuf_impl->pitch);
+    fbuf_fill_stub(ptr_dst, 0, lines, color);
 }
 
 void fbuf_scroll_down(size_t lines, uint32_t color) {
     if(fbuf_impl == NULL || lines == 0) return;
     if(lines > fbuf_impl->height) lines = fbuf_impl->height;
 
-    if(fbuf_impl->scroll_down != NULL) fbuf_impl->scroll_down(fbuf_impl, lines);
-    else {
-        uintptr_t ptr = (uintptr_t) ((fbuf_impl->backbuffer != NULL) ? fbuf_impl->backbuffer : fbuf_impl->framebuffer);
-        memmove((void*) (ptr + lines * fbuf_impl->pitch), (void*) ptr, (fbuf_impl->height - lines) * fbuf_impl->pitch);
-        fbuf_impl->flip_all = true;
+    if(fbuf_impl->scroll_down != NULL) {
+        fbuf_impl->scroll_down(fbuf_impl, lines);
+        fbuf_fill_stub((fbuf_impl->backbuffer != NULL) ? fbuf_impl->backbuffer : fbuf_impl->framebuffer, 0, lines, color);
+    } else {
+        if(fbuf_impl->dbuf_direct_write || fbuf_impl->backbuffer == NULL)
+            fbuf_scroll_down_stub(fbuf_impl->framebuffer, fbuf_impl->backbuffer, lines, color);
+        if(fbuf_impl->backbuffer != NULL) {
+            fbuf_scroll_down_stub(fbuf_impl->backbuffer, fbuf_impl->backbuffer, lines, color);
+            fbuf_impl->flip_all = true; // since we've modified the entire framebuffer
+        }
     }
-    fbuf_fill_stub(0, lines, color);
 }
 
 void fbuf_unload() {
