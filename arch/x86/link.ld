@@ -23,8 +23,14 @@ SECTIONS
 
   __pre_end = .;
 
+  /* recursive mapping region */
+  . = 0xC0000000 - 0x400000;
+  __rmap_start = .;
+  . += 0x400000;
+  __rmap_end = .;
+
   /* higher half portion - for everything else ;) */
-  . += 0xC0000000;
+  . = 0xC0100000 + (__pre_end - __pre_start);
   __kernel_start = .;
 
   __text_start = .;
@@ -59,10 +65,6 @@ SECTIONS
   __kernel_end = .;
 
   /* other kernel memory spaces, which will be allocated during runtime */
-
-  /* kernel page table mapping location (mapped with vmm_krnlpt) */
-  . = 0xEFC00000; /* requires 4M, 4M aligned */
-  __krnlpt_start = .;
 
   /* kernel heap - REQUIRED FOR ALL PLATFORMS */
   . = 0xF0000000;

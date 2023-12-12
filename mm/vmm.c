@@ -48,7 +48,7 @@ void vmm_unmap(void* vmm, uintptr_t va, size_t sz) {
 	if(va % pgsz_min) {
 		size_t delta = va;
 		va = (va / pgsz_min) * pgsz_min;
-		delta = va - delta;
+		delta -= va;
 		sz += delta;
 	}
 	if(sz % pgsz_min) sz += pgsz_min - sz % pgsz_min;

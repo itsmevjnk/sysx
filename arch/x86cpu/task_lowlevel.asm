@@ -94,7 +94,6 @@ shl eax, 2 ; multiply by 4
 add eax, dword [proc_pidtab] ; address into proc_pidtab
 mov eax, [eax]
 mov eax, [eax + 2 * 4] ; proc->vmm - TODO: do we need mutex_acquire and mutex_release here?
-mov eax, [eax + 4 * 1024 + 4 * 1024] ; skip PDEs and PT pointers
 mov cr3, eax ; no more stack beyond this point!
 
 .load_esp0: ; load ring 0 ESP

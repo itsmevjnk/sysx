@@ -18,6 +18,7 @@ stack:
 .top:
 resb 65536 
 .bottom:
+kernelpt_start: resd 1 ; start of kernel page table (physical addr)
 
 global x86ext_on
 x86ext_on: resw 1 ; FPU = bit 0, MMX = bit 1, SSE = bit 2, XSAVE = bit 3
@@ -48,9 +49,11 @@ extern __data_end
 extern __bss_start
 extern __bss_end
 
-extern vmm_default
+extern vmm_default_pd
 extern vmm_krnlpt
-extern __krnlpt_start
+
+extern __rmap_start
+extern __rmap_end
 
 extern vmm_current
 extern vmm_kernel
@@ -225,25 +228,33 @@ test eax, eax
 jz .edi_aligned
 add edi, 0x1000
 .edi_aligned:
-mov ebp, PD(vmm_default) ; ptr to page directory
-mov [ebp + 8192], ebp ; load CR3 value
+mov [PHYS(kernelpt_start)], edi ; for later comparison (since we don't need to map the page tables)
+mov ebp, PD(vmm_default_pd) ; ptr to page directory
 ; wipe page directory in the case that it haven't been wiped yet
 push edi
 xor eax, eax
 mov edi, ebp
 mov ecx, 1024 * 4
 rep stosb ; more speed?
+; set up recursive mapping
+mov eax, ebp ; ptr to page directory
+or eax, (1 << 0) | (1 << 1) ; present, writable, supervisor
+mov edi, __rmap_start ; start of recursive mapping region (4M aligned)
+shr edi, 22 ; page directory entry idx
+shl edi, 2 ; times 4
+add edi, ebp ; EDI now contains pointer to the PDE
+stosd ; store EAX content to EDI - now the PD is recursively mapped
 pop edi
-mov esi, 0x100000 ; ptr to beginning of the page we're mapping
+mov esi, 0x100000 ; ESI = physical address of the page we're mapping
 .map: ; mapping code begins here
 ; check for page table
 mov ebp, esi
 shr ebp, 22 ; page directory entry
 shl ebp, 2 ; times 4
-add ebp, PD(vmm_default)
+add ebp, PD(vmm_default_pd)
 mov eax, [ebp]
-and eax, 0xfffff000 ; remove flags
-test eax, eax
+and eax, ~0xFFF ; discard flags
+test eax, eax ; EAX == 0?
 jnz .pt_created
 ; no page table for current page, let's make it then
 mov eax, edi
@@ -251,16 +262,12 @@ or eax, (1 << 0) | (1 << 1) ; present, writable, supervisor
 mov [ebp], eax ; identity map
 add ebp, 768 * 4
 mov [ebp], eax ; higher half map
-add edi, 0xC0000000
-add ebp, 4096 ; move to page table pointer array
-mov [ebp], edi
-; we don't need to write the pointer to the sub-0xC0000000 part since we will be unmapping it anyway
-sub edi, 0xC0000000
+; we don't need to store the page tables' virtual addresses, now that they are recursively mapped
 push edi
 ; wipe page table
 xor eax, eax
-mov ecx, 1024
-rep stosd ; this will also increment EDI for us
+mov ecx, 1024 * 4
+rep stosb ; this will also increment EDI for us
 pop eax
 .pt_created: ; this code assumes the page table pointer is stored in EAX
 ; do the mapping in page table
@@ -273,25 +280,10 @@ mov eax, esi
 or eax, (1 << 0) | (1 << 1) | (1 << 8) ; present, writable, supervisor, global
 mov [ebp], eax
 add esi, 0x1000 ; next page
-cmp esi, edi
+cmp esi, [PHYS(kernelpt_start)]
 jb .map ; if we haven't mapped everything, go back and map more
-; wipe vmm_krnlpt
-push edi
-xor eax, eax
-mov edi, PHYS(vmm_krnlpt)
-mov ecx, 1024
-rep stosd
-pop edi
-; tell the page directory about the kernel page table (vmm_krnlpt)
-mov ebp, __krnlpt_start
-shr ebp, 20 ; shr 22 + shl 2
-add ebp, PD(vmm_default) ; ptr to page directory's entry for kernel page table mapping
-mov eax, PHYS(vmm_krnlpt)
-or eax, (1 << 0) | (1 << 1) ; present, writable, supervisor
-mov [ebp], eax
-mov dword [ebp + 4096], vmm_krnlpt ; ptr to page table list
 ; we're ready to go, so let's enable paging
-mov eax, PD(vmm_default)
+mov eax, PD(vmm_default_pd)
 mov cr3, eax
 mov eax, cr4
 or eax, (1 << 7) | (1 << 4) ; enable global paging and PSE
@@ -335,7 +327,7 @@ mov dword [kernel_stack_top], stack.top ; save stack top address
 mov [mb_info], ebx
 add edi, 0xC0000000 ; bring kernel_end to higher half too
 mov [kernel_end], edi
-mov eax, __kernel_start
+mov eax, __rmap_start
 and eax, 0xF0000000
 mov [kernel_start], eax
 mov dword [text_start], __text_start
@@ -349,14 +341,16 @@ mov dword [bss_end], __bss_end
 
 ; wipe identity mapping portion off page directory
 xor eax, eax
-mov edi, vmm_default
-mov ecx, 768
-rep stosd
+mov edi, vmm_default_pd
+mov ecx, __rmap_start ; start of recursive mapping region (4M aligned)
+shr ecx, 22 ; page directory entry idx
+shl ecx, 2 ; times 4
+rep stosb
 mov eax, cr3
 mov cr3, eax ; quick and dirty TLB invalidation
 
-mov dword [vmm_current], vmm_default
-mov dword [vmm_kernel], vmm_default
+mov dword [vmm_current], PD(vmm_default_pd)
+mov dword [vmm_kernel], PD(vmm_default_pd)
 
 .fpu: ; initialize the FPU and SSE (if possible)
 mov word [x86ext_on], 0x55AA ; use x86ext_on for temporary storage too
