@@ -104,17 +104,17 @@ void exc_stub(uint8_t vector, idt_context_t* context) {
 	kerror("esi=0x%08x edi=0x%08x esp=0x%08x ebp=0x%08x", context->esi, context->edi, context->esp, context->ebp);
 	kerror("cs=0x%04x ds=0x%04x es=0x%04x fs=0x%04x gs=0x%04x", context->cs, context->ds, context->es, context->fs, context->gs);
 	kerror("user ss=0x%04x user esp=0x%08x eflags=0x%08x", context->ss_usr, context->esp_usr, context->eflags);
-#ifdef DEBUG
-	kdebug("stack trace:");
-	struct stkframe* stk = (struct stkframe*) context->ebp;
-	for(size_t i = 0; stk; i++) {
-	struct sym_addr* sym = NULL;
-	if(kernel_syms != NULL) sym = sym_addr2sym(kernel_syms, stk->eip);
-	if(sym != NULL) kdebug("%-4u [0x%08x]: 0x%08x (%s + 0x%08x)", i, (uint32_t) stk, stk->eip, sym->sym->name, sym->delta);
-	else kdebug("%-4u [0x%08x]: 0x%08x", i, (uint32_t) stk, stk->eip);
-	stk = stk->ebp;
-	}
-#endif
+// #ifdef DEBUG
+// 	kdebug("stack trace:");
+// 	struct stkframe* stk = (struct stkframe*) context->ebp;
+// 	for(size_t i = 0; stk; i++) {
+// 		struct sym_addr* sym = NULL;
+// 		if(kernel_syms != NULL) sym = sym_addr2sym(kernel_syms, stk->eip);
+// 		if(sym != NULL) kdebug("%-4u [0x%08x]: 0x%08x (%s + 0x%08x)", i, (uint32_t) stk, stk->eip, sym->sym->name, sym->delta);
+// 		else kdebug("%-4u [0x%08x]: 0x%08x", i, (uint32_t) stk, stk->eip);
+// 		stk = stk->ebp;
+// 	}
+// #endif
 
 	if(term_impl == &fbterm_hook) fbuf_commit();
 	while(1); // halt now
