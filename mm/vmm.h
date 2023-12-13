@@ -211,4 +211,18 @@ bool vmm_cow_duplicate(void* vmm, uintptr_t vaddr);
  */
 bool vmm_handle_fault(uintptr_t vaddr, size_t flags);
 
+/*
+ * void vmm_stage_free(void* vmm)
+ *  Stages the specified VMM configuration for deletion after
+ *  switching out of it.
+ */
+void vmm_stage_free(void* vmm);
+
+/*
+ * void vmm_do_cleanup()
+ *  Deallocates all VMM configurations that have been staged
+ *  and are eligible for deletion.
+ */
+void vmm_do_cleanup();
+
 #endif

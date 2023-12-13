@@ -270,3 +270,48 @@ bool vmm_handle_fault(uintptr_t vaddr, size_t flags) {
 	}
 	return false;
 }
+
+/* deallocation staging */
+
+static mutex_t vmm_frstage_mutex = {0};
+static void** vmm_frstage = NULL;
+static size_t vmm_frstage_len = 0;
+
+#ifndef VMM_FRSTAGE_ALLOCSZ
+#define VMM_FRSTAGE_ALLOCSZ							4
+#endif
+
+void vmm_stage_free(void* vmm) {
+	mutex_acquire(&vmm_frstage_mutex);
+	size_t i = 0;
+	for(; i < vmm_frstage_len; i++) {
+		if(vmm_frstage[i] == NULL) break;
+	}
+	if(i == vmm_frstage_len) {
+		void** new_frstage = krealloc(vmm_frstage, (vmm_frstage_len + VMM_FRSTAGE_ALLOCSZ) * sizeof(void*));
+		if(new_frstage == NULL) {
+			kerror("cannot extend deallocation staging queue");
+			mutex_release(&vmm_frstage_mutex);
+			return;
+		}
+		vmm_frstage_len += VMM_FRSTAGE_ALLOCSZ;
+		vmm_frstage = new_frstage;
+		memset(&vmm_frstage[i + 1], 0, (VMM_FRSTAGE_ALLOCSZ - 1) * sizeof(void*));
+	}
+	kdebug("staging VMM 0x%x for deletion", vmm);
+	vmm_frstage[i] = vmm;
+	mutex_release(&vmm_frstage_mutex);
+}
+
+void vmm_do_cleanup() {
+	if(vmm_frstage_mutex.locked) return; // we'll be back later
+	mutex_acquire(&vmm_frstage_mutex);
+	for(size_t i = 0; i < vmm_frstage_len; i++) {
+		if(vmm_frstage[i] != NULL && vmm_frstage[i] != vmm_current) {
+			kdebug("deleting staged VMM 0x%x", vmm_frstage[i]);
+			vmm_free(vmm_frstage[i]);
+			vmm_frstage[i] = NULL;
+		}
+	}
+	mutex_release(&vmm_frstage_mutex);
+}

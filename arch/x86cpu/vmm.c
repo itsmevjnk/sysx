@@ -576,8 +576,11 @@ void* vmm_clone(void* src) {
 }
 
 void vmm_free(void* vmm) {
-	kassert((uintptr_t)vmm != (uintptr_t)vmm_current); // we cannot free a configuration that is in use
-	if(vmm == vmm_kernel) return; // and we cannot free the default one either; however, this is not a fatal issue as we can just skip the deallocation
+	if(vmm == vmm_kernel) return; // we can't free the kernel VMM config; however, this is not a fatal issue as we can just skip the deallocation
+	
+	if(vmm == vmm_current) {
+		vmm_stage_free(vmm);
+	}
 
 	vmm_pde_t* pd = (vmm_pde_t*) vmm_alloc_map(vmm_current, (uintptr_t) vmm, 4096, 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT); // map PD
 	if(pd == NULL) {

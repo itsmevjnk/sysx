@@ -62,10 +62,18 @@ struct proc* proc_create(struct proc* parent, void* vmm);
 
 /*
  * void proc_delete(struct proc* proc)
- *  Deallocates the specified process from memory, and deletes all of
+ *  Stages the specified process for deletion, and deletes all of
  *  its associated tasks.
  */
 void proc_delete(struct proc* proc);
+
+/*
+ * void proc_do_delete(struct proc* proc) 
+ *  Deallocates the specified process from memory.
+ *  This is called by task_do_delete() upon deletion of the final
+ *  task of the process.
+ */
+void proc_do_delete(struct proc* proc);
 
 /*
  * size_t proc_add_task(struct proc* proc, void* task)

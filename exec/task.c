@@ -86,26 +86,41 @@ void* task_create(bool user, struct proc* proc, size_t stack_sz, uintptr_t entry
 static void task_do_delete(void* task) {
     task_common_t* common = task_common(task);
     
-    /* remove task from queue */
-    task_common(common->prev)->next = common->next;
-    task_common(common->next)->prev = common->prev;
+    task_yield_enable = false;
 
-    /* de-allocate stack */
     struct proc* proc = proc_get(common->pid);
     if(proc != NULL) {
+        /* de-allocate stack */
         size_t framesz = pmm_framesz();
         for(size_t i = 0; i < common->stack_size; i += framesz) {
             uintptr_t vaddr = common->stack_bottom - framesz - i;
             pmm_free(vmm_get_paddr(proc->vmm, vaddr) / framesz);
         }
-    }
+
+        /* delete task from process list and count remaining tasks */
+        size_t remaining_tasks = 0; // number of remaining tasks
+        for(size_t i = 0; i < proc->num_tasks; i++) {
+            if(proc->tasks[i] != NULL) {
+                if(proc->tasks[i] == task) proc->tasks[i] = NULL;
+                else remaining_tasks++;
+            }
+        }
+
+        if(!remaining_tasks) proc_do_delete(proc); // delete the process if it no longer has any tasks
+    } else kwarn("task 0x%x (PID %u) is possibly orphaned", task, common->pid);
+
+    /* remove task from queue */
+    task_common(common->prev)->next = common->next;
+    task_common(common->next)->prev = common->prev;
+
+    task_yield_enable = true;
 
     task_delete_stub(task); // finally purge the task
 }
 
 void task_delete(void* task) {
     task_common_t* common = task_common(task);
-    common->ready = 0;
+    // common->ready = 0;
     if(task_current == task) {
         common->type = TASK_TYPE_DELETE_PENDING;
         // while(1); // wait until we switch out of the task - then we'll delete it later
@@ -132,6 +147,7 @@ volatile timer_tick_t task_switch_tick = 0;
 
 void task_yield(void* context) {
     if(!task_yield_enable || task_kernel == NULL) return; // cannot switch yet
+    vmm_do_cleanup(); // remove any VMM config that have been staged for deletion
     if(task_current == NULL) {
         if(task_get_ready(task_kernel)) {
             task_switch_tick = timer_tick;

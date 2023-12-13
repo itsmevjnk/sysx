@@ -1,10 +1,10 @@
 section .text
 
 extern task_current
-extern vmm_switch
 extern x86ext_on
 extern proc_pidtab
 extern tss_entry
+extern vmm_current
 
 ; void task_switch(void* task, void* context)
 ;  Performs a context switch to the specified task.
@@ -95,6 +95,7 @@ add eax, dword [proc_pidtab] ; address into proc_pidtab
 mov eax, [eax]
 mov eax, [eax + 2 * 4] ; proc->vmm - TODO: do we need mutex_acquire and mutex_release here?
 mov cr3, eax ; no more stack beyond this point!
+mov [vmm_current], eax
 
 .load_esp0: ; load ring 0 ESP
 mov eax, [ebp + (4 * 11)] ; task->stack_bottom

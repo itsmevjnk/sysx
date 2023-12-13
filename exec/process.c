@@ -105,15 +105,22 @@ void proc_delete(struct proc* proc) {
     mutex_acquire(&proc->mu_tasks); mutex_acquire(&proc->mu_fds); // make sure nobody else is holding the process
 
     /* delete all tasks */
+    bool deleting_current = false; // set if deleting current task
     for(size_t i = 0; i < proc->num_tasks; i++) {
-        if(proc->tasks[i] != NULL) task_delete(proc->tasks[i]);
+        if(proc->tasks[i] != NULL) {
+            if(proc->tasks[i] == task_current) deleting_current = true; // save for later
+            else task_delete(proc->tasks[i]);
+        }
     }
 
     /* unmap ELF segments (if there's any) */
-    if(proc->elf_segments != NULL) elf_unload_prg(proc->vmm, proc->elf_segments, proc->num_elf_segments);
+    if(proc->elf_segments != NULL) elf_unload_prg(proc->vmm, proc->elf_segments, proc->num_elf_segments); // we can do this since we're in kernel space and therefore have no need to return to the calling code if it's being deleted
 
-    vmm_free(proc->vmm); // delete VMM config
-    
+    if(deleting_current) task_delete((void*) task_current); // stage current task for deletion too
+}
+
+void proc_do_delete(struct proc* proc) {
+    vmm_free(proc->vmm); // delete VMM config (or stage it for deletion)
     proc_pid_free(proc->pid);
     kfree(proc);
 }
