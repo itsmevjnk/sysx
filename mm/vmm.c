@@ -304,7 +304,7 @@ void vmm_stage_free(void* vmm) {
 }
 
 void vmm_do_cleanup() {
-	if(vmm_frstage_mutex.locked) return; // we'll be back later
+	if(mutex_test(&vmm_frstage_mutex)) return; // someone else is doing our work
 	mutex_acquire(&vmm_frstage_mutex);
 	for(size_t i = 0; i < vmm_frstage_len; i++) {
 		if(vmm_frstage[i] != NULL && vmm_frstage[i] != vmm_current) {
