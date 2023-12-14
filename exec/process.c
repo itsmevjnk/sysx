@@ -262,3 +262,45 @@ uint64_t proc_fd_write(struct proc* proc, size_t fd, uint64_t size, const uint8_
     mutex_release(&proc->fds[fd].mutex);
     return ret;
 }
+
+struct proc* proc_fork() {
+    struct proc* src = proc_get(task_common(task_current)->pid); // source (current) process
+
+    struct proc* dst = proc_create(src, src->vmm);
+    if(dst == NULL) return NULL; // cannot create process
+
+    /* TODO: deal with ELF segments */
+
+    /* copy file descriptors */
+    fd_t* new_fds = krealloc(dst->fds, src->num_fds * sizeof(fd_t));
+    if(new_fds == NULL) {
+        kerror("cannot extend file descriptor table");
+        proc_delete(dst);
+        return NULL;
+    }
+    dst->num_fds = src->num_fds; dst->fds = new_fds;
+    memcpy(dst->fds, src->fds, src->num_fds * sizeof(fd_t));
+    for(size_t i = 3; i < dst->num_fds; i++) {
+        /* reopen files */
+        if(dst->fds[i].ftab != NULL) {
+            if(dst->fds[i].ftab->excl != NULL) {
+                kerror("file descriptor %u is being exclusively accessed, so the forked task will not be able to access it");
+                memset(&dst->fds[i], 0, sizeof(fd_t));
+            } else {
+                mutex_acquire(&dst->fds[i].ftab->mutex);
+                dst->fds[i].ftab->refs++; // 1 more process is holding it
+                mutex_release(&dst->fds[i].ftab->mutex);
+            }
+        }
+    }
+    
+    /* copy current task */
+    void* new_task = task_fork(dst);
+    if(new_task == NULL) {
+        kerror("cannot fork current task");
+        proc_delete(dst);
+        return NULL;
+    }
+    
+    return dst;
+}

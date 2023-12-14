@@ -184,7 +184,7 @@ mov eax, [ebp + (4 * 7)]
 mov ebp, [ebp + (4 * 2)]
 iretd ; reload EFLAGS and EIP in one go
 
-; void* task_fork()
+; void* task_fork(struct proc* proc)
 ;  Forks the current task and returns the child task.
 global task_fork
 extern task_fork_stub
@@ -196,7 +196,10 @@ task_fork:
 push ebp ; create a new stack frame - this helps with debugging, and makes it easier to unwind the instruction and stack pointers later on.
 mov ebp, esp
 
+xor eax, [ebp + 4 * 2] ; proc
+push eax
 call task_fork_stub ; get new task - new task struct's ptr will be in EAX
+add esp, 4
 test eax, eax ; test EAX = NULL
 jz .done ; cannot create task - exit here.
 

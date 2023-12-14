@@ -177,11 +177,11 @@ void task_yield(void* context) {
     }
 }
 
-void* task_fork_stub() {
+void* task_fork_stub(struct proc* proc) {
     /* create blank task */
     task_common_t* common_current = task_common((void*) task_current);
-    struct proc* proc_current = proc_get(common_current->pid);
-    void* task = task_create((common_current->type == TASK_TYPE_USER || common_current->type == TASK_TYPE_USER_SYS), proc_current, common_current->stack_size, 0);
+    if(proc == NULL) proc = proc_get(common_current->pid); // current process
+    void* task = task_create((common_current->type == TASK_TYPE_USER || common_current->type == TASK_TYPE_USER_SYS), proc, common_current->stack_size, 0);
     if(task == NULL) return NULL;
 
     task_common_t* common = task_common(task);
@@ -192,21 +192,18 @@ void* task_fork_stub() {
     // stack has been allocated by task_create()
     common->ready = 0; // do not switch into this task as it's still being set up
 
-    // size_t pgsz = vmm_pgsz();
-    // void* stack_copy_dst = (void*) vmm_first_free(vmm_current, pgsz, kernel_start, pgsz, false);
-    // if(stack_copy_dst == NULL) {
-    //     kerror("cannot find unused virtual address space to map new task's stack page for copying");
-    //     task_delete_stub(task);
-    //     return NULL;
-    // }
-    // vmm_pgmap(vmm_current, 0, (uintptr_t) stack_copy_dst, VMM_FLAGS_PRESENT | VMM_FLAGS_RW); // we'll fill in the phys address later
-    // for(size_t i = 0; i < common->stack_size; i += pgsz) {
-    //     /* copy stack page - we may copy some of this function's garbage over, but it does not matter since task_fork will discard this stack frame anyway */
-    //     vmm_set_paddr(vmm_current, (uintptr_t) stack_copy_dst, vmm_get_paddr(vmm_current, common->stack_bottom - common->stack_size + i));
-    //     memcpy(stack_copy_dst, (void*) (common_current->stack_bottom - common_current->stack_size + i), pgsz);
-    // }
-    // vmm_pgunmap(vmm_current, (uintptr_t) stack_copy_dst);
-    memcpy((void*) (common->stack_bottom - common->stack_size), (void*) (common_current->stack_bottom - common_current->stack_size), common->stack_size);
+    /* copy stack */
+    uintptr_t stack_top = common->stack_bottom - common->stack_size;
+    if(proc->vmm != vmm_current) {
+        stack_top = vmm_alloc_map(vmm_current, vmm_get_paddr(proc->vmm, stack_top), common->stack_size, 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW);
+        if(!stack_top) {
+            kerror("cannot map new task's stack for copying");
+            task_delete(task);
+            return NULL;
+        }
+    }
+    memcpy((void*) stack_top, (void*) (common_current->stack_bottom - common_current->stack_size), common->stack_size);
+    if(proc->vmm != vmm_current) vmm_unmap(vmm_current, stack_top, common->stack_size); // unmap stack that we just had to map to copy data over
 
     return task;
 }
