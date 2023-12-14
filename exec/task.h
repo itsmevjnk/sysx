@@ -190,22 +190,26 @@ void task_yield_noirq();
 void task_insert(void* task, void* target);
 
 /*
- * void* task_fork_stub()
+ * void* task_fork_stub(struct proc* proc)
  *  Creates a new child (forked) task of the current task and copies
  *  the current task's stack to it. The newly-created task will not
  *  have a context yet; this is to be saved by task_fork.
+ *  The proc parameter specifies the process to associate the new task
+ *  with; if it is NULL, the current process will be used.
  */
-void* task_fork_stub();
+void* task_fork_stub(struct proc* proc);
 
 /*
- * void* task_fork()
+ * void* task_fork(struct proc* proc)
  *  Forks the current task and returns the child task.
+ *  The proc parameter specifies the process to associate the new task
+ *  with; if it is NULL, the current process will be used.
  *  This is an architecture-specific function, preferably implemented
  *  in Assembly, due to differences in ABIs and the fact that GCC
  *  does not guarantee the preservation of certain registers (such as
  *  EBX on x86) during execution.
  */
-void* task_fork();
+void* task_fork(struct proc* proc);
 
 /*
  * size_t task_get_pid(void* task)

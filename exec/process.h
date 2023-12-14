@@ -61,6 +61,13 @@ struct proc* proc_get(size_t pid);
 struct proc* proc_create(struct proc* parent, void* vmm);
 
 /*
+ * struct proc* proc_fork()
+ *  Clones the currently running process, along with the current task.
+ *  Returns the new process on success or NULL on failure.
+ */
+struct proc* proc_fork();
+
+/*
  * void proc_delete(struct proc* proc)
  *  Stages the specified process for deletion, and deletes all of
  *  its associated tasks.
