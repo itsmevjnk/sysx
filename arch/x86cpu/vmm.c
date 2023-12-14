@@ -10,48 +10,53 @@
 #include <exec/process.h>
 
 /* MMU data types */
-typedef struct {
-	size_t present : 1;
-	size_t rw : 1;
-	size_t user : 1;
-	size_t wthru : 1;
-	size_t ncache : 1;
-	size_t accessed : 1;
-	size_t zero : 1;
-	size_t pgsz : 1;
-	size_t avail : 4;
-	uintptr_t pt : 20; // page table ptr >> 12
+typedef union {
+	struct {
+		size_t present : 1;
+		size_t rw : 1;
+		size_t user : 1;
+		size_t wthru : 1;
+		size_t ncache : 1;
+		size_t accessed : 1;
+		size_t zero : 1;
+		size_t pgsz : 1;
+		size_t avail : 4;
+		uintptr_t pt : 20; // page table ptr >> 12
+	} __attribute__((packed)) entry;
+	struct {
+		size_t present : 1;
+		size_t rw : 1;
+		size_t user : 1;
+		size_t wthru : 1;
+		size_t ncache : 1;
+		size_t accessed : 1;
+		size_t dirty : 1;
+		size_t pgsz : 1;
+		size_t global : 1;
+		size_t avail : 3;
+		size_t pat : 1;
+		uintptr_t pa_ext : 8; // bits 32-39 of address
+		size_t zero : 1;
+		uintptr_t pa : 10; // bits 22-31 of address
+	} __attribute__((packed)) entry_pse; // for 4M pages
+	uint32_t dword;
 } __attribute__((packed)) vmm_pde_t;
 
-typedef struct {
-	size_t present : 1;
-	size_t rw : 1;
-	size_t user : 1;
-	size_t wthru : 1;
-	size_t ncache : 1;
-	size_t accessed : 1;
-	size_t dirty : 1;
-	size_t pgsz : 1;
-	size_t global : 1;
-	size_t avail : 3;
-	size_t pat : 1;
-	uintptr_t pa_ext : 8; // bits 32-39 of address
-	size_t zero : 1;
-	uintptr_t pa : 10; // bits 22-31 of address
-} __attribute__((packed)) vmm_pde_pse_t; // for PSE (4MiB pages)
-
-typedef struct {
-	size_t present : 1;
-	size_t rw : 1;
-	size_t user : 1;
-	size_t wthru : 1;
-	size_t ncache : 1;
-	size_t accessed : 1;
-	size_t dirty : 1;
-	size_t zero : 1;
-	size_t global : 1;
-	size_t avail : 3;
-	uintptr_t pa : 20; // phys addr >> 12
+typedef union {
+	struct {
+		size_t present : 1;
+		size_t rw : 1;
+		size_t user : 1;
+		size_t wthru : 1;
+		size_t ncache : 1;
+		size_t accessed : 1;
+		size_t dirty : 1;
+		size_t zero : 1;
+		size_t global : 1;
+		size_t avail : 3;
+		uintptr_t pa : 20; // phys addr >> 12
+	} __attribute__((packed)) entry;
+	uint32_t dword;
 } __attribute__((packed)) vmm_pte_t;
 
 vmm_pde_t vmm_default_pd[1024] __attribute__((aligned(4096))); // for bootstrap code
@@ -84,11 +89,11 @@ void vmm_pgmap_small(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 	if(pd == NULL) {
 		kerror("cannot map page directory");
 		return;
-	} else if(*((uint32_t*)&pd[pde]) && !pd[pde].pgsz) {
+	} else if(pd[pde].dword && !pd[pde].entry.pgsz) {
 		/* there's a PT to access too */
 		if(pd_map) {
 			/* map page table if needed */
-			pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW); // speed up lookup by basing it off pd
+			pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].entry.pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW); // speed up lookup by basing it off pd
 			if(pt == NULL) {
 				kerror("cannot map page table");
 				vmm_pgunmap(vmm_current, (uintptr_t) pd, 0);
@@ -100,9 +105,9 @@ void vmm_pgmap_small(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 	bool invalidate_tlb = (vmm == vmm_current); // set if TLB invalidation is needed
 
 	vmm_pde_t* pd_entry = &pd[pde]; // PD entry
-	vmm_pde_pse_t pde_pse; *((uint32_t*) &pde_pse) = *((uint32_t*) pd_entry); // current PD entry (assuming it's PSE)
-	bool pse = (pde_pse.present && pde_pse.pgsz); // set if this is a huge (PSE/4M) page
-	if(pse) invalidate_tlb = invalidate_tlb || (pde_pse.global); // invalidate TLB if this was a global hugepage
+	vmm_pde_t pde_orig; pde_orig.dword = pd_entry->dword; // current PD entry
+	bool pse = (pde_orig.entry.present && pde_orig.entry.pgsz); // set if this is a huge (PSE/4M) page
+	if(pse) invalidate_tlb = invalidate_tlb || (pde_orig.entry_pse.global); // invalidate TLB if this was a global hugepage
 
 	if(pt == NULL) {
 		/* allocate page table */
@@ -110,16 +115,16 @@ void vmm_pgmap_small(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 		if(frame == (size_t)-1) kerror("no more free frames, brace for impact");
 		else {
 			// pmm_alloc(frame);			
-			*((uint32_t*) pd_entry) = (frame << 12) | (1 << 0) | (1 << 1); // all the other flags will be filled in for us, but we must have present and rw
+			pd_entry->dword = (frame << 12) | (1 << 0) | (1 << 1); // all the other flags will be filled in for us, but we must have present and rw
 			if(pse) { // transfer the flags over
-				// pd_entry->present |= pde_pse.present;
-				// pd_entry->rw |= pde_pse.rw;
-				pd_entry->user |= pde_pse.user;
+				// pd_entry->entry.present |= pde_orig.entry.present;
+				// pd_entry->entry.rw |= pde_orig.entry.rw;
+				pd_entry->entry.user |= pde_orig.entry.user;
 			}
 
 			if(pd_map) {
 				/* map PT */
-				pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW); // speed up lookup by basing it off pd
+				pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].entry.pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW); // speed up lookup by basing it off pd
 				if(pt == NULL) {
 					kerror("cannot map page table");
 					vmm_pgunmap(vmm_current, (uintptr_t) pd, 0);
@@ -143,7 +148,7 @@ void vmm_pgmap_small(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 						if(proc->vmm != vmm) {
 							/* map page directory and copy PD entry over */
 							vmm_set_paddr(vmm_current, (uintptr_t) task_vmm_pd, (uintptr_t) proc->vmm);
-							*((uint32_t*)&task_vmm_pd[pde]) = *((uint32_t*) pd_entry);
+							task_vmm_pd[pde].dword = pd_entry->dword;
 						}
 						task = task->common.next;
 					} while(task != task_kernel);
@@ -154,41 +159,41 @@ void vmm_pgmap_small(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 
 		/* remap any PSE pages */
 		if(pse) {
-			size_t pa_frame = pde_pse.pa << 10;
+			size_t pa_frame = pde_orig.entry_pse.pa << 10;
 			for(size_t i = 0; i < 1024; i++, pa_frame++) {
 				if(i != pte) {
-					pt[i].present = pde_pse.present;
-					pt[i].user = pde_pse.user;
-					pt[i].rw = pde_pse.rw;
-					// pt[i].zero = 0;
-					pt[i].global = pde_pse.global;
-					pt[i].ncache = pde_pse.ncache;
-					pt[i].wthru = pde_pse.wthru;
-					pt[i].accessed = pde_pse.accessed;
-					pt[i].dirty = pde_pse.dirty;
-					pt[i].pa = pa_frame;
+					pt[i].entry.present = pde_orig.entry_pse.present;
+					pt[i].entry.user = pde_orig.entry_pse.user;
+					pt[i].entry.rw = pde_orig.entry_pse.rw;
+					// pt[i].entry.zero = 0;
+					pt[i].entry.global = pde_orig.entry_pse.global;
+					pt[i].entry.ncache = pde_orig.entry_pse.ncache;
+					pt[i].entry.wthru = pde_orig.entry_pse.wthru;
+					pt[i].entry.accessed = pde_orig.entry_pse.accessed;
+					pt[i].entry.dirty = pde_orig.entry_pse.dirty;
+					pt[i].entry.pa = pa_frame;
 				}
 			}
 		}
 	}
 
 	/* set settings in page directory entry */
-	pd_entry->present |= (flags & VMM_FLAGS_PRESENT) ? 1 : 0;
-	pd_entry->rw |= (flags & VMM_FLAGS_RW) ? 1 : 0;
-	pd_entry->user |= (flags & VMM_FLAGS_USER) ? 1 : 0;
+	pd_entry->entry.present |= (flags & VMM_FLAGS_PRESENT) ? 1 : 0;
+	pd_entry->entry.rw |= (flags & VMM_FLAGS_RW) ? 1 : 0;
+	pd_entry->entry.user |= (flags & VMM_FLAGS_USER) ? 1 : 0;
 
 	/* populate page table entry */
 	vmm_pte_t* pt_entry = &pt[pte];
-	invalidate_tlb = invalidate_tlb || (pt_entry->global) || (flags & VMM_FLAGS_GLOBAL); // set if the page was global, or will be global
-	pt_entry->present = (flags & VMM_FLAGS_PRESENT) ? 1 : 0;
-	pt_entry->user = (flags & VMM_FLAGS_USER) ? 1 : 0;
-	pt_entry->rw = (flags & VMM_FLAGS_RW) ? 1 : 0;
-	// pt_entry->zero = 0;
-	pt_entry->global = (flags & VMM_FLAGS_GLOBAL) ? 1 : 0;
-	pt_entry->ncache = (flags & VMM_FLAGS_CACHE) ? 0 : 1;
-	pt_entry->wthru = (flags & VMM_FLAGS_CACHE_WTHRU) ? 1 : 0;
-	pt_entry->pa = pa >> 12;
-	pt_entry->accessed = 0; pt[pte].dirty = 0;
+	invalidate_tlb = invalidate_tlb || (pt_entry->entry.global) || (flags & VMM_FLAGS_GLOBAL); // set if the page was global, or will be global
+	pt_entry->entry.present = (flags & VMM_FLAGS_PRESENT) ? 1 : 0;
+	pt_entry->entry.user = (flags & VMM_FLAGS_USER) ? 1 : 0;
+	pt_entry->entry.rw = (flags & VMM_FLAGS_RW) ? 1 : 0;
+	// pt_entry->entry.zero = 0;
+	pt_entry->entry.global = (flags & VMM_FLAGS_GLOBAL) ? 1 : 0;
+	pt_entry->entry.ncache = (flags & VMM_FLAGS_CACHE) ? 0 : 1;
+	pt_entry->entry.wthru = (flags & VMM_FLAGS_CACHE_WTHRU) ? 1 : 0;
+	pt_entry->entry.pa = pa >> 12;
+	pt_entry->entry.accessed = 0; pt_entry->entry.dirty = 0;
 
 	if(invalidate_tlb) asm volatile("invlpg (%0)" : : "r"(va) : "memory"); // invalidate TLB if needed
 
@@ -208,31 +213,31 @@ void vmm_pgmap_huge(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 		kerror("cannot map page directory");
 		return;
 	}
-	vmm_pde_pse_t* pd_entry = (vmm_pde_pse_t*) &pd[pde]; // PD entry
+	vmm_pde_t* pd_entry = &pd[pde]; // PD entry
 
 	bool invalidate_tlb = (vmm == vmm_current); // set if the TLB is to be invalidated
 
-	if(*((uint32_t*) &pd_entry) && !pd_entry->pgsz) {
+	if(pd_entry->dword && !pd_entry->entry.pgsz) {
 		/* there's a page table for this PDE - deallocate it to avoid confusion */
-		pmm_free(((vmm_pde_t*)pd_entry)->pt);
-		*((uint32_t*) pd_entry) = 0; // quick way to unmap page
+		pmm_free(((vmm_pde_t*)pd_entry)->entry.pt);
+		pd_entry->dword = 0; // quick way to unmap page
 		if(!pd_map) asm volatile("invlpg (%0)" : : "r"(vmm_pt(&__rmap_start, pde)) : "memory"); // invalidate TLB entry for the PT as a safety measure
 	}
 	
-	invalidate_tlb = invalidate_tlb || (pd_entry->global) || (flags & VMM_FLAGS_GLOBAL); // set if the page was global, or will be global
-	*((uint32_t*) pd_entry) = (1 << 7); // quickly clear PDE and set its PSE bit
-	pd_entry->present = (flags & VMM_FLAGS_PRESENT) ? 1 : 0;
-	pd_entry->user = (flags & VMM_FLAGS_USER) ? 1 : 0;
-	pd_entry->rw = (flags & VMM_FLAGS_RW) ? 1 : 0;
-	pd_entry->global = (flags & VMM_FLAGS_GLOBAL) ? 1 : 0;
-	pd_entry->ncache = (flags & VMM_FLAGS_CACHE) ? 0 : 1;
-	pd_entry->wthru = (flags & VMM_FLAGS_CACHE_WTHRU) ? 1 : 0;
-	pd_entry->pa = pa >> 22;
-	pd_entry->accessed = 0; pd_entry->dirty = 0;
+	invalidate_tlb = invalidate_tlb || (pd_entry->entry_pse.global) || (flags & VMM_FLAGS_GLOBAL); // set if the page was global, or will be global
+	pd_entry->dword = (1 << 7); // quickly clear PDE and set its PSE bit
+	pd_entry->entry_pse.present = (flags & VMM_FLAGS_PRESENT) ? 1 : 0;
+	pd_entry->entry_pse.user = (flags & VMM_FLAGS_USER) ? 1 : 0;
+	pd_entry->entry_pse.rw = (flags & VMM_FLAGS_RW) ? 1 : 0;
+	pd_entry->entry_pse.global = (flags & VMM_FLAGS_GLOBAL) ? 1 : 0;
+	pd_entry->entry_pse.ncache = (flags & VMM_FLAGS_CACHE) ? 0 : 1;
+	pd_entry->entry_pse.wthru = (flags & VMM_FLAGS_CACHE_WTHRU) ? 1 : 0;
+	pd_entry->entry_pse.pa = pa >> 22;
+	pd_entry->entry_pse.accessed = 0; pd_entry->entry_pse.dirty = 0;
 
 	if(task_kernel != NULL && va >= kernel_start) {
 		/* propagate kernel pages to all tasks' VMM configs */
-		vmm_pde_pse_t* task_vmm_pd = (vmm_pde_pse_t*) vmm_alloc_map(vmm_current, 0, 4096, (pd_map) ? ((uintptr_t) pd + 4096) : 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW);
+		vmm_pde_t* task_vmm_pd = (vmm_pde_t*) vmm_alloc_map(vmm_current, 0, 4096, (pd_map) ? ((uintptr_t) pd + 4096) : 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW);
 		if(task_vmm_pd == NULL) kerror("cannot map task VMM configurations for page table propagation");
 		else {
 			task_t* task = task_kernel;
@@ -241,7 +246,7 @@ void vmm_pgmap_huge(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 				if(proc->vmm != vmm) {
 					/* map page directory and copy PD entry over */
 					vmm_set_paddr(vmm_current, (uintptr_t) task_vmm_pd, (uintptr_t) proc->vmm);
-					*((uint32_t*)&task_vmm_pd[pde]) = *((uint32_t*) pd_entry);
+					task_vmm_pd[pde].dword = pd_entry->dword;
 				}
 				task = task->common.next;
 			} while(task != task_kernel);
@@ -285,25 +290,25 @@ void vmm_pgunmap_huge(void* vmm, uintptr_t va) {
 		kerror("cannot map page directory");
 		return;
 	}
-	vmm_pde_pse_t* pd_entry = (vmm_pde_pse_t*) &pd[pde]; // PD entry
-	if(!*((uint32_t*)&pd_entry)) goto done; // nothing to do
+	vmm_pde_t* pd_entry = &pd[pde]; // PD entry
+	if(!pd_entry->dword) goto done; // nothing to do
 
 	size_t invalidate_tlb = (vmm == vmm_current);
 
-	if(!pd_entry->pgsz) {
+	if(!pd_entry->entry.pgsz) {
 		/* there's a PT behind this - deallocate it. but first we'll need to invalidate the TLB of global pages if there's any (and if it's needed) */
-		vmm_pte_t* pt = ((pd_map) ? (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT) : vmm_pt(&__rmap_start, pde));
+		vmm_pte_t* pt = ((pd_map) ? (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].entry.pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT) : vmm_pt(&__rmap_start, pde));
 		if(!invalidate_tlb) {
 			for(size_t i = 0; i < 1024; i++) {
-				if(pt[i].global) asm volatile("invlpg (%0)" : : "r"(va | (i << 12)) : "memory");
+				if(pt[i].entry.global) asm volatile("invlpg (%0)" : : "r"(va | (i << 12)) : "memory");
 			}
 		}
-		pmm_free(((vmm_pde_t*) pd_entry)->pt);
+		pmm_free(pd_entry->entry.pt);
 		if(!pd_map) asm volatile("invlpg (%0)" : : "r"(pt) : "memory");
 		else vmm_pgunmap(vmm_current, (uintptr_t) pt, 0);
 	}
 
-	*((uint32_t*) pd_entry) = 0;
+	pd_entry->dword = 0;
 
 	if(invalidate_tlb) {
 		for(size_t i = 0; i < 1024; i++, va += 4096) {
@@ -327,11 +332,11 @@ void vmm_pgunmap_small(void* vmm, uintptr_t va) {
 	if(pd == NULL) {
 		kerror("cannot map page directory");
 		return;
-	} else if(*((uint32_t*)&pd[pde]) && !pd[pde].pgsz) {
+	} else if(pd[pde].dword && !pd[pde].entry.pgsz) {
 		/* there's a PT to access too */
 		if(pd_map) {
 			/* map page table if needed */
-			pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW); // speed up lookup by basing it off pd
+			pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].entry.pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW); // speed up lookup by basing it off pd
 			if(pt == NULL) {
 				kerror("cannot map page table");
 				vmm_pgunmap(vmm_current, (uintptr_t) pd, 0);
@@ -341,19 +346,19 @@ void vmm_pgunmap_small(void* vmm, uintptr_t va) {
 	}
 
 	vmm_pde_t* pd_entry = &pd[pde]; // PD entry
-	if(!*((uint32_t*)pd_entry)) goto done; // nothing to do
+	if(!pd_entry->dword) goto done; // nothing to do
 
 	bool invalidate_tlb = (vmm == vmm_current);
-	if(!pd_entry->pgsz) {
+	if(!pd_entry->entry.pgsz) {
 		/* unmapping small page */
-		invalidate_tlb = invalidate_tlb || (pt[pte].global);
-		*((uint32_t*) &pt[pte]) = 0;
+		invalidate_tlb = invalidate_tlb || (pt[pte].entry.global);
+		pt[pte].dword = 0;
 	} else {
 		/* unmapping one small page in a huge page */
-		uintptr_t pa = ((vmm_pde_pse_t*) pd_entry)->pa << 22;
+		uintptr_t pa = pd_entry->entry_pse.pa << 22;
 		size_t flags = vmm_get_flags(vmm, va); // reuse existing func
 		invalidate_tlb = invalidate_tlb || (flags & VMM_FLAGS_GLOBAL);
-		*((uint32_t*) pd_entry) = 0;
+		pd_entry->dword = 0;
 		uintptr_t va_map = va & 0xFFC00000;
 		for(size_t i = 0; i < 1024; i++, pa += 4096, va_map += 4096) {
 			if(va_map != va) vmm_pgmap_small(vmm, pa, va_map, flags);
@@ -395,10 +400,10 @@ size_t vmm_get_pgsz(void* vmm, uintptr_t va) {
 		return (size_t)-1;
 	}
 	
-	if(!(*((uint32_t*)&pd[pde]))) {
+	if(!pd[pde].dword) {
 		if(pd_map) vmm_pgunmap(vmm_current, (uintptr_t) pd, 0);
 		return (size_t)-1; // 4M not mapped
-	} else if(pd[pde].pgsz) {
+	} else if(pd[pde].entry.pgsz) {
 		if(pd_map) vmm_pgunmap(vmm_current, (uintptr_t) pd, 0);
 		return 1; // 4M page
 	} else {
@@ -406,14 +411,14 @@ size_t vmm_get_pgsz(void* vmm, uintptr_t va) {
 		vmm_pte_t* pt = NULL; // page table
 		if(pd_map) {
 			/* map page table if needed */
-			pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT); // speed up lookup by basing it off pd
+			pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].entry.pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT); // speed up lookup by basing it off pd
 			if(pt == NULL) {
 				kerror("cannot map page table");
 				vmm_pgunmap(vmm_current, (uintptr_t) pd, 0);
 				return (size_t)-1;
 			}
 		} else pt = vmm_pt(&__rmap_start, pde);
-		bool mapped = (*((uint32_t*)&pt[pte]));
+		bool mapped = (pt[pte].dword);
 		if(pd_map) vmm_pgunmap(vmm_current, (uintptr_t) pt, 0);
 		return (mapped) ? 0 : (size_t)-1;
 	}
@@ -430,22 +435,22 @@ uintptr_t vmm_get_paddr(void* vmm, uintptr_t va) {
 	}
 	
 	uintptr_t paddr = 0;
-	if(!(*((uint32_t*)&pd[pde]))) goto done; // nothing to be done here
+	if(!pd[pde].dword) goto done; // nothing to be done here
 
-	if(pd[pde].pgsz) paddr = (((vmm_pde_pse_t*)&pd[pde])->pa << 22) | (va & 0x3FFFFF); // hugepage
+	if(pd[pde].entry.pgsz) paddr = (pd[pde].entry_pse.pa << 22) | (va & 0x3FFFFF); // hugepage
 	else {
 		/* there's a PT to access too */
 		vmm_pte_t* pt = NULL; // page table
 		if(pd_map) {
 			/* map page table if needed */
-			pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT); // speed up lookup by basing it off pd
+			pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].entry.pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT); // speed up lookup by basing it off pd
 			if(pt == NULL) {
 				kerror("cannot map page table");
 				vmm_pgunmap(vmm_current, (uintptr_t) pd, 0);
 				return 0;
 			}
 		} else pt = vmm_pt(&__rmap_start, pde);
-		if(*((uint32_t*)&pt[pte])) paddr = (pt[pte].pa << 12) | (va & 0xFFF);
+		if(pt[pte].dword) paddr = (pt[pte].entry.pa << 12) | (va & 0xFFF);
 		if(pd_map) vmm_pgunmap(vmm_current, (uintptr_t) pt, 0);
 	}
 
@@ -464,12 +469,12 @@ void vmm_set_paddr(void* vmm, uintptr_t va, uintptr_t pa) {
 		return;
 	}
 
-	if(!(*((uint32_t*)&pd[pde]))) goto done; // not mapped - nothing to be done here
+	if(!pd[pde].dword) goto done; // not mapped - nothing to be done here
 
-	if(pd[pde].pgsz) {
+	if(pd[pde].entry.pgsz) {
 		/* huge page */
-		((vmm_pde_pse_t*)&pd[pde])->pa = pa >> 22;
-		if(vmm == vmm_current || ((vmm_pde_pse_t*)&pd[pde])->global) {
+		pd[pde].entry_pse.pa = pa >> 22;
+		if(vmm == vmm_current || pd[pde].entry_pse.global) {
 			/* invalidate TLB */
 			va &= 0xFFC00000;
 			for(size_t i = 0; i < 1024; i++, va += 4096) asm volatile("invlpg (%0)" : : "r"(va) : "memory");
@@ -479,16 +484,16 @@ void vmm_set_paddr(void* vmm, uintptr_t va, uintptr_t pa) {
 		vmm_pte_t* pt = NULL; // page table
 		if(pd_map) {
 			/* map page table if needed */
-			pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW); // speed up lookup by basing it off pd
+			pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].entry.pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW); // speed up lookup by basing it off pd
 			if(pt == NULL) {
 				kerror("cannot map page table");
 				vmm_pgunmap(vmm_current, (uintptr_t) pd, 0);
 				return;
 			}
 		} else pt = vmm_pt(&__rmap_start, pde);
-		if(*((uint32_t*)&pt[pte])) {
-			pt[pte].pa = pa >> 12;
-			if(vmm == vmm_current || pt[pte].global) asm volatile("invlpg (%0)" : : "r"(va & ~0xFFF) : "memory"); // invalidate TLB
+		if(pt[pte].dword) {
+			pt[pte].entry.pa = pa >> 12;
+			if(vmm == vmm_current || pt[pte].entry.global) asm volatile("invlpg (%0)" : : "r"(va & ~0xFFF) : "memory"); // invalidate TLB
 		}
 		if(pd_map) vmm_pgunmap(vmm_current, (uintptr_t) pt, 0);
 	}
@@ -530,7 +535,7 @@ void* vmm_clone(void* src) {
 
 	/* initialize destination PD */
 	memcpy(pd_dst, pd_src, 4096);
-	*((uint32_t*)&pd_dst[VMM_PD_PTE]) = (dst_frame << 12) | (1 << 0) | (1 << 1); // set up recursive mapping
+	pd_dst[VMM_PD_PTE].dword = (dst_frame << 12) | (1 << 0) | (1 << 1); // set up recursive mapping
 
 	/* unmap source PD since we have a copy of it in pd_dst now */
 	if(pd_map) vmm_pgunmap(vmm_current, (uintptr_t) pd_src, 0);
@@ -545,9 +550,9 @@ void* vmm_clone(void* src) {
 	}
 	vmm_pte_t* pt_dst = (vmm_pte_t*) ((uintptr_t) pt_src + 4096); // destination PT, also placeholder
 	for(size_t i = 0; i < tables; i++) { // do not clone the kernel's top 1G space
-		if((*((uint32_t*)&pd_dst[i])) && !pd_dst[i].pgsz) { // ignore hugepages
+		if(pd_dst[i].dword && !pd_dst[i].entry.pgsz) { // ignore hugepages
 			/* map source PT */
-			vmm_set_paddr(vmm_current, (uintptr_t) pt_src, pd_dst[i].pt << 12);
+			vmm_set_paddr(vmm_current, (uintptr_t) pt_src, pd_dst[i].entry.pt << 12);
 			
 			/* allocate and map destination PT */
 			size_t pt_dst_frame = pmm_alloc_free(1);
@@ -558,7 +563,7 @@ void* vmm_clone(void* src) {
 				vmm_unmap(vmm_current, (uintptr_t) pt_src, 4096 * 2); // unmap PTs
 				for(size_t j = 0; j < i; j++) {
 					/* free existing PTs */
-					if((*((uint32_t*)&pd_dst[j])) && !pd_dst[j].pgsz) pmm_free(pd_dst[j].pt);
+					if(pd_dst[j].dword && !pd_dst[j].entry.pgsz) pmm_free(pd_dst[j].entry.pt);
 				}
 				vmm_pgunmap(vmm_current, (uintptr_t) pd_dst, 0); pmm_free(dst_frame); // deallocate destination PD
 				return NULL;
@@ -567,7 +572,7 @@ void* vmm_clone(void* src) {
 
 			/* replace the PT */
 			memcpy(pt_dst, pt_src, 4096);
-			pd_dst[i].pt = pt_dst_frame;
+			pd_dst[i].entry.pt = pt_dst_frame;
 		}
 	}
 	vmm_unmap(vmm_current, (uintptr_t) pt_src, 4096 * 2); // unmap PTs
@@ -591,7 +596,7 @@ void vmm_free(void* vmm) {
 	/* free PT frames */
 	size_t tables = kernel_start >> 22; // only free tables up to the kernel space
 	for(size_t i = 0; i < tables; i++) {
-		if((*((uint32_t*)&pd[i])) && !pd[i].pgsz) pmm_free(pd[i].pt);
+		if(pd[i].dword && !pd[i].entry.pgsz) pmm_free(pd[i].entry.pt);
 	}
 	
 	pmm_free((uintptr_t) vmm >> 12); // free the page directory's frame
@@ -609,34 +614,33 @@ size_t vmm_get_flags(void* vmm, uintptr_t va) {
 	}
 	
 	size_t flags = 0;
-	if(!(*((uint32_t*)&pd[pde]))) goto done; // nothing to be done here
+	if(!pd[pde].dword) goto done; // nothing to be done here
 
-	if(pd[pde].pgsz) {
+	if(pd[pde].entry.pgsz) {
 		/* hugepage */
-		vmm_pde_pse_t* pde_pse = (vmm_pde_pse_t*) &pd[pde];
-		if(pde_pse->present) flags |= VMM_FLAGS_PRESENT;
-		if(pde_pse->rw) flags |= VMM_FLAGS_RW;
-		if(pde_pse->user) flags |= VMM_FLAGS_USER;
-		if(pde_pse->global) flags |= VMM_FLAGS_GLOBAL;
-		if(!pde_pse->ncache) flags |= VMM_FLAGS_CACHE | ((pde_pse->wthru) ? VMM_FLAGS_CACHE_WTHRU : 0);
+		if(pd[pde].entry_pse.present) flags |= VMM_FLAGS_PRESENT;
+		if(pd[pde].entry_pse.rw) flags |= VMM_FLAGS_RW;
+		if(pd[pde].entry_pse.user) flags |= VMM_FLAGS_USER;
+		if(pd[pde].entry_pse.global) flags |= VMM_FLAGS_GLOBAL;
+		if(!pd[pde].entry_pse.ncache) flags |= VMM_FLAGS_CACHE | ((pd[pde].entry_pse.wthru) ? VMM_FLAGS_CACHE_WTHRU : 0);
 	} else {
 		/* small page - there's a PT to access too */
 		vmm_pte_t* pt = NULL; // page table
 		if(pd_map) {
 			/* map page table if needed */
-			pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT); // speed up lookup by basing it off pd
+			pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].entry.pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT); // speed up lookup by basing it off pd
 			if(pt == NULL) {
 				kerror("cannot map page table");
 				vmm_pgunmap(vmm_current, (uintptr_t) pd, 0);
 				return 0;
 			}
 		} else pt = vmm_pt(&__rmap_start, pde);
-		if(*((uint32_t*)&pt[pte])) {
-			if(pt[pte].present) flags |= VMM_FLAGS_PRESENT;
-			if(pt[pte].rw) flags |= VMM_FLAGS_RW;
-			if(pt[pte].user) flags |= VMM_FLAGS_USER;
-			if(pt[pte].global) flags |= VMM_FLAGS_GLOBAL;
-			if(!pt[pte].ncache) flags |= VMM_FLAGS_CACHE | ((pt[pte].wthru) ? VMM_FLAGS_CACHE_WTHRU : 0);
+		if(pt[pte].dword) {
+			if(pt[pte].entry.present) flags |= VMM_FLAGS_PRESENT;
+			if(pt[pte].entry.rw) flags |= VMM_FLAGS_RW;
+			if(pt[pte].entry.user) flags |= VMM_FLAGS_USER;
+			if(pt[pte].entry.global) flags |= VMM_FLAGS_GLOBAL;
+			if(!pt[pte].entry.ncache) flags |= VMM_FLAGS_CACHE | ((pt[pte].entry.wthru) ? VMM_FLAGS_CACHE_WTHRU : 0);
 		}
 		if(pd_map) vmm_pgunmap(vmm_current, (uintptr_t) pt, 0);
 	}
@@ -656,20 +660,19 @@ void vmm_set_flags(void* vmm, uintptr_t va, size_t flags) {
 		return;
 	}
 	
-	if(!(*((uint32_t*)&pd[pde]))) goto done; // nothing to be done here
+	if(!pd[pde].dword) goto done; // nothing to be done here
 
 	bool invalidate_tlb = (vmm == vmm_current) || (flags & VMM_FLAGS_GLOBAL);
 
-	if(pd[pde].pgsz) {
+	if(pd[pde].entry.pgsz) {
 		/* hugepage */
-		vmm_pde_pse_t* pde_pse = (vmm_pde_pse_t*) &pd[pde];
-		invalidate_tlb = invalidate_tlb || (pde_pse->global);
-		pde_pse->present = (flags & VMM_FLAGS_PRESENT) ? 1 : 0;
-		pde_pse->user = (flags & VMM_FLAGS_USER) ? 1 : 0;
-		pde_pse->rw = (flags & VMM_FLAGS_RW) ? 1 : 0;
-		pde_pse->global = (flags & VMM_FLAGS_GLOBAL) ? 1 : 0;
-		pde_pse->ncache = (flags & VMM_FLAGS_CACHE) ? 0 : 1;
-		pde_pse->wthru = (flags & VMM_FLAGS_CACHE_WTHRU) ? 1 : 0;
+		invalidate_tlb = invalidate_tlb || (pd[pde].entry_pse.global);
+		pd[pde].entry_pse.present = (flags & VMM_FLAGS_PRESENT) ? 1 : 0;
+		pd[pde].entry_pse.user = (flags & VMM_FLAGS_USER) ? 1 : 0;
+		pd[pde].entry_pse.rw = (flags & VMM_FLAGS_RW) ? 1 : 0;
+		pd[pde].entry_pse.global = (flags & VMM_FLAGS_GLOBAL) ? 1 : 0;
+		pd[pde].entry_pse.ncache = (flags & VMM_FLAGS_CACHE) ? 0 : 1;
+		pd[pde].entry_pse.wthru = (flags & VMM_FLAGS_CACHE_WTHRU) ? 1 : 0;
 		if(invalidate_tlb) {
 			va &= 0xFFC00000;
 			for(size_t i = 0; i < 1024; i++, va += 4096) asm volatile("invlpg (%0)" : : "r"(va) : "memory");
@@ -679,21 +682,21 @@ void vmm_set_flags(void* vmm, uintptr_t va, size_t flags) {
 		vmm_pte_t* pt = NULL; // page table
 		if(pd_map) {
 			/* map page table if needed */
-			pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT); // speed up lookup by basing it off pd
+			pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].entry.pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT); // speed up lookup by basing it off pd
 			if(pt == NULL) {
 				kerror("cannot map page table");
 				vmm_pgunmap(vmm_current, (uintptr_t) pd, 0);
 				return;
 			}
 		} else pt = vmm_pt(&__rmap_start, pde);
-		if(*((uint32_t*)&pt[pte])) {
-			invalidate_tlb = invalidate_tlb || (pt[pte].global);
-			pt[pte].present = (flags & VMM_FLAGS_PRESENT) ? 1 : 0;
-			pt[pte].user = (flags & VMM_FLAGS_USER) ? 1 : 0;
-			pt[pte].rw = (flags & VMM_FLAGS_RW) ? 1 : 0;
-			pt[pte].global = (flags & VMM_FLAGS_GLOBAL) ? 1 : 0;
-			pt[pte].ncache = (flags & VMM_FLAGS_CACHE) ? 0 : 1;
-			pt[pte].wthru = (flags & VMM_FLAGS_CACHE_WTHRU) ? 1 : 0;
+		if(pt[pte].dword) {
+			invalidate_tlb = invalidate_tlb || (pt[pte].entry.global);
+			pt[pte].entry.present = (flags & VMM_FLAGS_PRESENT) ? 1 : 0;
+			pt[pte].entry.user = (flags & VMM_FLAGS_USER) ? 1 : 0;
+			pt[pte].entry.rw = (flags & VMM_FLAGS_RW) ? 1 : 0;
+			pt[pte].entry.global = (flags & VMM_FLAGS_GLOBAL) ? 1 : 0;
+			pt[pte].entry.ncache = (flags & VMM_FLAGS_CACHE) ? 0 : 1;
+			pt[pte].entry.wthru = (flags & VMM_FLAGS_CACHE_WTHRU) ? 1 : 0;
 			if(invalidate_tlb) asm volatile("invlpg (%0)" : : "r"(va) : "memory");
 		}
 		if(pd_map) vmm_pgunmap(vmm_current, (uintptr_t) pt, 0);
@@ -714,22 +717,22 @@ bool vmm_get_dirty(void* vmm, uintptr_t va) {
 	}
 	
 	bool dirty = false;
-	if(!(*((uint32_t*)&pd[pde]))) goto done; // nothing to be done here
+	if(!pd[pde].dword) goto done; // nothing to be done here
 
-	if(pd[pde].pgsz) dirty = (((vmm_pde_pse_t*)&pd[pde])->dirty);
+	if(pd[pde].entry.pgsz) dirty = (pd[pde].entry_pse.dirty);
 	else {
 		/* small page - there's a PT to access too */
 		vmm_pte_t* pt = NULL; // page table
 		if(pd_map) {
 			/* map page table if needed */
-			pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT); // speed up lookup by basing it off pd
+			pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].entry.pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT); // speed up lookup by basing it off pd
 			if(pt == NULL) {
 				kerror("cannot map page table");
 				vmm_pgunmap(vmm_current, (uintptr_t) pd, 0);
 				return true;
 			}
 		} else pt = vmm_pt(&__rmap_start, pde);
-		dirty = (pt[pte].dirty);
+		dirty = (pt[pte].entry.dirty);
 		if(pd_map) vmm_pgunmap(vmm_current, (uintptr_t) pt, 0);
 	}
 
@@ -748,22 +751,22 @@ void vmm_set_dirty(void* vmm, uintptr_t va, bool dirty) {
 		return;
 	}
 	
-	if(!(*((uint32_t*)&pd[pde]))) goto done; // nothing to be done here
+	if(!pd[pde].dword) goto done; // nothing to be done here
 
-	if(pd[pde].pgsz) ((vmm_pde_pse_t*)&pd[pde])->dirty = (dirty) ? 1 : 0;
+	if(pd[pde].entry.pgsz) pd[pde].entry_pse.dirty = (dirty) ? 1 : 0;
 	else {
 		/* small page - there's a PT to access too */
 		vmm_pte_t* pt = NULL; // page table
 		if(pd_map) {
 			/* map page table if needed */
-			pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT); // speed up lookup by basing it off pd
+			pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].entry.pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT); // speed up lookup by basing it off pd
 			if(pt == NULL) {
 				kerror("cannot map page table");
 				vmm_pgunmap(vmm_current, (uintptr_t) pd, 0);
 				return;
 			}
 		} else pt = vmm_pt(&__rmap_start, pde);
-		if(*((uint32_t*)&pt[pte])) pt[pte].dirty = (dirty) ? 1 : 0;
+		if(pt[pte].dword) pt[pte].entry.dirty = (dirty) ? 1 : 0;
 		if(pd_map) vmm_pgunmap(vmm_current, (uintptr_t) pt, 0);
 	}
 
