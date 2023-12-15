@@ -327,8 +327,8 @@ mov dword [kernel_stack_top], stack.top ; save stack top address
 mov [mb_info], ebx
 add edi, 0xC0000000 ; bring kernel_end to higher half too
 mov [kernel_end], edi
-mov eax, __rmap_start
-and eax, 0xF0000000
+mov eax, __rmap_start ; assuming it's on a 4M boundary already
+; and eax, 0xFFC00000
 mov [kernel_start], eax
 mov dword [text_start], __text_start
 mov dword [text_end], __text_end
