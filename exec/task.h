@@ -103,15 +103,16 @@ void task_init();
 void* task_create_stub();
 
 /*
- * void* task_create(bool user, struct proc* proc, size_t stack_sz, uintptr_t entry)
+ * void* task_create(bool user, struct proc* proc, size_t stack_sz, uintptr_t entry, uintptr_t stack_bottom)
  *  Creates a new kernel/user task belonging to the specified process,
  *  then set the task's entry point to the specified pointer and allocate
  *  stack space for it.
- *  The new task's stack will be located at the end of the user address
- *  space (start of kernel address space).
+ *  If stack_bottom is 0, new task's stack will be located at the end of
+ *  the user address space (start of kernel address space); otherwise, 
+ *  stack_bottom specifies the new task's stack bottom address.
  *  This is a common-defined function to be called in ring 0.
  */
-void* task_create(bool user, struct proc* proc, size_t stack_sz, uintptr_t entry);
+void* task_create(bool user, struct proc* proc, size_t stack_sz, uintptr_t entry, uintptr_t stack_bottom);
 
 /*
  * void task_delete_stub(void* task)

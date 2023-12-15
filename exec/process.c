@@ -264,10 +264,11 @@ uint64_t proc_fd_write(struct proc* proc, size_t fd, uint64_t size, const uint8_
 }
 
 struct proc* proc_fork() {
-    struct proc* src = proc_get(task_common(task_current)->pid); // source (current) process
+    struct proc* src = proc_get(task_common((void*) task_current)->pid); // source (current) process
 
     struct proc* dst = proc_create(src, src->vmm);
     if(dst == NULL) return NULL; // cannot create process
+    dst->parent_pid = src->pid; // set parent PID
 
     /* TODO: deal with ELF segments */
 
