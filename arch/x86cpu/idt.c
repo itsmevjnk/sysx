@@ -5,6 +5,7 @@
 #include <exec/syms.h>
 #include <mm/vmm.h>
 #include <hal/fbuf.h>
+#include <exec/task.h>
 
 //#define IDT_DEBUG // uncomment for log hell
 
@@ -87,11 +88,15 @@ struct stkframe {
 void exc_stub(uint8_t vector, idt_context_t* context) {
 	(void) vector;
 
-	uint32_t t; // temporary register
+	uint32_t cr0, cr2, cr3, cr4;
+	asm volatile("mov %%cr0, %0" : "=r"(cr0));
+	asm volatile("mov %%cr2, %0" : "=r"(cr2));
+	asm volatile("mov %%cr3, %0" : "=r"(cr3));
+	asm volatile("mov %%cr4, %0" : "=r"(cr4));
+
 	switch(vector) {
 	case 0x0E: // page fault
-		asm volatile("mov %%cr2, %0" : "=r"(t));
-		if(vmm_handle_fault(t, context->exc_code & 0b111)) return;
+		if(vmm_handle_fault(cr2, context->exc_code & 0b111)) return;
 		break;
 	default:
 		break;
@@ -100,10 +105,12 @@ void exc_stub(uint8_t vector, idt_context_t* context) {
 	/* unhandled exception */
 	asm("cli"); // no more interrupts!
 	kerror("unhandled exception 0x%x (code 0x%x) @ 0x%x", context->vector, context->exc_code, context->eip);
+	kerror("task_current=0x%x pid=%u", task_current, (task_current == NULL) ? 0 : task_common((void*) task_current)->pid);
 	kerror("eax=0x%08x ebx=0x%08x ecx=0x%08x edx=0x%08x", context->eax, context->ebx, context->ecx, context->edx);
 	kerror("esi=0x%08x edi=0x%08x esp=0x%08x ebp=0x%08x", context->esi, context->edi, context->esp, context->ebp);
 	kerror("cs=0x%04x ds=0x%04x es=0x%04x fs=0x%04x gs=0x%04x", context->cs, context->ds, context->es, context->fs, context->gs);
 	kerror("user ss=0x%04x user esp=0x%08x eflags=0x%08x", context->ss_usr, context->esp_usr, context->eflags);
+	kerror("cr0=0x%08x cr2=0x%08x cr3=0x%08x cr4=0x%08x", cr0, cr2, cr3, cr4);
 // #ifdef DEBUG
 // 	kdebug("stack trace:");
 // 	struct stkframe* stk = (struct stkframe*) context->ebp;
