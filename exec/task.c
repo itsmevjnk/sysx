@@ -28,7 +28,7 @@ void task_insert(void* task, void* target) {
     task_yield_enable = true;
 }
 
-void* task_create(bool user, struct proc* proc, size_t stack_sz, uintptr_t entry) {
+void* task_create(bool user, struct proc* proc, size_t stack_sz, uintptr_t entry, uintptr_t stack_bottom) {
     /* allocate memory for new task */
     void* task = task_create_stub();
     if(task == NULL) {
@@ -49,7 +49,7 @@ void* task_create(bool user, struct proc* proc, size_t stack_sz, uintptr_t entry
     size_t stack_frames = 0; // number of allocated stack frames
     size_t framesz = pmm_framesz();
     if(stack_sz % framesz) stack_sz += framesz - stack_sz % framesz; // frame-align stack size
-    common->stack_bottom = vmm_first_free(proc->vmm, 0, kernel_start, stack_sz, 0, true) + stack_sz;
+    common->stack_bottom = (stack_bottom) ? stack_bottom : (vmm_first_free(proc->vmm, 0, kernel_start, stack_sz, 0, true) + stack_sz);
     if(common->stack_bottom == 0) {
         kerror("cannot allocate virtual address space for task");
         task_delete_stub(task);
@@ -180,28 +180,36 @@ void task_yield(void* context) {
 void* task_fork_stub(struct proc* proc) {
     /* create blank task */
     task_common_t* common_current = task_common((void*) task_current);
+    bool same_proc = (proc == NULL || proc == proc_get(common_current->pid)); // set if we're cloning into the same process
     if(proc == NULL) proc = proc_get(common_current->pid); // current process
-    void* task = task_create((common_current->type == TASK_TYPE_USER || common_current->type == TASK_TYPE_USER_SYS), proc, common_current->stack_size, 0);
+    bool user = (common_current->type == TASK_TYPE_USER || common_current->type == TASK_TYPE_USER_SYS);
+    void* task = task_create(user, proc, common_current->stack_size - ((user) ? TASK_KERNEL_STACK_SIZE : 0), 0, (same_proc) ? 0 : common_current->stack_bottom);
     if(task == NULL) return NULL;
 
     task_common_t* common = task_common(task);
 
     /* set up common parameters */
     common->type = (common_current->type == TASK_TYPE_KERNEL) ? TASK_TYPE_KERNEL : TASK_TYPE_USER_SYS;
-    common->pid = common_current->pid;
+    common->pid = proc->pid;
     // stack has been allocated by task_create()
     common->ready = 0; // do not switch into this task as it's still being set up
 
     /* copy stack */
     uintptr_t stack_top = common->stack_bottom - common->stack_size;
     if(proc->vmm != vmm_current) {
-        stack_top = vmm_alloc_map(vmm_current, vmm_get_paddr(proc->vmm, stack_top), common->stack_size, 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW);
+        uintptr_t stack_top_src = stack_top;
+        stack_top = vmm_alloc_map(vmm_current, 0, common->stack_size, 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW);
         if(!stack_top) {
             kerror("cannot map new task's stack for copying");
             task_delete(task);
             return NULL;
         }
+        size_t framesz = pmm_framesz();
+        for(size_t off = 0; off < common->stack_size; off += framesz, stack_top_src += framesz) {
+            vmm_set_paddr(vmm_current, stack_top + off, vmm_get_paddr(proc->vmm, stack_top_src));
+        }
     }
+    // kdebug("copying %u bytes (current = %u) of stack from 0x%x to 0x%x", common->stack_size, common_current->stack_size, common_current->stack_bottom - common_current->stack_size, stack_top);
     memcpy((void*) stack_top, (void*) (common_current->stack_bottom - common_current->stack_size), common->stack_size);
     if(proc->vmm != vmm_current) vmm_unmap(vmm_current, stack_top, common->stack_size); // unmap stack that we just had to map to copy data over
 

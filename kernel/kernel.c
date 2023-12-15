@@ -210,7 +210,7 @@ void kmain() {
         proc->elf_segments = load_result; proc->num_elf_segments = load_result_len;
 
         kinfo("creating new task");
-        void* task = task_create(true, proc, TASK_INITIAL_STACK_SIZE, entry);
+        void* task = task_create(true, proc, TASK_INITIAL_STACK_SIZE, entry, 0);
         if(task == NULL) {
             kprintf("Cannot create task");
             proc_delete(proc);
