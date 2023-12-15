@@ -259,7 +259,7 @@ void fbuf_commit() {
     if(fbuf_impl->flip != NULL) fbuf_impl->flip(fbuf_impl); // use accelerated flip function
     else {        
         size_t fb_size = fbuf_impl->pitch * fbuf_impl->height; // framebuffer size
-        size_t pgsz; // VMM page size - we'll set it according to the page in question later
+        size_t pgsz = 0; // VMM page size - we'll set it according to the page in question later
         uintptr_t backbuf_ptr = (uintptr_t) fbuf_impl->backbuffer; // pointer into backbuffer
         if(fbuf_impl->flip_all) {
             memcpy(fbuf_impl->framebuffer, fbuf_impl->backbuffer, fb_size);

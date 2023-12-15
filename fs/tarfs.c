@@ -96,6 +96,8 @@ const vfs_hook_t tar_hooks = {
 #endif
 
 vfs_node_t* tar_init(void* buffer, size_t size, vfs_node_t* root) {
+    tar_info_t* root_info = NULL;
+
     if(root == NULL) { // caller wants us to allocate our own root node
         root = kmalloc(sizeof(vfs_node_t));
         if(root == NULL) {
@@ -106,7 +108,7 @@ vfs_node_t* tar_init(void* buffer, size_t size, vfs_node_t* root) {
         root->uid = 0; root->gid = 0;
     }
 
-    tar_info_t* root_info = kmalloc(sizeof(tar_info_t));
+    root_info = kmalloc(sizeof(tar_info_t));
     if(root_info == NULL) {
         kerror("cannot allocate space for TAR information structure");
         goto fail;
