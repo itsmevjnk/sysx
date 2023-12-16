@@ -122,6 +122,13 @@ void pci_cfg_write_byte(uint8_t bus, uint8_t dev, uint8_t func, uint8_t offset, 
  */
 #define pci_read_progif(bus, dev, func)                         pci_cfg_read_byte((bus), (dev), (func), PCI_CFG_PROG_IF)
 
+/*
+ * #define pci_write_progif(bus, dev, func, val)
+ *  Writes the Prog IF field of the specified device's PCI configuration
+ *  space.
+ */
+#define pci_write_progif(bus, dev, func, val)                   pci_cfg_write_byte((bus), (dev), (func), PCI_CFG_PROG_IF, (val))
+
 extern devtree_t pci_devtree_root;
 extern devtree_t pci_devtree_geo_root; // device tree root for PCI (geographically named)
 extern devtree_t pci_devtree_id_root; // device tree root for PCI (named by VID-PID)
@@ -133,7 +140,6 @@ typedef struct {
     uint16_t pid;
     uint8_t class;
     uint8_t subclass;
-    uint8_t prog_if;
     uint8_t bus;
     uint8_t dev;
     uint8_t func;

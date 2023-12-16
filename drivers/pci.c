@@ -94,9 +94,8 @@ static bool pci_scan_func(uint8_t bus, uint8_t dev, uint8_t func) {
 
     uint16_t cs = pci_cfg_read_word(bus, dev, func, PCI_CFG_SUBCLASS); // read subclass and class at the same time
     uint8_t* class_sub = (uint8_t*) &cs; // class_sub[0] = subclass, class_sub[1] = class
-    uint8_t prog_if = pci_read_progif(bus, dev, func);
 
-    kinfo("device %02x:%02x.%x: ID %04x:%04x, class %02x:%02x, prog IF %02x", bus, dev, func, vid_pid[0], vid_pid[1], class_sub[1], class_sub[0], prog_if);
+    kinfo("device %02x:%02x.%x: ID %04x:%04x, class %02x:%02x", bus, dev, func, vid_pid[0], vid_pid[1], class_sub[1], class_sub[0]);
 
     pci_devtree_t* node_geo = kcalloc(1, sizeof(pci_devtree_t));
     if(node_geo == NULL) kwarn("cannot allocate memory for PCI device node");
@@ -105,7 +104,7 @@ static bool pci_scan_func(uint8_t bus, uint8_t dev, uint8_t func) {
         ksprintf(node_geo->header.name, "%02x:%02x.%x", bus, dev, func);
         node_geo->header.type = DEVTREE_NODE_DEVICE;
         node_geo->vid = vid_pid[0]; node_geo->pid = vid_pid[1];
-        node_geo->class = class_sub[1]; node_geo->subclass = class_sub[0]; node_geo->prog_if = prog_if;
+        node_geo->class = class_sub[1]; node_geo->subclass = class_sub[0];
         node_geo->bus = bus; node_geo->dev = dev; node_geo->func = func;
         devtree_add_child(&pci_devtree_geo_root, (devtree_t*) node_geo);
         kdebug("created geo devtree node at 0x%x for device %s", node_geo, node_geo->header.name);
@@ -117,7 +116,7 @@ static bool pci_scan_func(uint8_t bus, uint8_t dev, uint8_t func) {
         ksprintf(node_id->header.name, "%04x:%04x", vid_pid[0], vid_pid[1]);
         node_id->header.type = DEVTREE_NODE_DEVICE;
         node_id->vid = vid_pid[0]; node_id->pid = vid_pid[1];
-        node_id->class = class_sub[1]; node_id->subclass = class_sub[0]; node_id->prog_if = prog_if;
+        node_id->class = class_sub[1]; node_id->subclass = class_sub[0];
         node_id->bus = bus; node_id->dev = dev; node_id->func = func;
         devtree_add_child(&pci_devtree_id_root, (devtree_t*) node_id);
         kdebug("created ID devtree node at 0x%x for device %s", node_id, node_id->header.name);
