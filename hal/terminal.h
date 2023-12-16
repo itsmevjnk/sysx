@@ -38,7 +38,7 @@ extern term_hook_t* term_impl; // terminal implementation
  *  terminal implementation must be present.
  *  If the TERM_SER macro is defined, the TERM_SER_PORT, TERM_SER_DBIT,
  *  TERM_SER_SBIT, TERM_SER_PARITY and TERM_SER_BAUD macros can also
- *  be defined to change from the default of (115200,N,8,1).
+ *  be defined to change from the default of (9600,N,8,1).
  */
 void term_init();
 

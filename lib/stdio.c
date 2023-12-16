@@ -62,7 +62,7 @@ static ptstream_t pts_log = {
 #endif
 
 #ifndef KSTDERR_SER_BAUD
-#define KSTDERR_SER_BAUD            115200UL
+#define KSTDERR_SER_BAUD            9600UL
 #endif
 
 static uint8_t kstderr_read(struct ptstream* stream) {

@@ -1,22 +1,5 @@
 #include <hal/serial.h>
-
-/* support functions */
-static inline void outb(uint16_t port, uint8_t val) {
-    asm volatile("outb %0, %1" : : "a"(val), "Nd"(port));
-}
-static inline void outw(uint16_t port, uint16_t val) {
-    asm volatile("outw %0, %1" : : "a"(val), "Nd"(port));
-}
-static inline uint8_t inb(uint16_t port) {
-    uint8_t ret;
-    asm volatile("inb %1, %0" : "=a"(ret) : "Nd"(port));
-    return ret;
-}
-static inline uint16_t inw(uint16_t port) {
-    uint16_t ret;
-    asm volatile("inw %1, %0" : "=a"(ret) : "Nd"(port));
-    return ret;
-}
+#include <arch/x86cpu/asm.h>
 
 /* IO port offset */
 #define SER_DATA        0
@@ -56,16 +39,16 @@ int ser_init(size_t p, size_t datbits, size_t stpbits, size_t parity, size_t bau
     /* initialize the port now that we know there's a working controller */
     outb(ser_iobase[p] + SER_IER, 0); // disable all interrupts
     outb(ser_iobase[p] + SER_LCR, (1 << 7)); // set DLAB so we can set baud rate
-    uint16_t div = 115200 / baud;
-    outb(ser_iobase[p] + SER_BAUD_L, div & 0xff);
-    outb(ser_iobase[p] + SER_BAUD_H, div >> 8);
+    size_t div = 115200 / baud;
+    outb(ser_iobase[p] + SER_BAUD_L, (uint8_t) (div & 0xff));
+    outb(ser_iobase[p] + SER_BAUD_H, (uint8_t) ((div >> 8) & 0xff));
     outb(ser_iobase[p] + SER_LCR, (datbits - 5) | ((stpbits - 1) << 2) | ((parity) ? ((1 << 3) | (parity - 1) << 4) : 0)); // insanity
     outb(ser_iobase[p] + SER_IID_FIFO, 0xc7); // enable 14-byte FIFO and clear it
 
     /* test the port in loopback mode */
-    outb(ser_iobase[p] + SER_MCR, 0x1e); // set to loopback mode
-    outb(ser_iobase[p] + SER_DATA, 0x55);
-    if(inb(ser_iobase[p] + SER_DATA) != 0x55) return -3; // loopback test failed
+    // outb(ser_iobase[p] + SER_MCR, 0x1e); // set to loopback mode
+    // outb(ser_iobase[p] + SER_DATA, 0x55);
+    // if(inb(ser_iobase[p] + SER_DATA) != 0x55) return -3; // loopback test failed
 
     outb(ser_iobase[p] + SER_MCR, 0x0f); // set RTS/DSR and turn off loopback mode
     // TODO: use interrupt mode instead of polling

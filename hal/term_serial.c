@@ -25,7 +25,7 @@
 #endif
 
 #ifndef TERM_SER_BAUD
-#define TERM_SER_BAUD               115200UL
+#define TERM_SER_BAUD               9600UL
 #endif
 
 void serterm_putc(term_hook_t* impl, char c) {
