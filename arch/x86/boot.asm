@@ -37,6 +37,9 @@ global _start
 extern __kernel_start
 extern __kernel_end
 
+; extern __ptext_start
+; extern __ptext_end
+
 extern __text_start
 extern __text_end
 
@@ -277,7 +280,21 @@ shl ebp, 2
 and ebp, 0xfff ; remove the page directory entry junk
 add ebp, eax ; ptr to page table entry
 mov eax, esi
-or eax, (1 << 0) | (1 << 1) | (1 << 8) ; present, writable, supervisor, global
+or eax, (1 << 0) | (1 << 8) ; present, supervisor, global
+; cmp esi, PHYS(__ptext_start) ; __ptext_start thru __ptext_end is to be mapped as read-only
+; jb .check_text_rodata
+; cmp esi, PHYS(__ptext_end)
+; ja .check_text_rodata
+; jmp .set_pte
+.check_text_rodata:
+cmp esi, PHYS(__text_start) ; __text_start thru __rodata_end is to be mapped as read-only
+jb .set_pte_writable
+cmp esi, PHYS(__rodata_end) ; __text_start thru __rodata_end is to be mapped as read-only
+ja .set_pte_writable
+jmp .set_pte ; skip setting writable bit
+.set_pte_writable:
+or eax, (1 << 1) ; writable
+.set_pte:
 mov [ebp], eax
 add esi, 0x1000 ; next page
 cmp esi, [PHYS(kernelpt_start)]
