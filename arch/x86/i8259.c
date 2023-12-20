@@ -78,6 +78,10 @@ void pic_handle(uint8_t irq, void (*handler)(uint8_t irq, void* context)) {
     pic_handlers[irq] = handler;
 }
 
+bool pic_is_handled(uint8_t irq) {
+    return (pic_handlers[irq] != NULL);
+}
+
 void pic_init() {
     asm volatile("cli"); // disable interrupts
 

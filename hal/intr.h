@@ -29,4 +29,10 @@ bool intr_test();
  */
 void intr_handle(uint8_t vector, void (*handler)(uint8_t vector, void* context));
 
+/*
+ * bool intr_is_handled(uint8_t vector)
+ *  Checks if there's an interrupt handler assigned to the specified vector.
+ */
+bool intr_is_handled(uint8_t vector);
+
 #endif

@@ -68,6 +68,10 @@ void intr_handle(uint8_t vector, void (*handler)(uint8_t vector, void* context))
 	idt_handlers[vector] = handler;
 }
 
+bool intr_is_handled(uint8_t vector) {
+	return (idt_handlers[vector] != NULL);
+}
+
 /* IDT handler stub to be called by the low level handler portion */
 void idt_stub(void* context) {
 	idt_context_t* ctxt = context;

@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <arch/x86cpu/asm.h>
 
 /* Intel 8259 PIC base interrupt vector */
@@ -89,5 +90,12 @@ uint16_t pic_read_isr();
  *  acknowledge the IRQ, as this is handled by the handler stub.
  */
 void pic_handle(uint8_t irq, void (*handler)(uint8_t irq, void* context));
+
+/*
+ * bool pic_is_handled(uint8_t irq)
+ *  Checks whether the specified IRQ handler is handled by a handler
+ *  function.
+ */
+bool pic_is_handled(uint8_t irq);
 
 #endif
