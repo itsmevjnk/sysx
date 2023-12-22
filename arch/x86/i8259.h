@@ -21,6 +21,8 @@
 #define PIC2_CMD            PIC2_BASE
 #define PIC2_DATA           (PIC2_BASE + 1)
 
+extern void (*pic_handlers[16])(uint8_t irq, void* context); // list of PIC handlers
+
 /*
  * inline static void pic_eoi_inline(uint8_t irq)
  *  Acknowledges an IRQ.
@@ -69,6 +71,12 @@ void pic_mask(uint8_t irq);
  *  Unmasks the specified IRQ line.
  */
 void pic_unmask(uint8_t irq);
+
+/*
+ * uint16_t pic_get_mask()
+ *  Retrieves the PIC's IRQ line masking bitmask.
+ */
+uint16_t pic_get_mask();
 
 /*
  * uint16_t pic_read_irr()

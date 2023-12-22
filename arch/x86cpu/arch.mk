@@ -9,4 +9,5 @@ $(ARCHDIR_ARCH)/task_lowlevel.o \
 $(ARCHDIR_ARCH)/task.o \
 $(ARCHDIR_ARCH)/int32.o \
 $(ARCHDIR_ARCH)/int32_init.o \
-$(ARCHDIR_ARCH)/acpi_lai.o
+$(ARCHDIR_ARCH)/acpi_lai.o \
+$(ARCHDIR_ARCH)/apic.o

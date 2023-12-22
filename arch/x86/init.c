@@ -7,6 +7,7 @@
 #include <arch/x86/multiboot.h>
 #include <string.h>
 #include <arch/x86cpu/int32.h>
+#include <arch/x86cpu/apic.h>
 
 #include <fs/vfs.h>
 #include <fs/tarfs.h>
@@ -16,7 +17,7 @@
 
 extern uint16_t x86ext_on;
 
-int ktgtinit() {
+int ktgt_preinit() {
     kdebug("x86ext_on = 0x%x", x86ext_on);
 
     kdebug("Multiboot information structure address: 0x%08x", mb_info);
@@ -58,5 +59,14 @@ int ktgtinit() {
     } else kwarn("kernel has been loaded without any modules");
 
     kinfo("initialization for target x86 completed successfully");
+    return 0;
+}
+
+int ktgt_init() {
+#ifdef FEAT_ACPI
+    kinfo("initializing APIC");
+    apic_init();
+#endif
+
     return 0;
 }

@@ -29,7 +29,8 @@
 #include <drivers/pci.h>
 #include <drivers/acpi.h>
 
-extern int ktgtinit(); // must be defined somewhere in the target specific code
+int ktgt_preinit(); // must be defined somewhere in the target specific code
+int ktgt_init();
 
 /* VFS directory listing */
 void vfs_dirlist(const vfs_node_t* node, size_t tab) {
@@ -66,9 +67,9 @@ void kinit() {
     vmm_init();
 #endif
 
-    kinfo("invoking target-specific system initialization routine");
-    if(ktgtinit()) {
-        kinfo("ktgtinit() failed, committing suicide");
+    kinfo("invoking target-specific system pre-initialization routine");
+    if(ktgt_preinit()) {
+        kerror("ktgt_preinit() failed");
         return; // this should send us into an infinite loop prepared by the bootstrap code
     }
 
@@ -122,6 +123,12 @@ void kinit() {
     kinfo("initializing ACPI");
     acpi_init();
 #endif
+
+    kinfo("invoking target-specific system initialization routine");
+    if(ktgt_init()) {
+        kerror("ktgt_init() failed");
+        return; // this should send us into an infinite loop prepared by the bootstrap code
+    }
 
     /* load kernel modules */
     kinfo("loading kernel modules from " KMOD_PATH);

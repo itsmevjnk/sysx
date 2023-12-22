@@ -6,6 +6,9 @@ extern proc_pidtab
 extern tss_entry
 extern vmm_current
 
+extern apic_enabled:weak
+extern lapic_base:weak
+
 ; void task_switch(void* task, void* context)
 ;  Performs a context switch to the specified task.
 ;  This is an architecture-specific function and is called in ring 0.
@@ -176,6 +179,18 @@ mov fs, ax
 mov gs, ax
 
 .eoi: ; send EOI to master PIC (IRQ0) on the PIC handler's behalf (since we'll be skipping over it)
+mov eax, apic_enabled
+test eax, eax ; test if apic_enabled is NULL (i.e. no APIC support)
+jz .pic_eoi ; no APIC support
+mov eax, [apic_enabled]
+test eax, eax ; test if apic_enabled is true (i.e. APIC is up)
+jz .pic_eoi ; APIC is supported but is not enabled
+.apic_eoi:
+mov eax, [lapic_base]
+add eax, 0x0B0 ; LAPIC EOI register
+mov dword [eax], 0
+jmp .load_regs_s2
+.pic_eoi:
 mov al, 0x20
 out 0x20, al
 
