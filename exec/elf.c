@@ -708,7 +708,7 @@ enum elf_load_result elf_load_syms(vfs_node_t* file, void* shdr, bool is_elf64, 
                     if(entry_name != NULL && entry_ptr != NULL && *entry_ptr == 0 && !strcmp(&strtab_data[st_name], entry_name)) {
                         kdebug("found entry point %s at 0x%x", entry_name, st_value);
                         *entry_ptr = st_value;
-                    } else if(ELF_ST_BIND(st_info) == STB_GLOBAL && syms != NULL) {
+                    } else if((ELF_ST_BIND(st_info) == STB_GLOBAL || ELF_ST_BIND(st_info) == STB_WEAK) && syms != NULL) {
 #ifdef ELF_DEBUG_ADDSYM
                         kdebug("adding symbol %s (0x%x)", &strtab_data[st_name], st_value);
 #endif
