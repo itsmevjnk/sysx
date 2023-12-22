@@ -4,15 +4,9 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <drivers/acpi.h>
 
-extern bool apic_enabled __attribute__((weak)); // weak symbol - if this is NULL then it's safe to assume that APIC is not enabled
-extern uint8_t ioapic_irq_gsi[16] __attribute__((weak)); // legacy IRQ to GSI mapping
-
-#ifdef FEAT_ACPI // LAPIC is only available if ACPI capabilities are enabled
-
-#define FEAT_APIC
-
+extern bool apic_enabled; // weak symbol - if this is NULL then it's safe to assume that APIC is not enabled
+extern uint8_t ioapic_irq_gsi[16]; // legacy IRQ to GSI mapping
 extern uintptr_t lapic_base;
 
 /*
@@ -62,7 +56,5 @@ void apic_eoi();
  *  Sets up the local and I/O APIC.
  */
 bool apic_init();
-
-#endif
 
 #endif

@@ -18,25 +18,21 @@
 #define ICW4_SFNM           0x10 // special fully nested (not)
 
 void pic_eoi(uint8_t irq) {
-#ifdef FEAT_APIC
     if(apic_enabled) {
         apic_eoi();
         return;
     }
-#endif
     if(irq >= 8) outb(PIC2_CMD, 0x20);
     outb(PIC1_CMD, 0x20);
 }
 
 void pic_mask_bm(uint16_t bitmask) {
-#ifdef FEAT_APIC
     if(apic_enabled) {
         for(size_t i = 0; i < 16; i++) {
             if((bitmask & (1 << i)) && !ioapic_get_mask(ioapic_irq_gsi[i])) ioapic_mask(ioapic_irq_gsi[i]);
         }
         return;
     }
-#endif
     bitmask &= ~(1 << 2); // disallow masking of IRQ2, as it will kill the slave PIC
     if((uint8_t) bitmask != 0)
         outb(PIC1_DATA, inb(PIC1_DATA) | ((uint8_t) bitmask));
@@ -45,14 +41,12 @@ void pic_mask_bm(uint16_t bitmask) {
 }
 
 void pic_unmask_bm(uint16_t bitmask) {
-#ifdef FEAT_APIC
     if(apic_enabled) {
         for(size_t i = 0; i < 16; i++) {
             if((bitmask & (1 << i)) && ioapic_get_mask(ioapic_irq_gsi[i])) ioapic_unmask(ioapic_irq_gsi[i]);
         }
         return;
     }
-#endif
     bitmask = ~bitmask;
     if((uint8_t) bitmask != 0xFF)
         outb(PIC1_DATA, inb(PIC1_DATA) & ((uint8_t) bitmask));
@@ -61,7 +55,6 @@ void pic_unmask_bm(uint16_t bitmask) {
 }
 
 uint16_t pic_get_mask() {
-#ifdef FEAT_APIC
     if(apic_enabled) {
         uint16_t ret = 0;
         for(size_t i = 0; i < 16; i++) {
@@ -69,27 +62,22 @@ uint16_t pic_get_mask() {
         }
         return ret;
     }
-#endif
     return ((inb(PIC2_DATA) << 8) | inb(PIC1_DATA));
 }
 
 void pic_mask(uint8_t irq) {
-#ifdef FEAT_APIC
     if(apic_enabled) {
         ioapic_mask(ioapic_irq_gsi[irq]);
         return;
     }
-#endif
     pic_mask_bm(1 << irq);
 }
 
 void pic_unmask(uint8_t irq) {
-#ifdef FEAT_APIC
     if(apic_enabled) {
         ioapic_unmask(ioapic_irq_gsi[irq]);
         return;
     }
-#endif
     pic_unmask_bm(1 << irq);
 }
 
@@ -124,9 +112,7 @@ void pic_handler_stub(uint8_t vector, void* context) {
 
 void pic_handle(uint8_t irq, void (*handler)(uint8_t irq, void* context)) {
     pic_handlers[irq] = handler;
-#ifdef FEAT_APIC
     if(apic_enabled) ioapic_handle(ioapic_irq_gsi[irq], ioapic_legacy_handler);
-#endif
 }
 
 bool pic_is_handled(uint8_t irq) {

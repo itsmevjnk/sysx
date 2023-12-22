@@ -8,6 +8,7 @@
 #include <string.h>
 #include <arch/x86cpu/int32.h>
 #include <arch/x86cpu/apic.h>
+#include <arch/x86/mptab.h>
 
 #include <fs/vfs.h>
 #include <fs/tarfs.h>
@@ -63,10 +64,11 @@ int ktgt_preinit() {
 }
 
 int ktgt_init() {
-#ifdef FEAT_ACPI
+    kinfo("initializing MP specification support");
+    mp_init();
+
     kinfo("initializing APIC");
     apic_init();
-#endif
 
     return 0;
 }
