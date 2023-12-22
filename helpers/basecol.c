@@ -34,7 +34,7 @@ size_t basecol_decode(const char* str, char** endptr) {
             ret += *str - 'a';
         } else {
             /* invalid character */
-            if(endptr != NULL) *endptr = str;
+            if(endptr != NULL) *endptr = (char*) str;
             break;
         }
     }
