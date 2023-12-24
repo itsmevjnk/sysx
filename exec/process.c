@@ -66,7 +66,7 @@ struct proc* proc_get(size_t pid) {
     else return NULL;
 }
 
-struct proc* proc_create(struct proc* parent, void* vmm) {
+struct proc* proc_create(struct proc* parent, void* vmm, bool cow) {
     struct proc* proc = kcalloc(1, sizeof(struct proc));
     if(proc == NULL) {
         kerror("cannot allocate memory for new process");
@@ -74,7 +74,7 @@ struct proc* proc_create(struct proc* parent, void* vmm) {
     }
     
     if(vmm != NULL) {
-        proc->vmm = vmm_clone(vmm);
+        proc->vmm = vmm_clone(vmm, cow);
         if(proc->vmm == NULL) {
             kerror("cannot clone VMM for new process");
             kfree(proc);
@@ -167,7 +167,7 @@ void proc_delete_task(struct proc* proc, void* task) {
 }
 
 void proc_init() {
-    proc_kernel = proc_create(NULL, NULL); // we'll set the VMM later
+    proc_kernel = proc_create(NULL, NULL, false); // we'll set the VMM later
     kassert(proc_kernel != NULL);
     proc_kernel->vmm = vmm_kernel;
     task_init();
@@ -266,7 +266,7 @@ uint64_t proc_fd_write(struct proc* proc, size_t fd, uint64_t size, const uint8_
 struct proc* proc_fork() {
     struct proc* src = proc_get(task_common((void*) task_current)->pid); // source (current) process
 
-    struct proc* dst = proc_create(src, src->vmm);
+    struct proc* dst = proc_create(src, src->vmm, true);
     if(dst == NULL) return NULL; // cannot create process
     dst->parent_pid = src->pid; // set parent PID
 

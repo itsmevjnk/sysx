@@ -53,12 +53,15 @@ extern struct proc* proc_kernel; // kernel process
 struct proc* proc_get(size_t pid);
 
 /*
- * struct proc* proc_create(struct proc* parent, void* vmm)
+ * struct proc* proc_create(struct proc* parent, void* vmm, bool cow)
  *  Creates a new process, optionally given the caller's process, optionally
  *  cloning the specified VMM config.
+ *  The cow parameter specifies whether userland pages in the specified source
+ *  VMM configuration shall be cloned as copy-on-write instead of having both
+ *  the source and new VMM configurations pointing to the same frames.
  *  Returns the process on success or NULL on failure.
  */
-struct proc* proc_create(struct proc* parent, void* vmm);
+struct proc* proc_create(struct proc* parent, void* vmm, bool cow);
 
 /*
  * struct proc* proc_fork()

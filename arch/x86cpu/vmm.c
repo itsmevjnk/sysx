@@ -511,7 +511,7 @@ void vmm_init() {
 	// do nothing - VMM initialization is done during bootstrapping
 }
 
-void* vmm_clone(void* src) {
+void* vmm_clone(void* src, bool cow) {
 	/* get source's PD */
 	bool pd_map = (src != vmm_current); // set if we need to map the page directory and page table to our VMM config
 	vmm_pde_t* pd_src = ((pd_map) ? (vmm_pde_t*) vmm_alloc_map(vmm_current, (uintptr_t) src, 4096, 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT) : vmm_pd(&__rmap_start)); // page directory
@@ -534,48 +534,66 @@ void* vmm_clone(void* src) {
 	}
 
 	/* initialize destination PD */
-	memcpy(pd_dst, pd_src, 4096);
+	size_t tables = kernel_start >> 22; // number of non-kernel tables
+	if(cow) {
+		memset(pd_dst, 0, tables << 2); // wipe out non-kernel table space (so we can CoW map later)
+		memcpy(&pd_dst[tables], &pd_src[tables], (1024 - tables) << 2); // only copy kernel tables over
+	} else memcpy(pd_dst, pd_src, 4096); // copy the entire page directory
 	pd_dst[VMM_PD_PTE].dword = (dst_frame << 12) | (1 << 0) | (1 << 1); // set up recursive mapping
 
 	/* unmap source PD since we have a copy of it in pd_dst now */
 	if(pd_map) vmm_pgunmap(vmm_current, (uintptr_t) pd_src, 0);
 
 	/* clone non-kernel page tables */
-	size_t tables = kernel_start >> 22;
-	vmm_pte_t* pt_src = (vmm_pte_t*) vmm_alloc_map(vmm_current, 0, 4096 * 2, (pd_map) ? (uintptr_t)pd_src : 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW); // source PT (placeholder for now)
+	vmm_pte_t* pt_src = (vmm_pte_t*) vmm_alloc_map(vmm_current, 0, (cow) ? 4096 : 8192, (pd_map) ? (uintptr_t)pd_src : 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW); // source PT (placeholder for now)
 	if(pt_src == NULL) {
 		kerror("cannot map source and destination page tables");
 		vmm_pgunmap(vmm_current, (uintptr_t) pd_dst, 0); pmm_free(dst_frame); // deallocate destination PD
 		return NULL;
 	}
-	vmm_pte_t* pt_dst = (vmm_pte_t*) ((uintptr_t) pt_src + 4096); // destination PT, also placeholder
+	vmm_pte_t* pt_dst = (vmm_pte_t*) ((uintptr_t) pt_src + 4096); // destination PT, also placeholder (this will not be used in CoW mode)
 	for(size_t i = 0; i < tables; i++) { // do not clone the kernel's top 1G space
-		if(pd_dst[i].dword && !pd_dst[i].entry.pgsz) { // ignore hugepages
-			/* map source PT */
-			vmm_set_paddr(vmm_current, (uintptr_t) pt_src, pd_dst[i].entry.pt << 12);
-			
-			/* allocate and map destination PT */
-			size_t pt_dst_frame = pmm_alloc_free(1);
-			if(pt_dst_frame == (size_t)-1) {
-				kerror("cannot allocate destination page table %u", i);
-				
-				/* do cleanup */
-				vmm_unmap(vmm_current, (uintptr_t) pt_src, 4096 * 2); // unmap PTs
-				for(size_t j = 0; j < i; j++) {
-					/* free existing PTs */
-					if(pd_dst[j].dword && !pd_dst[j].entry.pgsz) pmm_free(pd_dst[j].entry.pt);
+		if(pd_src[i].dword) {
+			/* ignore empty page directory entries */
+			if(cow) {
+				/* set up copy on write */
+				if(pd_dst[i].entry.pgsz) vmm_cow_setup(src, (i << 22), (void*)(dst_frame << 12), (i << 22), 4194304); // hugepage
+				else {
+					vmm_set_paddr(vmm_current, (uintptr_t) pt_src, pd_dst[i].entry.pt << 12);
+					for(size_t j = 0; j < 1024; j++) {
+						if(pt_src[j].dword) vmm_cow_setup(src, (i << 22) | (j << 12), (void*)(dst_frame << 12), (i << 22) | (j << 12), 4096); // small page - we ignore any empty entries here
+					}
 				}
-				vmm_pgunmap(vmm_current, (uintptr_t) pd_dst, 0); pmm_free(dst_frame); // deallocate destination PD
-				return NULL;
-			}
-			vmm_set_paddr(vmm_current, (uintptr_t) pt_dst, pt_dst_frame << 12);
+			} else {
+				/* clone references */
+				if(!pd_dst[i].entry.pgsz) { // ignore hugepages
+					/* map source PT */
+					vmm_set_paddr(vmm_current, (uintptr_t) pt_src, pd_dst[i].entry.pt << 12);
+					
+					/* allocate and map destination PT */
+					size_t pt_dst_frame = pmm_alloc_free(1);
+					if(pt_dst_frame == (size_t)-1) {
+						kerror("cannot allocate destination page table %u", i);
+						
+						/* do cleanup */
+						vmm_unmap(vmm_current, (uintptr_t) pt_src, 4096 * 2); // unmap PTs
+						for(size_t j = 0; j < i; j++) {
+							/* free existing PTs */
+							if(pd_dst[j].dword && !pd_dst[j].entry.pgsz) pmm_free(pd_dst[j].entry.pt);
+						}
+						vmm_pgunmap(vmm_current, (uintptr_t) pd_dst, 0); pmm_free(dst_frame); // deallocate destination PD
+						return NULL;
+					}
+					vmm_set_paddr(vmm_current, (uintptr_t) pt_dst, pt_dst_frame << 12);
 
-			/* replace the PT */
-			memcpy(pt_dst, pt_src, 4096);
-			pd_dst[i].entry.pt = pt_dst_frame;
+					/* replace the PT */
+					memcpy(pt_dst, pt_src, 4096);
+					pd_dst[i].entry.pt = pt_dst_frame;
+				}
+			}
 		}
 	}
-	vmm_unmap(vmm_current, (uintptr_t) pt_src, 4096 * 2); // unmap PTs
+	vmm_unmap(vmm_current, (uintptr_t) pt_src, (cow) ? 4096 : 8192); // unmap PTs
 
 	return (void*) (dst_frame << 12); // return phys address of destination PD as VMM config address
 }

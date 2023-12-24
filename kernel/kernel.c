@@ -200,7 +200,7 @@ void kmain() {
         // kputs(buf);
 
         kinfo("creating new process");
-        proc_t* proc = proc_create(proc_kernel, vmm_kernel);
+        proc_t* proc = proc_create(proc_kernel, vmm_kernel, false);
         if(proc == NULL) {
             kprintf("Cannot create process\n\n");
             continue;

@@ -94,11 +94,14 @@ void vmm_switch(void* vmm);
 void vmm_init();
 
 /*
- * void* vmm_clone(void* src)
+ * void* vmm_clone(void* src, bool cow)
  *  Creates a new VMM configuration from the specified source.
+ *  The cow parameter specifies whether frames mapped in userland
+ *  address space shall be copy-on-write instead of being referenced
+ *  in the new VMM configuration.
  *  Returns NULL on failure.
  */
-void* vmm_clone(void* src);
+void* vmm_clone(void* src, bool cow);
 
 /*
  * void vmm_free(void* vmm)

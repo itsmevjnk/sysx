@@ -244,6 +244,7 @@ bool vmm_cow_duplicate(void* vmm, uintptr_t vaddr) {
 	/* change destination's physical address to the allocated frame */
 	vmm_set_paddr(vmm, vaddr, frame * framesz);
 	vmm_set_flags(vmm, vaddr, vmm_get_flags(vmm, vaddr) | VMM_FLAGS_RW);
+	kdebug("resolved CoW: vaddr 0x%x (VMM 0x%x) mapped to paddr 0x%x", vaddr, (uintptr_t) vmm, frame * framesz);
 
 	/* check if the source will not be referenced */
 	size_t idx_src_ref = 0;
