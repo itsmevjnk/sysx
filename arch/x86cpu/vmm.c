@@ -80,6 +80,8 @@ size_t vmm_pgsz(size_t idx) {
 #define vmm_pt(base, pde)						((vmm_pte_t*) ((uintptr_t)(base) + ((pde) << 12))) // retrieve page table given the base ptr and PDE
 #define vmm_pd(base)							((vmm_pde_t*) vmm_pt(base, VMM_PD_PTE)) // retrieve page directory virtual address given the base ptr
 
+#define VMM_AVAIL_TRAPPED						(1 << 0)
+
 void vmm_pgmap_small(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 	size_t pde = va >> 22, pte = (va >> 12) & 0x3ff; // page directory and page table entries for our virtual address
 
@@ -171,6 +173,7 @@ void vmm_pgmap_small(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 					pt[i].entry.wthru = pde_orig.entry_pse.wthru;
 					pt[i].entry.accessed = pde_orig.entry_pse.accessed;
 					pt[i].entry.dirty = pde_orig.entry_pse.dirty;
+					pt[i].entry.avail = pde_orig.entry_pse.avail;
 					pt[i].entry.pa = pa_frame;
 				}
 			}
@@ -194,6 +197,7 @@ void vmm_pgmap_small(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 	pt_entry->entry.wthru = (flags & VMM_FLAGS_CACHE_WTHRU) ? 1 : 0;
 	pt_entry->entry.pa = pa >> 12;
 	pt_entry->entry.accessed = 0; pt_entry->entry.dirty = 0;
+	pt_entry->entry.avail = (flags & VMM_FLAGS_TRAPPED) ? VMM_AVAIL_TRAPPED : 0;
 
 	if(invalidate_tlb) asm volatile("invlpg (%0)" : : "r"(va) : "memory"); // invalidate TLB if needed
 
@@ -234,6 +238,7 @@ void vmm_pgmap_huge(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 	pd_entry->entry_pse.wthru = (flags & VMM_FLAGS_CACHE_WTHRU) ? 1 : 0;
 	pd_entry->entry_pse.pa = pa >> 22;
 	pd_entry->entry_pse.accessed = 0; pd_entry->entry_pse.dirty = 0;
+	pd_entry->entry_pse.avail = (flags & VMM_FLAGS_TRAPPED) ? VMM_AVAIL_TRAPPED : 0;
 
 	if(task_kernel != NULL && va >= kernel_start) {
 		/* propagate kernel pages to all tasks' VMM configs */
@@ -281,6 +286,17 @@ void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, size_t pgsz_idx, size_t fl
 	}
 }
 
+static void vmm_unmap_resolve_cow(void* vmm, uintptr_t va, size_t pgsz) {
+	/* resolve any remaining CoW traps */
+	vmm_trap_t* cow = vmm_is_cow(vmm, va, true);
+	while(cow != NULL) {
+		vmm_trap_t* src = (vmm_trap_t*) cow->info;
+		// kdebug("resolving CoW: 0x%x:0x%x <-- 0x%x:0x%x", src->vmm, src->vaddr, cow->vmm, cow->vaddr);
+		vmm_cow_duplicate(src->vmm, src->vaddr, pgsz);
+		cow = vmm_is_cow(vmm, va, true);
+	}
+}
+
 void vmm_pgunmap_huge(void* vmm, uintptr_t va) {
 	size_t pde = va >> 22; // page directory entry number for our virtual address
 
@@ -298,15 +314,14 @@ void vmm_pgunmap_huge(void* vmm, uintptr_t va) {
 	if(!pd_entry->entry.pgsz) {
 		/* there's a PT behind this - deallocate it. but first we'll need to invalidate the TLB of global pages if there's any (and if it's needed) */
 		vmm_pte_t* pt = ((pd_map) ? (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].entry.pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT) : vmm_pt(&__rmap_start, pde));
-		if(!invalidate_tlb) {
-			for(size_t i = 0; i < 1024; i++) {
-				if(pt[i].entry.global) asm volatile("invlpg (%0)" : : "r"(va | (i << 12)) : "memory");
-			}
+		for(size_t i = 0; i < 1024; i++) {
+			if(!invalidate_tlb && pt[i].entry.global) asm volatile("invlpg (%0)" : : "r"(va | (i << 12)) : "memory");
+			if(pt[i].entry.avail & VMM_AVAIL_TRAPPED) vmm_unmap_resolve_cow(vmm, va | (i << 12), 0);
 		}
 		pmm_free(pd_entry->entry.pt);
 		if(!pd_map) asm volatile("invlpg (%0)" : : "r"(pt) : "memory");
 		else vmm_pgunmap(vmm_current, (uintptr_t) pt, 0);
-	}
+	} else if(pd_entry->entry_pse.avail & VMM_AVAIL_TRAPPED) vmm_unmap_resolve_cow(vmm, va, 1); // resolve CoW if needed
 
 	pd_entry->dword = 0;
 
@@ -321,7 +336,6 @@ done:
 		vmm_pgunmap(vmm_current, (uintptr_t) pd, 0); // unmap PD
 	}
 }
-
 
 void vmm_pgunmap_small(void* vmm, uintptr_t va) {
 	size_t pde = va >> 22, pte = (va >> 12) & 0x3ff; // page directory and page table entries for our virtual address
@@ -352,11 +366,18 @@ void vmm_pgunmap_small(void* vmm, uintptr_t va) {
 	if(!pd_entry->entry.pgsz) {
 		/* unmapping small page */
 		invalidate_tlb = invalidate_tlb || (pt[pte].entry.global);
+		if(pt[pte].entry.avail & VMM_AVAIL_TRAPPED) vmm_unmap_resolve_cow(vmm, va, 0);
 		pt[pte].dword = 0;
 	} else {
 		/* unmapping one small page in a huge page */
 		uintptr_t pa = pd_entry->entry_pse.pa << 22;
-		size_t flags = vmm_get_flags(vmm, va); // reuse existing func
+		size_t flags = 0;
+		if(pd_entry->entry_pse.present) flags |= VMM_FLAGS_PRESENT;
+		if(pd_entry->entry_pse.rw) flags |= VMM_FLAGS_RW;
+		if(pd_entry->entry_pse.user) flags |= VMM_FLAGS_USER;
+		if(pd_entry->entry_pse.global) flags |= VMM_FLAGS_GLOBAL;
+		if(!pd_entry->entry_pse.ncache) flags |= VMM_FLAGS_CACHE | ((pd_entry->entry_pse.wthru) ? VMM_FLAGS_CACHE_WTHRU : 0);
+		if(pd_entry->entry_pse.avail & VMM_AVAIL_TRAPPED) vmm_unmap_resolve_cow(vmm, pde << 22, 1); // resolve CoW here (and discard the trap flag)
 		invalidate_tlb = invalidate_tlb || (flags & VMM_FLAGS_GLOBAL);
 		pd_entry->dword = 0;
 		uintptr_t va_map = va & 0xFFC00000;
@@ -379,16 +400,6 @@ void vmm_pgunmap(void* vmm, uintptr_t va, size_t pgsz_idx) {
 	if(va >= (uintptr_t)&__rmap_start && va < (uintptr_t)&__rmap_end) {
 		kerror("cannot unmap recursive mapping region");
 		return;
-	}
-
-	/* resolve any remaining CoW traps */
-	vmm_trap_t* cow = vmm_is_cow(vmm, va, false);
-	while(cow != NULL) {
-		uintptr_t va_aligned = cow->vaddr;
-		vmm_trap_t* src = (vmm_trap_t*) cow->info;
-		// kdebug("resolving CoW: 0x%x:0x%x <-- 0x%x:0x%x", src->vmm, src->vaddr, cow->vmm, cow->vaddr);
-		vmm_cow_duplicate(src->vmm, src->vaddr);
-		cow = vmm_is_cow(vmm, va_aligned, true);
 	}
 
 	switch(pgsz_idx) {
@@ -652,6 +663,7 @@ size_t vmm_get_flags(void* vmm, uintptr_t va) {
 		if(pd[pde].entry_pse.user) flags |= VMM_FLAGS_USER;
 		if(pd[pde].entry_pse.global) flags |= VMM_FLAGS_GLOBAL;
 		if(!pd[pde].entry_pse.ncache) flags |= VMM_FLAGS_CACHE | ((pd[pde].entry_pse.wthru) ? VMM_FLAGS_CACHE_WTHRU : 0);
+		if(pd[pde].entry_pse.avail & VMM_AVAIL_TRAPPED) flags |= VMM_FLAGS_TRAPPED;
 	} else {
 		/* small page - there's a PT to access too */
 		vmm_pte_t* pt = NULL; // page table
@@ -670,6 +682,7 @@ size_t vmm_get_flags(void* vmm, uintptr_t va) {
 			if(pt[pte].entry.user) flags |= VMM_FLAGS_USER;
 			if(pt[pte].entry.global) flags |= VMM_FLAGS_GLOBAL;
 			if(!pt[pte].entry.ncache) flags |= VMM_FLAGS_CACHE | ((pt[pte].entry.wthru) ? VMM_FLAGS_CACHE_WTHRU : 0);
+			if(pt[pte].entry.avail & VMM_AVAIL_TRAPPED) flags |= VMM_FLAGS_TRAPPED;
 		}
 		if(pd_map) vmm_pgunmap(vmm_current, (uintptr_t) pt, 0);
 	}
@@ -702,6 +715,7 @@ void vmm_set_flags(void* vmm, uintptr_t va, size_t flags) {
 		pd[pde].entry_pse.global = (flags & VMM_FLAGS_GLOBAL) ? 1 : 0;
 		pd[pde].entry_pse.ncache = (flags & VMM_FLAGS_CACHE) ? 0 : 1;
 		pd[pde].entry_pse.wthru = (flags & VMM_FLAGS_CACHE_WTHRU) ? 1 : 0;
+		pd[pde].entry_pse.avail = (flags & VMM_FLAGS_TRAPPED) ? VMM_AVAIL_TRAPPED : 0;
 		if(invalidate_tlb) {
 			va &= 0xFFC00000;
 			for(size_t i = 0; i < 1024; i++, va += 4096) asm volatile("invlpg (%0)" : : "r"(va) : "memory");
@@ -726,6 +740,7 @@ void vmm_set_flags(void* vmm, uintptr_t va, size_t flags) {
 			pt[pte].entry.global = (flags & VMM_FLAGS_GLOBAL) ? 1 : 0;
 			pt[pte].entry.ncache = (flags & VMM_FLAGS_CACHE) ? 0 : 1;
 			pt[pte].entry.wthru = (flags & VMM_FLAGS_CACHE_WTHRU) ? 1 : 0;
+			pt[pde].entry.avail = (flags & VMM_FLAGS_TRAPPED) ? VMM_AVAIL_TRAPPED : 0;
 			if(invalidate_tlb) asm volatile("invlpg (%0)" : : "r"(va) : "memory");
 		}
 		if(pd_map) vmm_pgunmap(vmm_current, (uintptr_t) pt, 0);

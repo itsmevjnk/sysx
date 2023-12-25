@@ -36,6 +36,7 @@ void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, size_t pgsz_idx, size_t fl
 #define VMM_FLAGS_GLOBAL            (1 << 3) // set if mapping is global (TLB cached across VMM switches)
 #define VMM_FLAGS_CACHE             (1 << 4) // set if page can be cached
 #define VMM_FLAGS_CACHE_WTHRU       (1 << 5) // set if page is write-through instead of write-back cached
+#define VMM_FLAGS_TRAPPED           (1 << 6) // set if there's a trap set up for the page
 
 /*
  * void vmm_pgunmap(void* vmm, uintptr_t va, size_t pgsz_idx)
@@ -198,10 +199,13 @@ typedef struct {
 size_t vmm_cow_setup(void* vmm_src, uintptr_t vaddr_src, void* vmm_dst, uintptr_t vaddr_dst, size_t size);
 
 /*
- * bool vmm_cow_duplicate(void* vmm, uintptr_t vaddr)
+ * bool vmm_cow_duplicate(void* vmm, uintptr_t vaddr, size_t pgsz)
  *  Resolves the COW order on the specified page if it has one.
+ *  The pgsz parameter allows the caller to pre-specify the page's
+ *  size index (see vmm_pgsz); if this is set to -1, the function will 
+ *  call vmm_get_pgsz() to find out the actual page size.
  */
-bool vmm_cow_duplicate(void* vmm, uintptr_t vaddr);
+bool vmm_cow_duplicate(void* vmm, uintptr_t vaddr, size_t pgsz);
 
 /*
  * vmm_trap_t* vmm_is_cow(void* vmm, uintptr_t vaddr, bool validated)

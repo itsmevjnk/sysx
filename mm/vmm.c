@@ -178,7 +178,7 @@ size_t vmm_cow_setup(void* vmm_src, uintptr_t vaddr_src, void* vmm_dst, uintptr_
 			vmm_map(vmm_src, pa_start + vaddr_src - va_start + new_sz, vaddr_src + new_sz, va_end - (vaddr_src + new_sz), pgsz_src, flags); // space after our page
 			pgsz_src = pgsz_src_new;
 		}
-		vmm_pgmap(vmm_dst, vmm_get_paddr(vmm_src, vaddr_src), vaddr_dst + done_sz, pgsz_src, vmm_get_flags(vmm_src, vaddr_src + done_sz) & ~VMM_FLAGS_RW);
+		vmm_pgmap(vmm_dst, vmm_get_paddr(vmm_src, vaddr_src), vaddr_dst + done_sz, pgsz_src, (vmm_get_flags(vmm_src, vaddr_src + done_sz) & ~VMM_FLAGS_RW) | VMM_FLAGS_TRAPPED);
 		vmm_trap_t* src = vmm_new_trap(vmm_src, vaddr_src, VMM_TRAP_COW);
 		vmm_trap_t* dst = vmm_new_trap(vmm_dst, vaddr_dst, VMM_TRAP_COW);
 		if(src == NULL || dst == NULL) {
@@ -189,7 +189,7 @@ size_t vmm_cow_setup(void* vmm_src, uintptr_t vaddr_src, void* vmm_dst, uintptr_
 		}
 		dst->info = src;
 		src->info = dst;
-		vmm_set_flags(vmm_src, vaddr_src, vmm_get_flags(vmm_src, vaddr_src) & ~VMM_FLAGS_RW); // disable RW so that we get page faults
+		vmm_set_flags(vmm_src, vaddr_src, (vmm_get_flags(vmm_src, vaddr_src) & ~VMM_FLAGS_RW) | VMM_FLAGS_TRAPPED); // disable RW so that we get page faults
 		// vmm_set_flags(vmm_dst, vaddr_dst, vmm_get_flags(vmm_dst, vaddr_dst) & ~VMM_FLAGS_RW);
 
 		size_t pgsz = vmm_pgsz(pgsz_src);
@@ -199,8 +199,8 @@ size_t vmm_cow_setup(void* vmm_src, uintptr_t vaddr_src, void* vmm_dst, uintptr_
 	return done_sz;
 }
 
-bool vmm_cow_duplicate(void* vmm, uintptr_t vaddr) {
-	size_t pgsz = vmm_get_pgsz(vmm, vaddr);
+bool vmm_cow_duplicate(void* vmm, uintptr_t vaddr, size_t pgsz) {
+	if(pgsz == (size_t)-1) pgsz = vmm_get_pgsz(vmm, vaddr);
 	if(pgsz == (size_t)-1) {
 		// kdebug("page fault is caused by accessing an non-existant page, exiting");
 		return false;
@@ -258,7 +258,7 @@ bool vmm_cow_duplicate(void* vmm, uintptr_t vaddr) {
 		if(vmm_traps[idx_src_ref].type == VMM_TRAP_COW && vmm_traps[idx_src_ref].vmm == vmm && vmm_traps[idx_src_ref].vaddr == vaddr) break;
 	}
 	if(idx_src_ref != vmm_traps_maxlen) {
-		vmm_set_flags(src->vmm, src->vaddr, vmm_get_flags(src->vmm, src->vaddr) | VMM_FLAGS_RW);
+		vmm_set_flags(src->vmm, src->vaddr, (vmm_get_flags(src->vmm, src->vaddr) & ~VMM_FLAGS_TRAPPED) | VMM_FLAGS_RW);
 	}
 
 	/* delete traps */
@@ -272,7 +272,7 @@ bool vmm_handle_fault(uintptr_t vaddr, size_t flags) {
 	kdebug("page fault on vaddr 0x%x (vmm_current = 0x%x), flags 0x%x", vaddr, vmm_current, flags);
 	if(flags & VMM_FLAGS_RW) {
 		/* write access caused this fault */
-		if(vmm_cow_duplicate(vmm_current, vaddr)) return true; // COW?
+		if(vmm_cow_duplicate(vmm_current, vaddr, (size_t)-1)) return true; // COW?
 	}
 	return false;
 }
