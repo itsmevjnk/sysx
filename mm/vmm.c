@@ -211,12 +211,17 @@ bool vmm_cow_duplicate(void* vmm, uintptr_t vaddr) {
 	
 	/* find the page's COW trap index */
 	size_t idx_dst = 0;
+	mutex_acquire(&vmm_traps_mutex);
 	for(; idx_dst < vmm_traps_maxlen; idx_dst++) {
 		if(vmm_traps[idx_dst].type == VMM_TRAP_COW && vmm_traps[idx_dst].vmm == vmm && vmm_traps[idx_dst].vaddr == vaddr) break;
 	}
-	if(idx_dst == vmm_traps_maxlen) return false; // cannot find COW trap entry
+	if(idx_dst == vmm_traps_maxlen) {
+		mutex_release(&vmm_traps_mutex);
+		return false; // cannot find COW trap entry
+	}
 	vmm_trap_t* dst = &vmm_traps[idx_dst];
 	vmm_trap_t* src = dst->info;
+	mutex_release(&vmm_traps_mutex);
 
 	/* find virtual address space to map memory to for copying */
 	size_t framesz = pmm_framesz(); // PMM frame size
@@ -270,6 +275,26 @@ bool vmm_handle_fault(uintptr_t vaddr, size_t flags) {
 		if(vmm_cow_duplicate(vmm_current, vaddr)) return true; // COW?
 	}
 	return false;
+}
+
+vmm_trap_t* vmm_is_cow(void* vmm, uintptr_t vaddr, bool validated) {
+	if(!validated) {
+		size_t pgsz_idx = vmm_get_pgsz(vmm, vaddr);
+		if(pgsz_idx == (size_t)-1) return NULL; // page isn't mapped
+		vaddr -= vaddr % vmm_pgsz(pgsz_idx);
+	}
+
+	mutex_acquire(&vmm_traps_mutex);
+
+	for(size_t i = 0; i < vmm_traps_maxlen; i++) {
+		if(vmm_traps[i].type == VMM_TRAP_COW && vmm_traps[i].vmm == vmm && vmm_traps[i].vaddr == vaddr) {
+			mutex_release(&vmm_traps_mutex);
+			return &vmm_traps[i];
+		}
+	}
+
+	mutex_release(&vmm_traps_mutex);
+	return NULL;
 }
 
 /* deallocation staging */

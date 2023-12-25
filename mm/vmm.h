@@ -204,6 +204,15 @@ size_t vmm_cow_setup(void* vmm_src, uintptr_t vaddr_src, void* vmm_dst, uintptr_
 bool vmm_cow_duplicate(void* vmm, uintptr_t vaddr);
 
 /*
+ * vmm_trap_t* vmm_is_cow(void* vmm, uintptr_t vaddr, bool validated)
+ *  Checks if the specified virtual address is mapped as CoW.
+ *  The validated flag indicates whether the address is guaranteed
+ *  to be mapped and aligned to its page size.
+ *  Returns the first CoW trap entry found, or NULL if there's none.
+ */
+vmm_trap_t* vmm_is_cow(void* vmm, uintptr_t vaddr, bool validated);
+
+/*
  * bool vmm_handle_fault(uintptr_t vaddr, size_t flags)
  *  Handles a page fault exception occurring on the specified
  *  virtual address, with access details (whether the page is

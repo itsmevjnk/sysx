@@ -381,6 +381,16 @@ void vmm_pgunmap(void* vmm, uintptr_t va, size_t pgsz_idx) {
 		return;
 	}
 
+	/* resolve any remaining CoW traps */
+	vmm_trap_t* cow = vmm_is_cow(vmm, va, false);
+	while(cow != NULL) {
+		uintptr_t va_aligned = cow->vaddr;
+		vmm_trap_t* src = (vmm_trap_t*) cow->info;
+		// kdebug("resolving CoW: 0x%x:0x%x <-- 0x%x:0x%x", src->vmm, src->vaddr, cow->vmm, cow->vaddr);
+		vmm_cow_duplicate(src->vmm, src->vaddr);
+		cow = vmm_is_cow(vmm, va_aligned, true);
+	}
+
 	switch(pgsz_idx) {
 		case 0: vmm_pgunmap_small(vmm, va); break;
 		case 1: vmm_pgunmap_huge(vmm, va); break;
@@ -700,7 +710,7 @@ void vmm_set_flags(void* vmm, uintptr_t va, size_t flags) {
 		vmm_pte_t* pt = NULL; // page table
 		if(pd_map) {
 			/* map page table if needed */
-			pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].entry.pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT); // speed up lookup by basing it off pd
+			pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].entry.pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW); // speed up lookup by basing it off pd
 			if(pt == NULL) {
 				kerror("cannot map page table");
 				vmm_pgunmap(vmm_current, (uintptr_t) pd, 0);

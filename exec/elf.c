@@ -1006,10 +1006,10 @@ void elf_unload_prg(void* alloc_vmm, elf_prgload_t* load_result, size_t load_res
         for(size_t off = 0; off < load_result[i].size; off += pgsz, vaddr += pgsz) {
             size_t paddr = vmm_get_paddr(alloc_vmm, vaddr);
             size_t pgsz_idx = vmm_get_pgsz(alloc_vmm, vaddr); pgsz = vmm_pgsz(pgsz_idx); // resolve for adding to variables
+            vmm_pgunmap(alloc_vmm, vaddr, pgsz_idx);
             if(paddr != 0) {
                 for(size_t j = 0; j < pgsz / framesz; j++) pmm_free(paddr / framesz + j);
             }
-            vmm_pgunmap(alloc_vmm, vaddr, pgsz_idx);
         }
     }
     kfree(load_result);
