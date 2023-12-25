@@ -604,6 +604,7 @@ void* vmm_clone(void* src, bool cow) {
 		}
 	}
 	vmm_unmap(vmm_current, (uintptr_t) pt_src, (cow) ? 4096 : 8192); // unmap PTs
+	vmm_pgunmap(vmm_current, (uintptr_t) pd_dst, 0); // unmap our new PD
 
 	return (void*) (dst_frame << 12); // return phys address of destination PD as VMM config address
 }
