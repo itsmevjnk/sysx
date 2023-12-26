@@ -4,6 +4,7 @@
 #include <kernel/log.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <drivers/acpi.h>
 
 #define PCI_CONFIG_ADDRESS                          0xCF8
 #define PCI_CONFIG_DATA                             0xCFC
@@ -127,6 +128,11 @@ static bool pci_scan_func(uint8_t bus, uint8_t dev, uint8_t func) {
         uint8_t bus_sec = pci_cfg_read_byte(bus, dev, func, PCI_CFG_H1_SEC_BUS);
         kdebug("device %02x:%02x.%x (%04x:%04x) is a PCI-to-PCI bridge - scanning secondary bus %02x", bus, dev, func, vid_pid[0], vid_pid[1], bus_sec);
         pci_scan_bus(bus_sec);
+    } else {
+        /* print pre-routing information for debugging */
+        size_t irq = pci_arch_get_irq_routing(bus, dev, func, (uint8_t)-1, NULL);
+        if(irq != (size_t)-1) kdebug("device %02x:%02x.%x has its interrupt pin pre-routed to IRQ %u", bus, dev, func, irq);
+        else kdebug("device %02x:%02x.%x does not have its interrupt pin pre-routed", bus, dev, func);
     }
 
     return true;
@@ -164,6 +170,18 @@ void pci_init() {
             pci_scan_bus(func);
         }
     }
+}
+
+size_t pci_route_irq(uint8_t bus, uint8_t dev, uint8_t func, uint8_t pin, uint8_t* flags) {
+    size_t ret = pci_arch_get_irq_routing(bus, dev, func, pin, flags); // do not route if it's already done by the BIOS
+
+#ifdef FEAT_ACPI
+    if(ret == (size_t)-1 && acpi_enabled) ret = acpi_pci_route_irq(bus, dev, func, pin, flags); // try using ACPI first
+#endif
+
+    if(ret == (size_t)-1) ret = pci_arch_route_irq(bus, dev, func, pin, flags);
+
+    return ret;
 }
 
 #endif

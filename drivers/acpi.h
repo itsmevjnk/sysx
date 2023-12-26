@@ -14,6 +14,7 @@ extern bool acpi_enabled;
 #ifdef FEAT_ACPI_LAI
 #include <lai/core.h>
 #include <lai/helpers/pm.h>
+#include <lai/helpers/pci.h>
 #include <lai/helpers/sci.h>
 #include <lai/drivers/ec.h>
 #include <lai/drivers/timer.h>
@@ -73,6 +74,13 @@ bool acpi_enter_sleep(uint8_t state);
  *  This is an implementation-specific function.
  */
 bool acpi_reboot();
+
+/*
+ * size_t acpi_pci_route_irq(uint8_t bus, uint8_t dev, uint8_t func, uint8_t pin, uint8_t* flags)
+ *  Routes the specified interrupt pin of the PCI device using ACPI methods.
+ *  Refer to pci_route_pin for input and output values.
+ */
+size_t acpi_pci_route_irq(uint8_t bus, uint8_t dev, uint8_t func, uint8_t pin, uint8_t* flags);
 
 #endif
 

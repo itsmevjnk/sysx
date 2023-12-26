@@ -151,6 +151,38 @@ typedef struct {
  */
 void pci_init();
 
+#define PCI_IRQ_EDGE                    (1 << 0) // set if interrupt is edge triggered
+#define PCI_IRQ_ACTIVE_LOW              (1 << 1) // set if interrupt is active low
+
+/*
+ * size_t pci_arch_get_irq_routing(uint8_t bus, uint8_t dev, uint8_t func, uint8_t pin, uint8_t* flags)
+ *  Retrieves the pre-routed interrupt number (if applicable/available) for
+ *  the specified interrupt pin. If pin is -1, the function will return the
+ *  interrupt number for the interrupt pin used by the specified PCI device
+ *  (i.e. the pin specified in the device's Interrupt Pin configuration field).
+ *  Refer to pci_route_pin for return values.
+ */
+size_t pci_arch_get_irq_routing(uint8_t bus, uint8_t dev, uint8_t func, uint8_t pin, uint8_t* flags);
+
+/*
+ * size_t pci_arch_route_irq(uint8_t bus, uint8_t dev, uint8_t func, uint8_t pin, uint8_t* flags)
+ *  Routes interrupt pin 0-3 (corresponding to INTA-D) of the specified PCI
+ *  device using architecture-specific method(s).
+ *  This is an architecture-specific function, to be called by pci_route_pin.
+ *  Refer to pci_route_pin for return values. Return -1 if the specified PCI
+ *  device cannot be routed using architecture-specific methods.
+ */
+size_t pci_arch_route_irq(uint8_t bus, uint8_t dev, uint8_t func, uint8_t pin, uint8_t* flags);
+
+/*
+ * size_t pci_route_irq(uint8_t bus, uint8_t dev, uint8_t func, uint8_t pin, uint8_t* flags)
+ *  Routes interrupt pin 0-3 (corresponding to INTA-D) of the specified PCI
+ *  device and returns its interrupt line number, or -1 on failure.
+ *  The flags pointer can be optionally passed to retrieve the interrupt's
+ *  attributes.
+ */
+size_t pci_route_irq(uint8_t bus, uint8_t dev, uint8_t func, uint8_t pin, uint8_t* flags);
+
 #endif
 
 #endif
