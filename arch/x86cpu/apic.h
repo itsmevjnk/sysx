@@ -9,6 +9,25 @@ extern bool apic_enabled; // weak symbol - if this is NULL then it's safe to ass
 extern uint8_t ioapic_irq_gsi[16]; // legacy IRQ to GSI mapping
 extern uintptr_t lapic_base;
 
+/* IOAPIC information */
+extern size_t ioapic_cnt; // number of detected IOAPICs
+typedef struct {
+    uint8_t id;
+    uintptr_t base; // base address (mapped)
+    uint8_t gsi_base; // starting GSI
+    uint8_t inputs; // number of inputs
+} ioapic_info_t;
+extern ioapic_info_t* ioapic_info; // table of IOAPICs
+
+/* CPU/LAPIC information */
+extern size_t apic_cpu_cnt; // number of detected CPU cores
+typedef struct {
+    size_t cpu_id;
+    uint8_t apic_id;
+} apic_cpu_info_t;
+extern apic_cpu_info_t* apic_cpu_info; // table of detected CPUs
+extern size_t apic_bsp_idx; // bootstrap processor's index
+
 /*
  * void ioapic_handle(uint8_t gsi, void (*handler)(uint8_t gsi, void* context))
  *  Assigns an interrupt handler to the specified GSI.
@@ -56,5 +75,11 @@ void apic_eoi();
  *  Sets up the local and I/O APIC.
  */
 bool apic_init();
+
+/*
+ * void ioapic_set_trigger(uint8_t gsi, bool edge, bool active_low)
+ *  Set the IOAPIC line trigger conditions for the specified GSI.
+ */
+void ioapic_set_trigger(uint8_t gsi, bool edge, bool active_low);
 
 #endif

@@ -109,6 +109,30 @@ mp_cfg_t* mp_map_cfgtab(mp_fptr_t* fptr);
 extern mp_fptr_t* mp_fptr;
 extern mp_cfg_t* mp_cfg;
 
+/* bus IDs */
+#define MP_BUS_NONE                         0
+#define MP_BUS_CBUS                         1 // Corollary CBus
+#define MP_BUS_CBUS2                        2 // Corollary CBus II
+#define MP_BUS_EISA                         3 // Extended ISA
+#define MP_BUS_FUTURE                       4 // IEEE FutureBus
+#define MP_BUS_INTERNAL                     5 // internal bus
+#define MP_BUS_ISA                          6 // ISA
+#define MP_BUS_MB1                          7 // Multibus I
+#define MP_BUS_MB2                          8 // Multibus II
+#define MP_BUS_MCA                          9 // MCA
+#define MP_BUS_MPI                          10
+#define MP_BUS_MPSA                         11
+#define MP_BUS_NUBUS                        12 // Apple NuBus
+#define MP_BUS_PCI                          13
+#define MP_BUS_PCMCIA                       14
+#define MP_BUS_TC                           15 // DEC TurboChannel
+#define MP_BUS_VLB                          16 // VESA Local Bus
+#define MP_BUS_VME                          17
+#define MP_BUS_EXPRESS                      18 // Express System Bus
+
+extern uint8_t* mp_busid;
+extern int mp_busid_cnt;
+
 /*
  * bool mp_init()
  *  Maps the MP tables if they exist and return their pointers in mp_fptr and

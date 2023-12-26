@@ -89,20 +89,10 @@ typedef struct {
 
 uintptr_t lapic_base = 0; // LAPIC base (mapped)
 
-static size_t ioapic_cnt = 0; // number of detected IOAPICs
-typedef struct {
-    uint8_t id;
-    uintptr_t base; // base address (mapped)
-    uint8_t gsi_base; // starting GSI
-    uint8_t inputs; // number of inputs
-} ioapic_info_t;
-static ioapic_info_t* ioapic_info = NULL; // table of IOAPICs
+size_t ioapic_cnt = 0; // number of detected IOAPICs
+ioapic_info_t* ioapic_info = NULL; // table of IOAPICs
 
 size_t apic_cpu_cnt = 0; // number of detected CPU cores
-typedef struct {
-    size_t cpu_id;
-    uint8_t apic_id;
-} apic_cpu_info_t;
 apic_cpu_info_t* apic_cpu_info = NULL; // table of detected CPUs
 size_t apic_bsp_idx = (size_t)-1; // bootstrap processor's index
 
@@ -355,8 +345,6 @@ bool apic_init() {
     }
     kinfo("mapped LAPIC at 0x%x to 0x%x", lapic_base_paddr, lapic_base);
 
-
-
     /* allocate IOAPIC and CPU info tables */
     ioapic_info = kcalloc(ioapic_cnt, sizeof(ioapic_info_t));
     if(ioapic_cnt && ioapic_info == NULL) {
@@ -496,7 +484,7 @@ bool apic_init() {
                     ioapic_irq_gsi[entry->data.ioapic_src_override.irq_src] = entry->data.ioapic_src_override.gsi;
                     // ioapic_gsi_irq[entry->data.ioapic_src_override.gsi]     = entry->data.ioapic_src_override.irq_src;
                     for(i = 0; i < ioapic_cnt; i++) {
-                        if(entry->data.ioapic_src_override.gsi >= ioapic_info[i].gsi_base && entry->data.ioapic_src_override.gsi <= ioapic_info[i].gsi_base + ioapic_info[i].inputs) {
+                        if(entry->data.ioapic_src_override.gsi >= ioapic_info[i].gsi_base && entry->data.ioapic_src_override.gsi < ioapic_info[i].gsi_base + ioapic_info[i].inputs) {
                             /* set up interrupt trigger */
                             ioapic_reg_write(i, IOREDTBL_L(entry->data.ioapic_src_override.gsi - ioapic_info[i].gsi_base), (IOAPIC_HANDLER_VECT_BASE + entry->data.ioapic_src_override.gsi) | APIC_LVT_BM_MASK | ((entry->data.ioapic_src_override.flags & (1 << 1)) ? APIC_LVT_BM_TRIG_POL : 0) | ((entry->data.ioapic_src_override.flags & (1 << 3)) ? APIC_LVT_BM_TRIG_MODE : 0));
                             break;
@@ -505,7 +493,7 @@ bool apic_init() {
                     break;
                 case MADT_ENTRY_IOAPIC_NMI:
                     for(i = 0; i < ioapic_cnt; i++) {
-                        if(entry->data.ioapic_nmi.gsi >= ioapic_info[i].gsi_base && entry->data.ioapic_nmi.gsi <= ioapic_info[i].gsi_base + ioapic_info[i].inputs) {
+                        if(entry->data.ioapic_nmi.gsi >= ioapic_info[i].gsi_base && entry->data.ioapic_nmi.gsi < ioapic_info[i].gsi_base + ioapic_info[i].inputs) {
                             /* set up interrupt trigger and wire interrupt to NMI (interrupt 2) */
                             ioapic_reg_write(i, IOREDTBL_L(entry->data.ioapic_nmi.gsi - ioapic_info[i].gsi_base), 2 | (1 << 10) | ((entry->data.ioapic_nmi.flags & (1 << 1)) ? APIC_LVT_BM_TRIG_POL : 0) | ((entry->data.ioapic_nmi.flags & (1 << 3)) ? APIC_LVT_BM_TRIG_MODE : 0));
                             break;
@@ -528,7 +516,8 @@ bool apic_init() {
         for(size_t n = 0; n < mp_cfg->base_cnt; n++, entry = (mp_cfg_entry_t*) ((uintptr_t) entry + ((entry->type) ? 8 : 20))) {
             switch(entry->type) {
                 case MP_ETYPE_IRQ_ASSIGN:
-                    ioapic_irq_gsi[entry->data.irq_assign.irq_src] = ioapic_info[entry->data.irq_assign.id_dest].gsi_base + entry->data.irq_assign.intin_dest; // TODO: check bus?
+                    if(mp_busid_cnt <= entry->data.irq_assign.bus_src || mp_busid[entry->data.irq_assign.bus_src] == MP_BUS_NONE || mp_busid[entry->data.irq_assign.bus_src] == MP_BUS_ISA || mp_busid[entry->data.irq_assign.bus_src] == MP_BUS_EISA) // bus is ISA or EISA (or we aren't sure what bus this is)
+                        ioapic_irq_gsi[entry->data.irq_assign.irq_src] = ioapic_info[entry->data.irq_assign.id_dest].gsi_base + entry->data.irq_assign.intin_dest;
                     if(entry->data.irq_assign.type == 1) // NMI
                         ioapic_reg_write(entry->data.irq_assign.id_dest, IOREDTBL_L(entry->data.irq_assign.intin_dest), 2 | (1 << 10) | ((entry->data.irq_assign.flags & (1 << 1)) ? APIC_LVT_BM_TRIG_POL : 0) | ((entry->data.irq_assign.flags & (1 << 3)) ? APIC_LVT_BM_TRIG_MODE : 0));
                     else if(entry->data.irq_assign.type == 3) // external interrupt (8259)
@@ -597,3 +586,13 @@ bool apic_init() {
     return true;
 }
 
+void ioapic_set_trigger(uint8_t gsi, bool edge, bool active_low) {
+    for(size_t i = 0; i < ioapic_cnt; i++) {
+        if(gsi >= ioapic_info[i].gsi_base && gsi < ioapic_info[i].gsi_base + ioapic_info[i].inputs) {
+            /* set up interrupt trigger and wire interrupt to NMI (interrupt 2) */
+            uint8_t reg = IOREDTBL_L(gsi - ioapic_info[i].gsi_base);
+            ioapic_reg_write(i, reg, (ioapic_reg_read(i, reg) & ~(APIC_LVT_BM_TRIG_MODE | APIC_LVT_BM_TRIG_POL)) | ((edge) ? 0 : APIC_LVT_BM_TRIG_MODE) | ((active_low) ? APIC_LVT_BM_TRIG_POL : 0));
+            break;
+        }
+    }
+}
