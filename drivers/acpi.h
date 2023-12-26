@@ -7,6 +7,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+extern bool acpi_enabled;
+
 #define FEAT_ACPI
 
 #ifdef FEAT_ACPI_LAI

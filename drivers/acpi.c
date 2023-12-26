@@ -3,6 +3,8 @@
 #include <kernel/cmdline.h>
 #include <string.h>
 
+bool acpi_enabled = false;
+
 #ifdef FEAT_ACPI
 
 bool acpi_init() {
@@ -28,6 +30,7 @@ bool acpi_init() {
         return false;
     }
     
+    acpi_enabled = true;
     return true;
 }
 

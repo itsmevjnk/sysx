@@ -261,8 +261,7 @@ bool apic_init() {
 
     /* look for the MADT */
 #ifdef FEAT_ACPI
-    const char* acpi_state = cmdline_find_kvp("acpi");
-    if(acpi_state == NULL || strcmp(acpi_state, "off")) {
+    if(acpi_enabled) {
 #ifdef FEAT_ACPI_LAI
         madt = laihost_scan("APIC", 0); // look for MADT
 #endif
@@ -585,7 +584,7 @@ bool apic_init() {
     apic_eoi(); // also send EOI to LAPIC just in case
 
 #ifdef FEAT_ACPI
-    if(acpi_state == NULL || strcmp(acpi_state, "off")) {
+    if(acpi_enabled) {
         /* re-enable ACPI in IOAPIC mode */
 #ifdef FEAT_ACPI_LAI
         lai_disable_acpi();
