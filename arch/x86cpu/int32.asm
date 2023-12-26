@@ -10,6 +10,8 @@ section .text
 ;  Calls the specified 16-bit (real mode) interrupt vector.
 global int32
 extern idt_desc
+extern lapic_base
+extern apic_enabled
 int32: use32
 push ebp ; set up stack frame here, which helps with debugging
 mov ebp, esp
@@ -162,6 +164,16 @@ out 0x21, al
 mov al, ah
 out 0xA1, al
 
+; check if APIC is enabled, and if so, send EOI to APIC
+mov eax, [apic_enabled]
+test eax, eax
+jz .done ; nothing to do here
+
+mov eax, [lapic_base]
+; mov dword [eax + 0x0F0], 0xFF | (1 << 8)
+mov dword [eax + 0x0B0], 0 ; EOI
+
+.done:
 ; restore all registers
 popa
 popf
