@@ -4,6 +4,7 @@
 #include <kernel/cmdline.h>
 #include <arch/x86/i8259.h>
 #include <arch/x86/i8253.h>
+#include <arch/x86/rtc.h>
 #include <arch/x86/multiboot.h>
 #include <string.h>
 #include <arch/x86cpu/int32.h>
@@ -34,6 +35,7 @@ int ktgt_preinit() {
     kinfo("initializing PIC"); pic_init();
     kinfo("initializing int32 capabilities"); int32_init();
     kinfo("initializing PIT as system timer source"); pit_systimer_init();
+    // kinfo("initializing RTC as system timer source"); rtc_timer_enable(); rtc_init();
 
 #ifdef DEBUG
     if(mb_info->flags & MULTIBOOT_INFO_MEM_MAP) {
@@ -69,6 +71,7 @@ int ktgt_init() {
 
     kinfo("initializing APIC");
     apic_init();
+    // rtc_irq_reset();
 
     return 0;
 }

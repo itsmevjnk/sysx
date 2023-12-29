@@ -178,7 +178,7 @@ mov es, ax
 mov fs, ax
 mov gs, ax
 
-.eoi: ; send EOI to master PIC (IRQ0) on the PIC handler's behalf (since we'll be skipping over it)
+.eoi: ; send EOI to all PICs on the PIC handler's behalf (since we'll be skipping over it)
 mov eax, apic_enabled
 test eax, eax ; test if apic_enabled is NULL (i.e. no APIC support)
 jz .pic_eoi ; no APIC support
@@ -192,7 +192,13 @@ mov dword [eax], 0
 jmp .load_regs_s2
 .pic_eoi:
 mov al, 0x20
+out 0xA0, al
 out 0x20, al
+
+; reset RTC
+mov al, 0x0C
+out 0x70, al
+in al, 0x71
 
 .load_regs_s2: ; load the rest of the general purpose registers, and finally EFLAGS and CS:EIP via IRET (plus SS:ESP if switching to ring 3)
 mov eax, [ebp + (4 * 7)]
