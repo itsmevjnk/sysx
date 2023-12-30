@@ -28,6 +28,9 @@ typedef struct {
 extern apic_cpu_info_t* apic_cpu_info; // table of detected CPUs
 extern size_t apic_bsp_idx; // bootstrap processor's index
 
+#define IOAPIC_HANDLER_VECT_BASE        0x30 // IOAPIC interrupt handler vector base
+extern uint8_t lapic_handler_vect_base; // LAPIC interrupt handler vector base (calculated in apic_init)
+
 /*
  * void ioapic_handle(uint8_t gsi, void (*handler)(uint8_t gsi, void* context))
  *  Assigns an interrupt handler to the specified GSI.
@@ -81,5 +84,45 @@ bool apic_init();
  *  Set the IOAPIC line trigger conditions for the specified GSI.
  */
 void ioapic_set_trigger(uint8_t gsi, bool edge, bool active_low);
+
+/* APIC timer */
+
+enum apic_tmr_divisor {
+    APIC_TIMER_DIV2 = 0,
+    APIC_TIMER_DIV4,
+    APIC_TIMER_DIV8,
+    APIC_TIMER_DIV16,
+    APIC_TIMER_DIV32 = (1 << 3),
+    APIC_TIMER_DIV64,
+    APIC_TIMER_DIV128,
+    APIC_TIMER_DIV1
+};
+#ifndef APIC_TIMER_DIVISOR
+#define APIC_TIMER_DIVISOR                  APIC_TIMER_DIV16
+#endif
+
+#define APIC_TIMER_VECT                     (lapic_handler_vect_base + 0x00)
+
+/*
+ * void apic_timer_calibrate()
+ *  Calibrates the APIC timer using the current system timer source.
+ *  This function sets the static apic_timer_delta variable, which
+ *  contains the number of timer ticks to increase every time the
+ *  timer generates an interrupt.
+ */
+void apic_timer_calibrate();
+
+/*
+ * void apic_timer_enable()
+ *  Enables the APIC timer as the system timer source.
+ *  NOTE: all other timer sources must be disabled!
+ */
+void apic_timer_enable();
+
+/*
+ * void apic_timer_disable()
+ *  Disables the APIC timer as the system timer source.
+ */
+void apic_timer_disable();
 
 #endif

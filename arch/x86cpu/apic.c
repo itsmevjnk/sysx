@@ -9,6 +9,7 @@
 #include <drivers/acpi.h>
 #include <arch/x86/mptab.h>
 #include <kernel/cmdline.h>
+#include <hal/timer.h>
 
 typedef struct {
     uint8_t type;
@@ -159,13 +160,14 @@ static inline void lapic_reg_write(uint16_t reg_idx, uint32_t val) {
 
 /* LVT bitmasks */
 #define APIC_LVT_BM_VECT                0xFF
-#define APIC_LVT_BM_DELV_MODE           (1 << 8) | (1 << 9) | (1 << 10) // 0 = fixed, 1 = lowest priority, 2 = SMI, 4 = NMI, 5 = INIT, 7 = external interrupt
-#define APIC_LVT_BM_DEST_MODE           (1 << 11) // 0 = physical destination, 1 = logical destination
+#define APIC_LVT_BM_DELV_MODE           (1 << 8) | (1 << 9) | (1 << 10) // 0 = fixed, 1 = lowest priority, 2 = SMI, 4 = NMI, 5 = INIT, 7 = external interrupt - does not apply to timer LVT
+#define APIC_LVT_BM_DEST_MODE           (1 << 11) // 0 = physical destination, 1 = logical destination - does not apply to timer LVT
 #define APIC_LVT_BM_DELV_STAT           (1 << 12) // whether the IRQ has been serviced
-#define APIC_LVT_BM_TRIG_POL            (1 << 13) // 0 = active high (ISA), 1 = active low
-#define APIC_LVT_BM_RIRR                (1 << 14)
-#define APIC_LVT_BM_TRIG_MODE           (1 << 15) // 0 = edge triggered (ISA), 1 = level triggered
+#define APIC_LVT_BM_TRIG_POL            (1 << 13) // 0 = active high (ISA), 1 = active low - does not apply to timer LVT
+#define APIC_LVT_BM_RIRR                (1 << 14) // does not apply to timer LVT
+#define APIC_LVT_BM_TRIG_MODE           (1 << 15) // 0 = edge triggered (ISA), 1 = level triggered - does not apply to timer LVT
 #define APIC_LVT_BM_MASK                (1 << 16) // 1 = IRQ disabled, 0 = IRQ enabled
+#define APIC_LVT_BM_TMR_MODE            (1 << 17) // 0 = one-shot, 1 = periodic - only applies to timer LVT
 
 /* spurious interrupt handler */
 #define LAPIC_SPURIOUS_VECT             0xFF // spurious interrupt vector
@@ -176,7 +178,6 @@ void apic_spurious_handler(uint8_t vector, void* context) {
 
 /* IOAPIC interrupt handlers */
 static void (**ioapic_handlers)(uint8_t gsi, void* context) = NULL;
-#define IOAPIC_HANDLER_VECT_BASE        0x30
 void ioapic_handler(uint8_t vector, void* context) {
     vector -= IOAPIC_HANDLER_VECT_BASE; // vector now holds the GSI
     // kdebug("IOAPIC interrupt GSI %u encountered", vector);
@@ -242,6 +243,7 @@ void apic_eoi() {
 }
 
 bool apic_enabled = false;
+uint8_t lapic_handler_vect_base = IOAPIC_HANDLER_VECT_BASE;
 
 bool apic_init() {
     /* APIC descriptor structure(s) */
@@ -462,6 +464,16 @@ bool apic_init() {
         vmm_unmap(vmm_kernel, lapic_base, 0x400);
         return false;
     }
+    lapic_handler_vect_base = IOAPIC_HANDLER_VECT_BASE + max_gsis;
+
+    /* set up LAPIC interrupt handling - stabilize all LVTs that might have been uninitialized */
+    mmio_outd(lapic_base + LAPIC_REG_LVT_CMCI, 0xFF | APIC_LVT_BM_MASK);
+    mmio_outd(lapic_base + LAPIC_REG_LVT_TIMER, 0xFF | APIC_LVT_BM_MASK);
+    mmio_outd(lapic_base + LAPIC_REG_LVT_TSENSE, 0xFF | APIC_LVT_BM_MASK);
+    mmio_outd(lapic_base + LAPIC_REG_LVT_PFMON, 0xFF | APIC_LVT_BM_MASK);
+    mmio_outd(lapic_base + LAPIC_REG_LVT_LINT0, 0xFF | APIC_LVT_BM_MASK);
+    mmio_outd(lapic_base + LAPIC_REG_LVT_LINT1, 0xFF | APIC_LVT_BM_MASK);
+    mmio_outd(lapic_base + LAPIC_REG_LVT_ERROR, 0xFF | APIC_LVT_BM_MASK);
 
     /* set up IOAPIC interrupt handling */
     for(size_t i = 0; i < ioapic_cnt; i++) {
@@ -595,4 +607,97 @@ void ioapic_set_trigger(uint8_t gsi, bool edge, bool active_low) {
             break;
         }
     }
+}
+
+static uint32_t apic_timer_initcnt = ~0;
+static size_t apic_timer_delta = 0;
+
+#define APIC_TIMER_CALIBRATE_DURATION               10000UL // minimum duration to wait between sampling timer counts
+
+/* accuracy optimization */
+#define APIC_TIMER_RATE_ACCOPT // set this flag to optimize accuracy by firing at lower frequency such that rounding errors are minimized
+#define APIC_TIMER_RATE_ACCOPT_DMIN                 75 // minimum delta (uS)
+#define APIC_TIMER_RATE_ACCOPT_DMAX                 150 // maximum delta (uS)
+
+static void apic_timer_handler(uint8_t vector, void* context) {
+    (void) vector;
+    timer_handler(apic_timer_delta, context);
+    apic_eoi();
+}
+
+void apic_timer_calibrate() {
+    if(!apic_enabled) {
+        kerror("APIC has not been initialized yet");
+        return;
+    }
+
+    uint32_t lvt_orig = mmio_ind(lapic_base + LAPIC_REG_LVT_TIMER); // original LVT
+    mmio_outd(lapic_base + LAPIC_REG_TMR_DIV, APIC_TIMER_DIVISOR); // set divisor
+    mmio_outd(lapic_base + LAPIC_REG_LVT_TIMER, 0xFF); // enable APIC timer in one-shot mode
+
+    timer_tick_t t_start = timer_tick;
+    while(timer_tick == t_start); // wait until we get to the start of a new tick
+
+    mmio_outd(lapic_base + LAPIC_REG_TMR_INITCNT, ~0); // start timer by setting the initial count to 0xFFFFFFFF
+    t_start = timer_tick; // starting timestamp
+    timer_delay_us(APIC_TIMER_CALIBRATE_DURATION);
+    mmio_outd(lapic_base + LAPIC_REG_LVT_TIMER, 0xFF | APIC_LVT_BM_MASK); // disable APIC timer
+    timer_tick_t t_stop = timer_tick; // stopping timestamp
+    uint32_t cnt = ~0 - mmio_ind(lapic_base + LAPIC_REG_TMR_CURRCNT); // get number of APIC ticks that have elapsed
+
+    double rate = (double)cnt / (double)(t_stop - t_start); // APIC firing rate
+    kdebug("APIC timer calibration (DCR=%u): %u ticks in %u uS -> %.8f APIC ticks per uS", APIC_TIMER_DIVISOR, cnt, (size_t)(t_stop - t_start), rate);
+    
+#ifdef APIC_TIMER_RATE_ACCOPT
+    double error_min = 1;
+    apic_timer_delta = APIC_TIMER_RATE_ACCOPT_DMIN;
+    for(size_t i = APIC_TIMER_RATE_ACCOPT_DMIN; i <= APIC_TIMER_RATE_ACCOPT_DMAX; i++) {
+        double rate_tmp = rate * i;
+        double error = rate_tmp - (uint32_t)rate_tmp; if(error >= 0.5) error = 1.0 - error; // round up/down error
+        if(error_min > error) {
+            apic_timer_delta = i;
+            apic_timer_initcnt = (uint32_t)rate_tmp;
+            if(rate_tmp - (double)apic_timer_initcnt >= 0.5) apic_timer_initcnt++;
+            error_min = error;
+            if(i == APIC_TIMER_RATE_ACCOPT_DMIN) kdebug("APIC timer rate accuracy optimization: initial error (at %u uS): %.8f ticks per uS", APIC_TIMER_RATE_ACCOPT_DMIN, error);
+        }
+    }
+    kdebug("APIC timer rate accuracy optimization: minimum error: %.8f ticks per uS", error_min);
+#else
+    /* use calculated rate rounded up/down for 1uS ticks */
+    apic_timer_initcnt = (uint32_t)rate;
+    if(rate - (double)apic_timer_initcnt >= 0.5) apic_timer_initcnt++;
+    apic_timer_delta = 1;
+#endif
+    kdebug("APIC timer calibration: initial count 0x%08X, delta %u uS", apic_timer_initcnt, apic_timer_delta);
+
+    mmio_outd(lapic_base + LAPIC_REG_LVT_TIMER, lvt_orig); // restore APIC timer LVT
+}
+
+void apic_timer_enable() {
+    if(!apic_enabled) {
+        kerror("APIC has not been initialized yet");
+        return;
+    }
+
+    if(!apic_timer_delta) {
+        kerror("APIC timer has not been calibrated yet");
+        return;
+    }
+
+    kdebug("assigning APIC timer to interrupt vector 0x%02X", APIC_TIMER_VECT);
+
+    intr_handle(APIC_TIMER_VECT, apic_timer_handler);
+    mmio_outd(lapic_base + LAPIC_REG_TMR_DIV, APIC_TIMER_DIVISOR);
+    mmio_outd(lapic_base + LAPIC_REG_LVT_TIMER, APIC_TIMER_VECT | APIC_LVT_BM_TMR_MODE); // periodic mode
+    mmio_outd(lapic_base + LAPIC_REG_TMR_INITCNT, apic_timer_initcnt);
+}
+
+void apic_timer_disable() {
+    if(!apic_enabled) {
+        kerror("APIC has not been initialized yet");
+        return;
+    }
+
+    mmio_outd(lapic_base + LAPIC_REG_LVT_TIMER, 0xFF | APIC_LVT_BM_MASK);
 }
