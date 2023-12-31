@@ -71,12 +71,12 @@ int ktgt_init() {
 
     kinfo("initializing APIC");
     if(apic_init()) {
-        kinfo("calibrating APIC timer");
-        apic_timer_calibrate();
+        // kinfo("calibrating APIC timer");
+        // apic_timer_calibrate();
 
-        kinfo("enabling APIC timer as new system timer source");
-        pit_systimer_stop();
-        apic_timer_enable();
+        // kinfo("enabling APIC timer as new system timer source");
+        // pit_systimer_stop();
+        // apic_timer_enable();
     }
     // rtc_irq_reset();
 
