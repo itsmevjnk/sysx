@@ -132,6 +132,7 @@ void stdio_stderr_init() {
         case KSTDERR_SER:
             ser_init(KSTDERR_SER_PORT, KSTDERR_SER_DBIT, KSTDERR_SER_SBIT, KSTDERR_SER_PARITY, KSTDERR_SER_BAUD);
             kstderr = &pts_ser;
+            break;
 #endif
     }
 }
