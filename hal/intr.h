@@ -35,4 +35,10 @@ void intr_handle(uint8_t vector, void (*handler)(uint8_t vector, void* context))
  */
 bool intr_is_handled(uint8_t vector);
 
+/* interrupt handler entry - for use by higher-level interrupt dispatchers (i.e. interrupt controller drivers) */
+typedef struct {
+    size_t irq;
+    void (*handler)(size_t irq, void* context);
+} intr_handler_t;
+
 #endif

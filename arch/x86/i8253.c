@@ -20,7 +20,7 @@
 
 #define PIT_IRQ                 0 // PIT IRQ line
 
-void pit_isr(uint8_t irq, void* context) {
+void pit_isr(size_t irq, void* context) {
     (void) irq;
     timer_handler(1000000UL / PIT_SYSTIMER_FREQ_REAL, context);
 }

@@ -1,8 +1,9 @@
 #include <arch/x86/i8259.h>
 #include <arch/x86cpu/idt.h>
-#include <hal/intr.h>
 #include <kernel/log.h>
 #include <arch/x86cpu/apic.h>
+#include <stdlib.h>
+#include <string.h>
 
 /* PIC initialization commands - see https://wiki.osdev.org/8259_PIC */
 #define ICW1_ICW4           0x01 // ICW4 will be present
@@ -91,7 +92,9 @@ uint16_t pic_read_isr() {
     return (inb(PIC2_CMD) << 8) | inb(PIC1_CMD);
 }
 
-void (*pic_handlers[16])(uint8_t irq, void* context);
+intr_handler_t* pic_handlers = NULL;
+size_t pic_handlers_cnt = 0;
+#define PIC_HANDLERS_ALLOCSZ            4
 
 void pic_handler_stub(uint8_t vector, void* context) {
     vector -= PIC_VECT_BASE; // get IRQ number
@@ -105,18 +108,55 @@ void pic_handler_stub(uint8_t vector, void* context) {
             return; // don't proceed further
         }
     }
-    if(pic_handlers[vector] != NULL) pic_handlers[vector](vector, context); // pass control to handler function
-    else kdebug("unhandled IRQ %u", vector);
+
+    size_t n = 0;
+    for(size_t i = 0; i < pic_handlers_cnt; i++) {
+        if(pic_handlers[i].handler != NULL && pic_handlers[i].irq == vector) {
+            pic_handlers[i].handler(vector, context);
+            n++;
+        }
+    }
+    if(!n) kdebug("unhandled IRQ %u", vector);
     pic_eoi_inline(vector); // acknowledge interrupt
 }
 
-void pic_handle(uint8_t irq, void (*handler)(uint8_t irq, void* context)) {
-    pic_handlers[irq] = handler;
+size_t pic_handle(uint8_t irq, void (*handler)(size_t irq, void* context)) {
+    size_t id = (size_t)-1;
+    for(size_t i = 0; i < pic_handlers_cnt; i++) {
+        if(pic_handlers[i].handler == NULL) {
+            id = i;
+            break;
+        }
+    }
+    if(id == (size_t)-1) {
+        void* new_handlers = krealloc(pic_handlers, (pic_handlers_cnt + PIC_HANDLERS_ALLOCSZ) * sizeof(intr_handler_t));
+        if(new_handlers == NULL) {
+            kerror("cannot allocate more memory for handlers list");
+            return id;
+        }
+#if PIC_HANDLERS_ALLOCSZ > 1
+        memset(&pic_handlers[pic_handlers_cnt + 1], 0, (PIC_HANDLERS_ALLOCSZ - 1) * sizeof(intr_handler_t));
+#endif
+        
+        id = pic_handlers_cnt; pic_handlers_cnt++;
+    }
+    pic_handlers[id].irq = irq;
+    pic_handlers[id].handler = handler;
     if(apic_enabled) ioapic_handle(ioapic_irq_gsi[irq], ioapic_legacy_handler);
+    return id;
+}
+
+void pic_unhandle(size_t id) {
+    if(id < pic_handlers_cnt) {
+        pic_handlers[id].handler = NULL;
+    }
 }
 
 bool pic_is_handled(uint8_t irq) {
-    return (pic_handlers[irq] != NULL);
+    for(size_t i = 0; i < pic_handlers_cnt; i++) {
+        if(pic_handlers[i].handler != NULL && pic_handlers[i].irq == irq) return true;
+    }
+    return false;
 }
 
 void pic_init() {
@@ -135,12 +175,15 @@ void pic_init() {
     outb(PIC2_DATA, ~0); // mask all slave PIC IRQs
 
     /* set up interrupt handling */
-    for(size_t i = 0; i < 16; i++) {
-        intr_handle(PIC_VECT_BASE + i, pic_handler_stub);
-        pic_handlers[i] = NULL; // clear out handler list
+    pic_handlers = kcalloc(16, sizeof(intr_handler_t));
+    if(pic_handlers == NULL) kerror("cannot allocate handlers list");
+    else {
+        pic_handlers_cnt = 16;
+        for(size_t i = 0; i < 16; i++) intr_handle(PIC_VECT_BASE + i, pic_handler_stub);
     }
 
     pic_eoi_inline(15); // EOI on both PICs in case some interrupt managed to fire
 
     asm volatile("sti"); // re-enable interrupts
+
 }

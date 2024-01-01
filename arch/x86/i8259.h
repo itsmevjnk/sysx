@@ -1,9 +1,7 @@
 #ifndef ARCH_X86_I8259_H
 #define ARCH_X86_I8259_H
 
-#include <stddef.h>
-#include <stdint.h>
-#include <stdbool.h>
+#include <hal/intr.h>
 #include <arch/x86cpu/asm.h>
 
 /* Intel 8259 PIC base interrupt vector */
@@ -21,7 +19,8 @@
 #define PIC2_CMD            PIC2_BASE
 #define PIC2_DATA           (PIC2_BASE + 1)
 
-extern void (*pic_handlers[16])(uint8_t irq, void* context); // list of PIC handlers
+extern intr_handler_t* pic_handlers; // list of PIC handlers
+extern size_t pic_handlers_cnt;
 
 /*
  * inline static void pic_eoi_inline(uint8_t irq)
@@ -93,11 +92,18 @@ uint16_t pic_read_irr();
 uint16_t pic_read_isr();
 
 /*
- * void pic_handle(uint8_t irq, void (*handler)(uint8_t irq, void* context))
+ * size_t pic_handle(uint8_t irq, void (*handler)(size_t irq, void* context))
  *  Registers an IRQ handler. The handler function does not have to
  *  acknowledge the IRQ, as this is handled by the handler stub.
+ *  Returns an unique identifier for use with pic_unhandle.
  */
-void pic_handle(uint8_t irq, void (*handler)(uint8_t irq, void* context));
+size_t pic_handle(uint8_t irq, void (*handler)(size_t irq, void* context));
+
+/*
+ * void pic_unhandle(size_t id)
+ *  Unregisters the specified PIC handler registered with pic_handle.
+ */
+void pic_unhandle(size_t id);
 
 /*
  * bool pic_is_handled(uint8_t irq)

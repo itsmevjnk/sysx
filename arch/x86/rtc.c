@@ -40,7 +40,7 @@ static inline uint8_t rtc_reg_read(uint8_t reg) {
 #define RTC_SRC_ALARM               (1 << 5)
 #define RTC_SRC_UPDATED             (1 << 4)
 
-static void rtc_irq_handler(uint8_t irq, void* context) {
+static void rtc_irq_handler(size_t irq, void* context) {
     (void) irq;
     uint8_t stat = rtc_reg_read(RTC_REG_STAT_C);
     if(stat & RTC_SRC_PERIODIC) timer_handler(RTC_TIMER_PERIOD, context);

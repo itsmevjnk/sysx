@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <helpers/mmio.h>
 #include <arch/x86/i8259.h>
-#include <hal/intr.h>
 #include <drivers/acpi.h>
 #include <arch/x86/mptab.h>
 #include <kernel/cmdline.h>
@@ -177,33 +176,78 @@ void apic_spurious_handler(uint8_t vector, void* context) {
 }
 
 /* IOAPIC interrupt handlers */
-static void (**ioapic_handlers)(uint8_t gsi, void* context) = NULL;
+intr_handler_t* ioapic_handlers = NULL;
+size_t ioapic_handlers_cnt = 0;
+#define IOAPIC_HANDLERS_ALLOCSZ         4
+
 void ioapic_handler(uint8_t vector, void* context) {
     vector -= IOAPIC_HANDLER_VECT_BASE; // vector now holds the GSI
     // kdebug("IOAPIC interrupt GSI %u encountered", vector);
 
-    if(ioapic_handlers[vector] != NULL) ioapic_handlers[vector](vector, context);
-    else kdebug("unhandled GSI %u", vector);
+    size_t n = 0;
+    for(size_t i = 0; i < ioapic_handlers_cnt; i++) {
+        if(ioapic_handlers[i].handler != NULL && ioapic_handlers[i].irq == vector) {
+            ioapic_handlers[i].handler(vector, context);
+            n++;
+        }
+    }
+    if(!n) kdebug("unhandled GSI %u", vector);
 
     apic_eoi(); // send APIC EOI
 }
 
-void ioapic_legacy_handler(uint8_t gsi, void* context) {
+void ioapic_legacy_handler(size_t gsi, void* context) {
+    size_t irq = (size_t)-1;
     for(size_t i = 0; i < 16; i++) {
-        if(ioapic_irq_gsi[i] == gsi && pic_handlers[i] != NULL) {
-            pic_handlers[i](i, context);
-            return;
+        if(ioapic_irq_gsi[i] == gsi) {
+            irq = i;
+            break;
         }
     }
-    kdebug("unhandled GSI %u routed through legacy IRQ adapter", gsi);
+    if(irq == (size_t)-1) {
+        kerror("unable to route GSI %u to legacy IRQ");
+        return;
+    }
+    size_t n = 0;
+    for(size_t i = 0; i < pic_handlers_cnt; i++) {
+        if(pic_handlers[i].handler != NULL && pic_handlers[i].irq == irq) {
+            pic_handlers[i].handler(irq, context);
+            n++;
+        }
+    }
+    if(!n) kdebug("unhandled GSI %u routed through legacy IRQ adapter", gsi);
 }
 
-void ioapic_handle(uint8_t gsi, void (*handler)(uint8_t gsi, void* context)) {
-    ioapic_handlers[gsi] = handler;
+size_t ioapic_handle(uint8_t gsi, void (*handler)(size_t gsi, void* context)) {
+    size_t id = (size_t)-1;
+    for(size_t i = 0; i < ioapic_handlers_cnt; i++) {
+        if(ioapic_handlers[i].handler == NULL) {
+            id = i;
+            break;
+        }
+    }
+    if(id == (size_t)-1) {
+        void* new_handlers = krealloc(ioapic_handlers, (ioapic_handlers_cnt + IOAPIC_HANDLERS_ALLOCSZ) * sizeof(intr_handler_t));
+        if(new_handlers == NULL) {
+            kerror("cannot allocate more memory for handlers list");
+            return id;
+        }
+#if IOAPIC_HANDLERS_ALLOCSZ > 1
+        memset(&ioapic_handlers[ioapic_handlers_cnt + 1], 0, (IOAPIC_HANDLERS_ALLOCSZ - 1) * sizeof(intr_handler_t));
+#endif
+        
+        id = ioapic_handlers_cnt; ioapic_handlers_cnt++;
+    }
+    ioapic_handlers[id].irq = gsi;
+    ioapic_handlers[id].handler = handler;
+    return id;
 }
 
 bool ioapic_is_handled(uint8_t gsi) {
-    return (ioapic_handlers[gsi] != NULL);
+    for(size_t i = 0; i < ioapic_handlers_cnt; i++) {
+        if(ioapic_handlers[i].handler != NULL && ioapic_handlers[i].irq == gsi) return true;
+    }
+    return false;
 }
 
 void ioapic_mask(uint8_t gsi) {
@@ -476,6 +520,12 @@ bool apic_init() {
     mmio_outd(lapic_base + LAPIC_REG_LVT_ERROR, 0xFF | APIC_LVT_BM_MASK);
 
     /* set up IOAPIC interrupt handling */
+    ioapic_handlers = kcalloc(max_gsis, sizeof(intr_handler_t));
+    if(ioapic_handlers == NULL) {
+        kerror("cannot allocate memory for handlers list");
+        return false;
+    }
+    ioapic_handlers_cnt = max_gsis;
     for(size_t i = 0; i < ioapic_cnt; i++) {
         /* iterate through each IOAPIC to set up their IOREDTBLs */
         for(size_t j = 0; j < ioapic_info[i].inputs; j++) {
@@ -568,11 +618,14 @@ bool apic_init() {
 
     /* transparently adapt legacy PIC IRQs to APIC GSIs */
     uint16_t pic_irq_mask = pic_get_mask();
-    for(size_t i = 0; i < 16; i++) {
-        if(pic_handlers[i] != NULL) {
+    uint16_t pic_handled_irqs = 0; // bitmask of handled IRQs
+    for(size_t i = 0; i < pic_handlers_cnt; i++) {
+        if(pic_handlers[i].handler != NULL && !(pic_handled_irqs & (1 << pic_handlers[i].irq))) {
             /* there's a PIC handler assigned - adapt this to APIC */
-            ioapic_handle(ioapic_irq_gsi[i], ioapic_legacy_handler);
-            if(pic_irq_mask & (1 << i)) ioapic_mask(ioapic_irq_gsi[i]); else ioapic_unmask(ioapic_irq_gsi[i]); // transfer masking status over
+            pic_handled_irqs |= (1 << pic_handlers[i].irq);
+            uint8_t gsi = ioapic_irq_gsi[pic_handlers[i].irq];
+            ioapic_handle(gsi, ioapic_legacy_handler);
+            if(pic_irq_mask & (1 << pic_handlers[i].irq)) ioapic_mask(gsi); else ioapic_unmask(gsi); // transfer masking status over
         }
     }
 
