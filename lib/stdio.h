@@ -51,8 +51,17 @@ extern ptstream_t* kstdout;
 extern ptstream_t* kstderr;
 
 /*
+ * void stdio_stderr_init()
+ *  Initializes the stderr stream based on kernel cmdline
+ *  arguments.
+ */
+void stdio_stderr_init();
+
+/*
  * void stdio_init()
  *  Initializes the stdio system.
+ *  If KSTDERR_INIT_SEPARATE is not defined, this function
+ *  will also call stdio_stderr_init.
  */
 void stdio_init();
 

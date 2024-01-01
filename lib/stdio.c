@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <hal/terminal.h>
+#include <kernel/cmdline.h>
 
 /* protostream for log output */
 #ifndef TERM_NO_INPUT
@@ -37,11 +38,7 @@ static ptstream_t pts_log = {
     &ptlog_write
 };
 
-#ifdef KSTDERR_SER
-
-#ifdef NO_SERIAL
-#error "Serial is disabled through the NO_SERIAL macro!"
-#endif
+#ifndef NO_SERIAL
 
 #include <hal/serial.h>
 
@@ -65,12 +62,12 @@ static ptstream_t pts_log = {
 #define KSTDERR_SER_BAUD            9600UL
 #endif
 
-static uint8_t kstderr_read(struct ptstream* stream) {
+static uint8_t ptser_read(struct ptstream* stream) {
     (void) stream;
     return (uint8_t) ser_getc(KSTDERR_SER_PORT);
 }
 
-static int kstderr_write(struct ptstream* stream, uint8_t c) {
+static int ptser_write(struct ptstream* stream, uint8_t c) {
     (void) stream;
 #ifndef KSTDERR_SER_NO_CRNL
     if(c == '\n') ser_putc(KSTDERR_SER_PORT, '\r'); // add CR to NL
@@ -79,18 +76,65 @@ static int kstderr_write(struct ptstream* stream, uint8_t c) {
     return 0;
 }
 
-static ptstream_t pts_kstderr = {
+static ptstream_t pts_ser = {
     NULL,
     (size_t) -1,
     0,
-    &kstderr_read,
-    &kstderr_write
+    &ptser_read,
+    &ptser_write
 };
+
 #endif
 
 ptstream_t* kstdin = NULL;
 ptstream_t* kstdout = NULL;
 ptstream_t* kstderr = NULL;
+
+/* list of possible stderr outputs */
+enum stderr_out {
+    KSTDERR_NONE, // no kstderr at all
+    KSTDERR_LOG, // output via pts_log
+    KSTDERR_SER, // output via serial terminal
+};
+#if defined(KSTDERR_DEF_NONE)
+#define KSTDERR_OUT_DEFAULT                 KSTDERR_NONE
+#elif defined(KSTDERR_DEF_SER) && !defined(NO_SERIAL)
+#define KSTDERR_OUT_DEFAULT                 KSTDERR_SER
+#else
+#define KSTDERR_OUT_DEFAULT                 KSTDERR_LOG
+#endif
+
+void stdio_stderr_init() {
+    enum stderr_out output = KSTDERR_OUT_DEFAULT;
+
+    const char* stderr_cmd = cmdline_find_kvp("kstderr");
+    if(stderr_cmd != NULL) {
+        if(!strcmp(stderr_cmd, "none")) output = KSTDERR_NONE;
+        else if(!strcmp(stderr_cmd, "serial")) output = KSTDERR_SER;
+        else if(!strcmp(stderr_cmd, "log")) output = KSTDERR_LOG;
+    }
+
+#ifdef NO_SERIAL
+    if(output == KSTDERR_SER) {
+        kerror("cannot output to serial as it's disabled with NO_SERIAL build flag");
+        output = KSTDERR_OUT_DEFAULT;
+    }
+#endif
+    
+    switch(output) {
+        case KSTDERR_NONE:
+            kstderr = NULL;
+            break;
+        case KSTDERR_LOG:
+            kstderr = &pts_log;
+            break;
+#ifndef NO_SERIAL
+        case KSTDERR_SER:
+            ser_init(KSTDERR_SER_PORT, KSTDERR_SER_DBIT, KSTDERR_SER_SBIT, KSTDERR_SER_PARITY, KSTDERR_SER_BAUD);
+            kstderr = &pts_ser;
+#endif
+    }
+}
 
 void stdio_init() {
     kstdout = &pts_log;
@@ -99,11 +143,8 @@ void stdio_init() {
     kstdin = &pts_log;
 #endif
 
-#ifdef KSTDERR_SER
-    ser_init(KSTDERR_SER_PORT, KSTDERR_SER_DBIT, KSTDERR_SER_SBIT, KSTDERR_SER_PARITY, KSTDERR_SER_BAUD);
-    kstderr = &pts_kstderr;
-#else
-    kstderr = &pts_log;
+#ifndef KSTDERR_INIT_SEPARATE
+    stdio_stderr_init();
 #endif
 }
 

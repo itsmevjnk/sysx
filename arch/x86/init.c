@@ -20,15 +20,17 @@
 extern uint16_t x86ext_on;
 
 int ktgt_preinit() {
+    if(mb_info->flags & MULTIBOOT_INFO_CMDLINE) {
+        cmdline_init((char*)mb_info->cmdline);
+        // kdebug("cmdline: %s (argc = %u)", (char*)mb_info->cmdline, kernel_argc);
+    }
+    stdio_stderr_init();
+
     kdebug("x86ext_on = 0x%x", x86ext_on);
 
     kdebug("Multiboot information structure address: 0x%08x", mb_info);
 
     if(mb_info->flags & MULTIBOOT_INFO_MEMORY) kdebug("memory size: lo %uK, hi %uK", mb_info->mem_lower, mb_info->mem_upper);
-    if(mb_info->flags & MULTIBOOT_INFO_CMDLINE) {
-        cmdline_init((char*)mb_info->cmdline);
-        kdebug("cmdline: %s (argc = %u)", (char*)mb_info->cmdline, kernel_argc);
-    }
 
     kinfo("initializing GDT"); gdt_init();
     kinfo("initializing IDT"); idt_init();
