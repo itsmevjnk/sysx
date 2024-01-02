@@ -11,4 +11,5 @@ $(ARCHDIR)/syscall.o \
 $(ARCHDIR)/pci.o \
 $(ARCHDIR)/acpi_lai.o \
 $(ARCHDIR)/mptab.o \
-$(ARCHDIR)/rtc.o
+$(ARCHDIR)/rtc.o \
+$(ARCHDIR)/bios.o

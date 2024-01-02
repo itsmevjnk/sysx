@@ -10,6 +10,7 @@
 #include <arch/x86cpu/int32.h>
 #include <arch/x86cpu/apic.h>
 #include <arch/x86/mptab.h>
+#include <arch/x86/bios.h>
 
 #include <fs/vfs.h>
 #include <fs/tarfs.h>
@@ -38,6 +39,8 @@ int ktgt_preinit() {
     kinfo("initializing int32 capabilities"); int32_init();
     kinfo("initializing PIT as system timer source"); pit_systimer_init();
     // kinfo("initializing RTC as system timer source"); rtc_timer_enable(); rtc_init();
+
+    kinfo("acquiring EBDA address"); kdebug("EBDA is located at 0x%08X", bios_get_ebda_paddr());
 
 #ifdef DEBUG
     if(mb_info->flags & MULTIBOOT_INFO_MEM_MAP) {
