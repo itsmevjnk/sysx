@@ -524,6 +524,7 @@ done:
 }
 
 void vmm_switch(void* vmm) {
+	if(vmm_current == vmm) return; // no need to do anything
 	asm volatile("mov %0, %%cr3" : : "r"(vmm) : "memory");
 	vmm_current = vmm;
 }
