@@ -13,9 +13,6 @@ extern void* task_kernel;
 /* current task pointer */
 extern volatile void* task_current;
 
-/* task yielding (automatic switching) enable/disable */
-extern volatile bool task_yield_enable;
-
 /* task switch timestamp */
 extern volatile timer_tick_t task_switch_tick;
 
@@ -76,6 +73,21 @@ void task_switch(void* task, void* context);
  *  interrupt handler.
  */
 void task_yield(void* context);
+
+/*
+ * void task_yield_block()
+ *  Blocks task yielding.
+ *  This function increments an internal block counter (similar to a semaphore).
+ */
+void task_yield_block();
+
+/*
+ * void task_yield_unblock()
+ *  Unblocks task yielding.
+ *  This function decrements the aforementioned internal counter, whose value
+ *  of zero indicates the enabling of task yielding.
+ */
+void task_yield_unblock();
 
 /*
  * void task_init_stub()

@@ -18,14 +18,14 @@ bool task_get_ready(void* task) {
 }
 
 void task_insert(void* task, void* target) {
-    task_yield_enable = false;
+    task_yield_block();
     task_common_t* common = task_common(task);
     task_common_t* common_tgt = task_common(target);
     common->prev = target;
     common->next = common_tgt->next;
     task_common(common->next)->prev = task;
     common_tgt->next = task;
-    task_yield_enable = true;
+    task_yield_unblock();
 }
 
 void* task_create(bool user, struct proc* proc, size_t stack_sz, uintptr_t entry, uintptr_t stack_bottom) {
@@ -86,7 +86,7 @@ void* task_create(bool user, struct proc* proc, size_t stack_sz, uintptr_t entry
 static void task_do_delete(void* task) {
     task_common_t* common = task_common(task);
     
-    task_yield_enable = false;
+    task_yield_block();
 
     struct proc* proc = proc_get(common->pid);
     if(proc != NULL) {
@@ -113,7 +113,7 @@ static void task_do_delete(void* task) {
     task_common(common->prev)->next = common->next;
     task_common(common->next)->prev = common->prev;
 
-    task_yield_enable = true;
+    task_yield_unblock();
 
     task_delete_stub(task); // finally purge the task
 }
@@ -141,12 +141,12 @@ void task_init_stub() {
     // common->ready = 1;
 }
 
-volatile bool task_yield_enable = true;
+static volatile size_t task_yield_block_cnt = 0;
 
 volatile timer_tick_t task_switch_tick = 0;
 
 void task_yield(void* context) {
-    if(!task_yield_enable || task_kernel == NULL) return; // cannot switch yet
+    if(task_yield_block_cnt || task_kernel == NULL) return; // cannot switch yet
     vmm_do_cleanup(); // remove any VMM config that have been staged for deletion
     if(task_current == NULL) {
         if(task_get_ready(task_kernel)) {
@@ -175,6 +175,14 @@ void task_yield(void* context) {
             task_switch(task, context);
         }
     }
+}
+
+void task_yield_block() {
+    task_yield_block_cnt++;
+}
+
+void task_yield_unblock() {
+    if(task_yield_block_cnt) task_yield_block_cnt--;
 }
 
 void* task_fork_stub(struct proc* proc) {
