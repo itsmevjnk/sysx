@@ -5,6 +5,7 @@ extern x86ext_on
 extern proc_pidtab
 extern tss_entry
 extern vmm_current
+extern timer_tick
 
 extern apic_enabled:weak
 extern lapic_base:weak
@@ -38,6 +39,9 @@ jmp .user_task_cont
 or eax, 1
 .user_task_cont:
 mov [ebp + (4 * 10)], eax
+
+mov eax, [timer_tick]
+mov [ebp + (4 * 13)], eax ; task_current->t_switch
 
 .store_ctx: ; store context into current task
 add esi, (4 * 4) ; skip DS/ES/FS/GS
@@ -92,6 +96,8 @@ mov ebp, [esp + (4 * 1)] ; task
 mov dword [task_current], ebp ; change task_current since we will not be working on it
 
 mov eax, [ebp + (4 * 10)] ; task->type/ready/pid
+or eax, (1 << 3) ; set ready flag (as we're switching into it, so it has to be ready)
+mov [ebp + (4 * 10)], eax
 shr eax, 4 ; discard type and ready
 shl eax, 2 ; multiply by 4
 add eax, dword [proc_pidtab] ; address into proc_pidtab

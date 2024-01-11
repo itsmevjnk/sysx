@@ -11,7 +11,7 @@ void timer_handler(size_t delta, void* context) {
         fbuf_commit();
     }
 
-    if(task_kernel != NULL && (task_current == NULL || timer_tick - task_switch_tick >= TASK_QUANTUM)) {
+    if(task_kernel != NULL && (task_current == NULL || timer_tick - task_yield_tick >= TASK_QUANTUM)) {
         task_yield(context);
     }
 }

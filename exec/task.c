@@ -73,6 +73,8 @@ void* task_create(bool user, struct proc* proc, size_t stack_sz, uintptr_t entry
     task_set_iptr(task, entry);
     task_set_sptr(task, common->stack_bottom - ((user) ? TASK_KERNEL_STACK_SIZE : 0));
 
+    common->t_switch = timer_tick; // give the new task an equal chance to be started later
+
     /* set task type and activate task */
     common->type = (user) ? TASK_TYPE_USER : TASK_TYPE_KERNEL;
     if(entry != 0) common->ready = 1; // start task immediately if there's an instruction pointer ready
@@ -143,36 +145,40 @@ void task_init_stub() {
 
 static volatile size_t task_yield_block_cnt = 0;
 
-volatile timer_tick_t task_switch_tick = 0;
+volatile timer_tick_t task_yield_tick = 0;
 
 void task_yield(void* context) {
     if(task_yield_block_cnt || task_kernel == NULL) return; // cannot switch yet
     vmm_do_cleanup(); // remove any VMM config that have been staged for deletion
     if(task_current == NULL) {
         if(task_get_ready(task_kernel)) {
-            task_switch_tick = timer_tick;
+            task_yield_tick = timer_tick;
             task_switch(task_kernel, context); // switch into kernel task
         }
     } else {
+        void* task_selected = (void*) task_current; // the task we'll switch to next
+        timer_tick_t tdelta_max = 0; // maximum duration between now and the selected task's switch-out - we'll select a ready task that has been waiting for longest
         void* task = (void*) task_current;
-        do {
+        while(1) {
             task = task_common(task)->next;
-            if(task_common(task)->type == TASK_TYPE_DELETE_PENDING) {
-                /* this task is to be deleted - delete it now */
-                void* next_task = task_common((void*) task_common(task)->next)->next; // go to the task after this one
-                task_do_delete(task);
-                task = next_task;
+            if(task == task_current) break;
+            task_common_t* common = task_common(task);
+            if(!common->ready) continue; // task is not ready - discard this one
+            timer_tick_t tdelta = timer_tick - common->t_switch; // figure out how long this task has been suspended for
+            if(tdelta > tdelta_max) {
+                tdelta_max = tdelta;
+                task_selected = task;
             }
-        } while(!task_common(task)->ready && task != task_current); // find a ready task to switch to, while making sure that we don't get stuck in a loop if no tasks are ready
-        if(task == task_current) return; // no tasks to switch to
+        }
+        if(task_selected == task_current) return; // no tasks to switch to
         else {
             if(task_common((void*) task_current)->type == TASK_TYPE_DELETE_PENDING) {
                 /* current task is waiting to be deleted - let's do it now */
                 task_do_delete((void*) task_current);
                 task_current = NULL;
             }
-            task_switch_tick = timer_tick;
-            task_switch(task, context);
+            task_yield_tick = timer_tick;
+            task_switch(task_selected, context);
         }
     }
 }

@@ -14,7 +14,7 @@ extern void* task_kernel;
 extern volatile void* task_current;
 
 /* task switch timestamp */
-extern volatile timer_tick_t task_switch_tick;
+extern volatile timer_tick_t task_yield_tick;
 
 /* COMMON TASK DESCRIPTION FIELDS */
 #if UINTPTR_MAX == UINT64_MAX
@@ -29,6 +29,7 @@ typedef struct {
     size_t pid : TASK_PID_BITS; // task's process ID
     uintptr_t stack_bottom;
     size_t stack_size;
+    timer_tick_t t_switch; // timestamp of when the task is switched out
     void* prev; // previous task
     void* next; // next task - our task description structure is a cyclic doubly linked list
 } __attribute__((packed)) task_common_t;
