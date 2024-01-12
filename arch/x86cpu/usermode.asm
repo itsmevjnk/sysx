@@ -45,8 +45,11 @@ iretd ; goodbye!
 extern task_kernel
 global task_yield_noirq
 task_yield_noirq:
+push ebp
+mov ebp, esp
 cmp dword [task_kernel], 0
 jz .done ; do not yield if tasking is not available
 int 0x9F ; INT 0x9F will be configured to call task_yield()
 .done:
+leave
 ret

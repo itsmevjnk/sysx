@@ -74,6 +74,6 @@ void task_init() {
         }
     }
     kdebug("task structure size with regs_ext: %u", task_size);
-    intr_handle(0x8F, (void*) &task_do_yield_noirq);
+    intr_handle(0x9F, (void*) &task_do_yield_noirq);
     task_init_stub();
 }
