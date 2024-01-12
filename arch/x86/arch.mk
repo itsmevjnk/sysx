@@ -12,4 +12,5 @@ $(ARCHDIR)/pci.o \
 $(ARCHDIR)/acpi_lai.o \
 $(ARCHDIR)/mptab.o \
 $(ARCHDIR)/rtc.o \
-$(ARCHDIR)/bios.o
+$(ARCHDIR)/bios.o \
+$(ARCHDIR)/mutex.o
