@@ -204,10 +204,10 @@ static void kheap_truncate_block(kheap_header_t* header, size_t size) {
     }
 }
 
-void* kmalloc_ext(size_t size, size_t align, void** phys) {
+void* kheap_alloc(size_t size, size_t align) {
     if(size == 0) {
         /* do not allocate anything */
-        if(phys != NULL) *phys = NULL;
+        // if(phys != NULL) *phys = NULL;
         return NULL;
     }
 
@@ -260,7 +260,7 @@ void* kmalloc_ext(size_t size, size_t align, void** phys) {
                 kheap_truncate_block(header, size);
                 
                 header->used = 1; // mark block as used
-                if(phys != NULL) *phys = (void*) vmm_get_paddr(vmm_current, return_addr);
+                // if(phys != NULL) *phys = (void*) vmm_get_paddr(vmm_current, return_addr);
                 return (void*) return_addr;
             }
         }
@@ -280,12 +280,12 @@ void kfree(void* ptr) {
     kheap_merge(header); // defragment our freed header
 }
 
-void* krealloc_ext(void* ptr, size_t size, size_t align, void** phys) {
-    if(ptr == NULL) return kmalloc_ext(size, align, phys); // redirect to kmalloc_ext
+void* kheap_realloc(void* ptr, size_t size, size_t align) {
+    if(ptr == NULL) return kheap_alloc(size, align); // redirect to kheap_alloc
 
     if(size == 0) {
         /* redirect to kfree */
-        if(phys != NULL) *phys = NULL;
+        // if(phys != NULL) *phys = NULL;
         kfree(ptr);
         return NULL;
     }
@@ -366,12 +366,12 @@ void* krealloc_ext(void* ptr, size_t size, size_t align, void** phys) {
         kheap_truncate_block(proj_header, size);
 
         proj_header->used = 1; // mark block as used
-        if(phys != NULL) *phys = (void*) vmm_get_paddr(vmm_current, return_addr);
+        // if(phys != NULL) *phys = (void*) vmm_get_paddr(vmm_current, return_addr);
         return (void*) return_addr;
     }
 
     /* APPROACH 2: ALLOCATE NEW BLOCK */
-    void* new_ptr = kmalloc_ext(size, align, phys);
+    void* new_ptr = kheap_alloc(size, align);
     if(new_ptr != NULL) {
         /* successful allocation */
         memmove(new_ptr, ptr, move_size);
@@ -394,4 +394,16 @@ void kheap_dump() {
             header = (kheap_header_t*) ((uintptr_t) footer + sizeof(kheap_footer_t));
         }
     } else kdebug("kernel heap is not initialized");
+}
+
+void* kmalloc(size_t size) {
+    return kheap_alloc(size, 1);
+}
+
+void* krealloc(void* ptr, size_t size) {
+    return kheap_realloc(ptr, size, 1);
+}
+
+void* kmemalign(size_t alignment, size_t size) {
+    return kheap_alloc(size, alignment);
 }

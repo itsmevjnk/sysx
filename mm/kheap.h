@@ -5,21 +5,19 @@
 #include <stdint.h>
 
 /*
- * void* kmalloc_ext(size_t size, size_t align, void** phys)
+ * void* kheap_alloc(size_t size, size_t align)
  *  An extended version of kmalloc that allows for the memory
- *  block to be specified as aligned to a specific boundary
- *  as well as its physical address to be retrieved.
+ *  block to be specified as aligned to a specific boundary.
  */
-void* kmalloc_ext(size_t size, size_t align, void** phys);
+void* kheap_alloc(size_t size, size_t align);
 
 /*
- * void* krealloc_ext(void* ptr, size_t size, size_t align, void** phys)
+ * void* kheap_realloc(void* ptr, size_t size, size_t align)
  *  An extended version of krealloc that allows for alignment
- *  requirements to be required and the new physical address
- *  to be retrieved.
+ *  requirements to be required.
  *  This is implemented in lib/kheap.c.
  */
-void* krealloc_ext(void* ptr, size_t size, size_t align, void** phys);
+void* kheap_realloc(void* ptr, size_t size, size_t align);
 
 /*
  * void kheap_dump()

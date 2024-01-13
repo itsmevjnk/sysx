@@ -12,7 +12,7 @@ static size_t task_size = sizeof(task_t); // size of each task structure (includ
 extern uint16_t x86ext_on;
 
 void* task_create_stub() {
-    task_t* task = kmalloc_ext(task_size, 16, NULL);
+    task_t* task = kmemalign(16, task_size);
     if(task == NULL) {
         kerror("cannot allocate memory for new task");
         return NULL;

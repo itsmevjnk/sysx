@@ -12,10 +12,29 @@
 void* kmalloc(size_t size);
 
 /*
+ * void* kmemalign(size_t alignment, size_t size)
+ *  Attempts to allocate a contiguous memory block of the
+ *  specified size on the specified address alignment boundary.
+ *  Returns the memory block's address on success, or NULL on
+ *  failure.
+ */
+void* kmemalign(size_t alignment, size_t size);
+
+/*
+ * void* kvalloc(size_t size)
+ *  Similar to kmemalign, with the alignment being chosen to
+ *  be the PMM frame size.
+ *  This function is implemented by stdlib.c using kmemalign.
+ */
+void* kvalloc(size_t size);
+
+/*
  * void* kcalloc(size_t nitems, size_t size)
  *  Attempts to allocate a contiguous memory block of size
  *  nitems * size, then zeroes it out and returns it, or
  *  return NULL on failure.
+ *  This function is implemented by stdlib.c using memset
+ *  and kmalloc.
  */
 void* kcalloc(size_t nitems, size_t size);
 
