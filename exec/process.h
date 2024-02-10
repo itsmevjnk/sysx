@@ -86,6 +86,12 @@ void proc_delete(struct proc* proc);
 void proc_do_delete(struct proc* proc);
 
 /*
+ * void proc_abort()
+ *  Terminates the current process.
+ */
+void proc_abort();
+
+/*
  * size_t proc_add_task(struct proc* proc, void* task)
  *  Adds the specified task to the process.
  *  Returns the task's index in proc->tasks, or -1 on failure.

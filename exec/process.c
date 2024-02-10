@@ -102,6 +102,11 @@ struct proc* proc_create(struct proc* parent, void* vmm, bool cow) {
 }
 
 void proc_delete(struct proc* proc) {
+    if(proc == proc_kernel) {
+        kerror("kernel process being deleted, halting");
+        while(1);
+    }
+
     mutex_acquire(&proc->mu_tasks); mutex_acquire(&proc->mu_fds); // make sure nobody else is holding the process
 
     /* delete all tasks */
@@ -123,6 +128,15 @@ void proc_do_delete(struct proc* proc) {
     vmm_free(proc->vmm); // delete VMM config (or stage it for deletion)
     proc_pid_free(proc->pid);
     kfree(proc);
+}
+
+void proc_abort() {
+    if(!task_current) {
+        kwarn("attempting to call proc_abort while task_current is unavailable");
+        while(1);
+    }
+    proc_delete(proc_get(task_common((void*) task_current)->pid));
+    while(1); // "buffer" so we don't crash
 }
 
 size_t proc_add_task(struct proc* proc, void* task) {

@@ -128,7 +128,8 @@ void exc_stub(uint8_t vector, idt_context_t* context) {
 // #endif
 
 	if(term_impl == &fbterm_hook) fbuf_commit();
-	while(1); // halt now
+	
+	proc_abort(); // abort current process
 }
 
 /* giant bomb of code */
