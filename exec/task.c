@@ -14,7 +14,7 @@ void task_set_ready(void* task, bool ready) {
 }
 
 bool task_get_ready(void* task) {
-    return (task_common(task)->ready != 0);
+    return (task_common(task)->ready);
 }
 
 void task_insert(void* task, void* target) {
@@ -31,7 +31,7 @@ void task_insert(void* task, void* target) {
 void* task_create(bool user, struct proc* proc, size_t stack_sz, uintptr_t entry, uintptr_t stack_bottom) {
     /* allocate memory for new task */
     void* task = task_create_stub();
-    if(task == NULL) {
+    if(!task) {
         kerror("task_create_stub() cannot create new task");
         return NULL;
     }
@@ -50,7 +50,7 @@ void* task_create(bool user, struct proc* proc, size_t stack_sz, uintptr_t entry
     size_t framesz = pmm_framesz();
     if(stack_sz % framesz) stack_sz += framesz - stack_sz % framesz; // frame-align stack size
     common->stack_bottom = (stack_bottom) ? stack_bottom : (vmm_first_free(proc->vmm, 0, kernel_start, stack_sz, 0, true) + stack_sz);
-    if(common->stack_bottom == 0) {
+    if(!common->stack_bottom) {
         kerror("cannot allocate virtual address space for task");
         task_delete_stub(task);
         return NULL;
@@ -77,7 +77,7 @@ void* task_create(bool user, struct proc* proc, size_t stack_sz, uintptr_t entry
 
     /* set task type and activate task */
     common->type = (user) ? TASK_TYPE_USER : TASK_TYPE_KERNEL;
-    if(entry != 0) common->ready = 1; // start task immediately if there's an instruction pointer ready
+    if(entry) common->ready = 1; // start task immediately if there's an instruction pointer ready
 
     /* insert this task after task_kernel */
     task_insert(task, task_kernel);
@@ -91,7 +91,7 @@ static void task_do_delete(void* task) {
     task_yield_block();
 
     struct proc* proc = proc_get(common->pid);
-    if(proc != NULL) {
+    if(proc) {
         /* de-allocate stack */
         size_t framesz = pmm_framesz();
         for(size_t i = 0; i < common->stack_size; i += framesz) {
@@ -102,7 +102,7 @@ static void task_do_delete(void* task) {
         /* delete task from process list and count remaining tasks */
         size_t remaining_tasks = 0; // number of remaining tasks
         for(size_t i = 0; i < proc->num_tasks; i++) {
-            if(proc->tasks[i] != NULL) {
+            if(proc->tasks[i]) {
                 if(proc->tasks[i] == task) proc->tasks[i] = NULL;
                 else remaining_tasks++;
             }
@@ -148,9 +148,9 @@ static volatile size_t task_yield_block_cnt = 0;
 volatile timer_tick_t task_yield_tick = 0;
 
 void task_yield(void* context) {
-    if(task_yield_block_cnt || task_kernel == NULL) return; // cannot switch yet
+    if(task_yield_block_cnt || !task_kernel) return; // cannot switch yet
     vmm_do_cleanup(); // remove any VMM config that have been staged for deletion
-    if(task_current == NULL) {
+    if(!task_current) {
         if(task_get_ready(task_kernel)) {
             task_yield_tick = timer_tick;
             task_switch(task_kernel, context); // switch into kernel task
@@ -194,11 +194,11 @@ void task_yield_unblock() {
 void* task_fork_stub(struct proc* proc) {
     /* create blank task */
     task_common_t* common_current = task_common((void*) task_current);
-    bool same_proc = (proc == NULL || proc == proc_get(common_current->pid)); // set if we're cloning into the same process
-    if(proc == NULL) proc = proc_get(common_current->pid); // current process
+    bool same_proc = (!proc || proc == proc_get(common_current->pid)); // set if we're cloning into the same process
+    if(!proc) proc = proc_get(common_current->pid); // current process
     bool user = (common_current->type == TASK_TYPE_USER || common_current->type == TASK_TYPE_USER_SYS);
     void* task = task_create(user, proc, common_current->stack_size - ((user) ? TASK_KERNEL_STACK_SIZE : 0), 0, (same_proc) ? 0 : common_current->stack_bottom);
-    if(task == NULL) return NULL;
+    if(!task) return NULL;
 
     task_common_t* common = task_common(task);
 

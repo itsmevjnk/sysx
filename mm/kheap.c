@@ -106,7 +106,7 @@ static size_t kheap_expand(size_t size) {
         if(frame == (size_t)-1) break; // out of memory
         // pmm_alloc(frame);
 
-        if(kheap_first_block == NULL) { // heap is being initialized
+        if(!kheap_first_block) { // heap is being initialized
             kheap_first_block = (kheap_header_t*) KHEAP_BASE_ADDRESS;
             // header = kheap_first_block;
         }
@@ -115,7 +115,7 @@ static size_t kheap_expand(size_t size) {
         alloc_frames++;
     }
 
-    if(alloc_frames > 0) {
+    if(alloc_frames) {
         /* at least we've allocated something */
         kheap_header_t* header = (kheap_header_t*) ((uintptr_t) kheap_first_block + kheap_size); // last header
         kheap_size += alloc_frames * pmm_framesz(); // update heap size
@@ -205,9 +205,9 @@ static void kheap_truncate_block(kheap_header_t* header, size_t size) {
 }
 
 void* kheap_alloc(size_t size, size_t align) {
-    if(size == 0) {
+    if(!size) {
         /* do not allocate anything */
-        // if(phys != NULL) *phys = NULL;
+        // if(phys) *phys = NULL;
         return NULL;
     }
 
@@ -240,7 +240,7 @@ void* kheap_alloc(size_t size, size_t align) {
 
             if(align > 1) {
                 /* alignment requirement */
-                if(return_addr % align > 0) return_addr += align - (return_addr % align); // align the returning address
+                if(return_addr % align) return_addr += align - (return_addr % align); // align the returning address
                 
                 if((uintptr_t) header == (uintptr_t) kheap_first_block) {
                     /* we're on our first block, so we cannot cede the preceding space to any previous blocks */
@@ -260,7 +260,7 @@ void* kheap_alloc(size_t size, size_t align) {
                 kheap_truncate_block(header, size);
                 
                 header->used = 1; // mark block as used
-                // if(phys != NULL) *phys = (void*) vmm_get_paddr(vmm_current, return_addr);
+                // if(phys) *phys = (void*) vmm_get_paddr(vmm_current, return_addr);
                 return (void*) return_addr;
             }
         }
@@ -272,7 +272,7 @@ void* kheap_alloc(size_t size, size_t align) {
 }
 
 void kfree(void* ptr) {
-    if(ptr == NULL) return; // no need to free anything
+    if(!ptr) return; // no need to free anything
 
     kheap_header_t* header = (kheap_header_t*) ((uintptr_t) ptr - sizeof(kheap_header_t));
     if(header->magic != KHEAP_HEADER_MAGIC) kwarn("invalid memory block @ 0x%x", (uintptr_t) ptr);
@@ -281,11 +281,11 @@ void kfree(void* ptr) {
 }
 
 void* kheap_realloc(void* ptr, size_t size, size_t align) {
-    if(ptr == NULL) return kheap_alloc(size, align); // redirect to kheap_alloc
+    if(!ptr) return kheap_alloc(size, align); // redirect to kheap_alloc
 
-    if(size == 0) {
+    if(!size) {
         /* redirect to kfree */
-        // if(phys != NULL) *phys = NULL;
+        // if(phys) *phys = NULL;
         kfree(ptr);
         return NULL;
     }
@@ -328,7 +328,7 @@ void* kheap_realloc(void* ptr, size_t size, size_t align) {
     uintptr_t start_addr = (uintptr_t) proj_header + sizeof(kheap_header_t);
     uintptr_t end_addr = start_addr + proj_size; // end address of projected block (i.e. footer address)
     uintptr_t return_addr = start_addr;
-    if(align > 1 && return_addr % align != 0) {
+    if(align > 1 && (return_addr % align)) {
         return_addr += align - (return_addr % align);
         if((uintptr_t) proj_header == (uintptr_t) kheap_first_block) {
             while(return_addr - start_addr < KHEAP_BLOCK_MIN_SIZE_TOTAL) return_addr += align;
@@ -340,7 +340,7 @@ void* kheap_realloc(void* ptr, size_t size, size_t align) {
         size_t orig_size = proj_size; // save projected size
         if(next_unused) proj_size -= next_header->size; // remove next header
         size_t expand_size = return_addr + size - end_addr;
-        if(kheap_expand(expand_size) > 0) {
+        if(kheap_expand(expand_size)) {
             /* expansion is (somewhat) successful */
             proj_size += next_header->size;
             if(!next_block_available) { // next block is now available, so we also have a new header and footer to absorb into the projected block
@@ -366,13 +366,13 @@ void* kheap_realloc(void* ptr, size_t size, size_t align) {
         kheap_truncate_block(proj_header, size);
 
         proj_header->used = 1; // mark block as used
-        // if(phys != NULL) *phys = (void*) vmm_get_paddr(vmm_current, return_addr);
+        // if(phys) *phys = (void*) vmm_get_paddr(vmm_current, return_addr);
         return (void*) return_addr;
     }
 
     /* APPROACH 2: ALLOCATE NEW BLOCK */
     void* new_ptr = kheap_alloc(size, align);
-    if(new_ptr != NULL) {
+    if(new_ptr) {
         /* successful allocation */
         memmove(new_ptr, ptr, move_size);
         kfree(ptr); // free up old block
@@ -383,7 +383,7 @@ void* kheap_realloc(void* ptr, size_t size, size_t align) {
 }
 
 void kheap_dump() {
-    if(kheap_first_block != NULL) {
+    if(kheap_first_block) {
         kdebug("kernel heap @ 0x%x (size: %u):", (uintptr_t) kheap_first_block, kheap_size);
         /* traverse kernel heap */
         kheap_header_t* header = kheap_first_block;

@@ -54,7 +54,7 @@ __attribute__((weak)) int memcmp(const void* ptr1, const void* ptr2, size_t n) {
     const uint8_t* buf1 = ptr1;
     const uint8_t* buf2 = ptr2;
     int ret = 0;
-    for(size_t i = 0; i < n && ret == 0; i++) {
+    for(size_t i = 0; i < n && !ret; i++) {
         ret = buf1[i] - buf2[i];
     }
     return ret;
@@ -63,7 +63,7 @@ __attribute__((weak)) int memcmp(const void* ptr1, const void* ptr2, size_t n) {
 __attribute__((weak)) int strcmp(const char* str1, const char* str2) {
     if((uintptr_t) str1 == (uintptr_t) str2) return 0;
     int ret = 0;
-    for(size_t i = 0; ret == 0; i++) {
+    for(size_t i = 0; !ret; i++) {
         ret = str1[i] - str2[i];
         if(!str1[i] || !str2[i]) break;
     }
@@ -73,7 +73,7 @@ __attribute__((weak)) int strcmp(const char* str1, const char* str2) {
 __attribute__((weak)) int strncmp(const char* str1, const char* str2, size_t n) {
     if((uintptr_t) str1 == (uintptr_t) str2) return 0;
     int ret = 0;
-    for(size_t i = 0; i < n && ret == 0; i++) {
+    for(size_t i = 0; i < n && !ret; i++) {
         ret = str1[i] - str2[i];
         if(!str1[i] || !str2[i]) break;
     }

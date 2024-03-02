@@ -8,7 +8,7 @@ size_t basecol_encode(size_t n, char* buf, bool upper) {
         buf[off++] = (n % 26) + ((upper) ? 'A' : 'a');
 
         n /= 26;
-        if(n == 0) break; // no more digits to encode
+        if(!n) break; // no more digits to encode
         n--;
     }
     buf[off] = '\0';
@@ -34,7 +34,7 @@ size_t basecol_decode(const char* str, char** endptr) {
             ret += *str - 'a';
         } else {
             /* invalid character */
-            if(endptr != NULL) *endptr = (char*) str;
+            if(endptr) *endptr = (char*) str;
             break;
         }
     }

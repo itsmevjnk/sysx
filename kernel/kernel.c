@@ -40,7 +40,7 @@ void vfs_dirlist(const vfs_node_t* node, size_t tab) {
 
     for(size_t i = 0; ; i++) {
         struct dirent* de = vfs_readdir(node, i);
-        if(de == NULL) return;
+        if(!de) return;
         vfs_node_t* n = vfs_finddir(node, de->name);
         kinfo("ino %llu:%s%s (0x%02x), size %llu", de->ino, tab_str, de->name, n->flags, n->length);
         if((n->flags & ~VFS_SYMLINK) == VFS_DIRECTORY || (n->flags & ~VFS_SYMLINK) == VFS_MOUNTPOINT) vfs_dirlist(n, tab + 1);
@@ -81,7 +81,7 @@ void kinit() {
 #endif
 
     vfs_node_t* devfs_root = vfs_traverse_path(NULL, DEVFS_ROOT);
-    if(devfs_root == NULL) kerror("cannot find " DEVFS_ROOT " for devfs mounting");
+    if(!devfs_root) kerror("cannot find " DEVFS_ROOT " for devfs mounting");
     else {
         kinfo("mounting devfs at " DEVFS_ROOT);
         devfs_mount(devfs_root);
@@ -98,7 +98,7 @@ void kinit() {
     kernel_syms = sym_new_table(KSYM_INITIAL_CNT);
     kinfo("locating kernel symbols file at " KSYM_PATH);
     vfs_node_t* ksym_node = vfs_traverse_path(NULL, KSYM_PATH);
-    if(ksym_node == NULL) kerror("cannot find kernel symbols file");
+    if(!ksym_node) kerror("cannot find kernel symbols file");
     else {
         kinfo("loading kernel symbols");
         elf_load_ksym(ksym_node);
@@ -133,12 +133,12 @@ void kinit() {
     /* load kernel modules */
     kinfo("loading kernel modules from " KMOD_PATH);
     vfs_node_t* kmods_node = vfs_traverse_path(NULL, KMOD_PATH);
-    if(kmods_node == NULL) kerror("cannot find kernel modules directory");
+    if(!kmods_node) kerror("cannot find kernel modules directory");
     else for(size_t i = 0; ; i++) {
         struct dirent* ent = vfs_readdir(kmods_node, i);
-        if(ent == NULL) break;
+        if(!ent) break;
         vfs_node_t* mod = vfs_finddir(kmods_node, ent->name);
-        if(mod == NULL) {
+        if(!mod) {
             kerror("module %s shows up in readdir result but cannot be found using finddir", ent->name);
             continue;
         }
@@ -146,7 +146,7 @@ void kinit() {
         int32_t (*kmod_init)(elf_prgload_t*, size_t) = NULL;
         elf_prgload_t* load_result; size_t load_result_len;
         elf_load_kmod(mod, &load_result, &load_result_len, (uintptr_t*) &kmod_init);
-        if(kmod_init != NULL) {
+        if(kmod_init) {
             kinfo(" - calling module's " ELF_KMOD_INIT_FUNC " function at 0x%x", (uintptr_t)kmod_init);
             int32_t ret = (*kmod_init)(load_result, load_result_len);
             kinfo(" - " ELF_KMOD_INIT_FUNC " returned %d", ret);
@@ -170,7 +170,7 @@ void kinit() {
 void kmain() {
     kinfo("kernel task (kmain), PID %u", task_get_pid((void*) task_current));
     vfs_node_t* bin_node = vfs_traverse_path(NULL, BIN_ROOT);
-    if(bin_node == NULL) {
+    if(!bin_node) {
         kerror(BIN_ROOT " not found");
         while(1);
     }
@@ -178,11 +178,11 @@ void kmain() {
     kprintf("Available binaries: ");
     for(size_t i = 0; ; i++) {
         struct dirent* ent = vfs_readdir(bin_node, i);
-        if(ent == NULL) {
+        if(!ent) {
             kprintf(".\n");
             break;
         }
-        if(i > 0) kprintf(", ");
+        if(i) kprintf(", ");
         kprintf("%s", ent->name);
     }
 
@@ -192,7 +192,7 @@ void kmain() {
         if(buf[0] == '\0') continue; // quicker than strlen(buf) == 0
         
         vfs_node_t* file = vfs_finddir(bin_node, buf);
-        if(file == NULL) {
+        if(!file) {
             kprintf("Binary %s not found\n\n");
             continue;
         }
@@ -201,7 +201,7 @@ void kmain() {
 
         kinfo("creating new process");
         proc_t* proc = proc_create(proc_kernel, vmm_kernel, false);
-        if(proc == NULL) {
+        if(!proc) {
             kprintf("Cannot create process\n\n");
             continue;
         }
@@ -218,7 +218,7 @@ void kmain() {
 
         kinfo("creating new task");
         void* task = task_create(true, proc, TASK_INITIAL_STACK_SIZE, entry, 0);
-        if(task == NULL) {
+        if(!task) {
             kprintf("Cannot create task");
             proc_delete(proc);
             continue;

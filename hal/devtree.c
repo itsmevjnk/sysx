@@ -25,7 +25,7 @@ void devtree_add_sibling(devtree_t* sib_existing, devtree_t* sib_new) {
 }
 
 devtree_t* devtree_traverse_path(devtree_t* curr_node, const char* path) {
-    devtree_t* ret = (curr_node != NULL) ? curr_node : &devtree_root;
+    devtree_t* ret = (curr_node) ? curr_node : &devtree_root;
     while(*path != '\0') {
         const char* e = path; // current element
         size_t len = 0; // e's length
@@ -34,9 +34,9 @@ devtree_t* devtree_traverse_path(devtree_t* curr_node, const char* path) {
         else if(!strncmp(e, "..", len)) ret = ret->parent; // back to parent
         else {
             ret = ret->first_child; // enter child node
-            if(ret == NULL) return NULL; // nothing to look for here
+            if(!ret) return NULL; // nothing to look for here
             while(1) {
-                if(ret == NULL) return NULL; // we've reached the end, and we couldn't find the node
+                if(!ret) return NULL; // we've reached the end, and we couldn't find the node
                 if(!strncmp(ret->name, e, len)) break; // we've found the next node
                 ret = ret->next_sibling;
             }

@@ -78,8 +78,8 @@ static void vgaterm_newline() {
 static void vgaterm_putc_stub(char c) {
     switch(c) {
         case '\b': // backspace character
-            if(vgaterm_x > 0) vgaterm_x--;
-            else if(vgaterm_y > 0) {
+            if(vgaterm_x) vgaterm_x--;
+            else if(vgaterm_y) {
                 vgaterm_x = 79;
                 vgaterm_y--;
             }
@@ -98,7 +98,7 @@ static void vgaterm_putc_stub(char c) {
                 vgaterm_buffer[vgaterm_y * 80 + vgaterm_x] = 0x0700;
 #endif
                 vgaterm_x++;
-            } while(vgaterm_x < 80 && vgaterm_x % TERM_VGATEXT_HTAB_LENGTH != 0);
+            } while(vgaterm_x < 80 && (vgaterm_x % TERM_VGATEXT_HTAB_LENGTH));
             if(vgaterm_x == 80) vgaterm_newline();
             break;
         default: // normal character
@@ -123,7 +123,7 @@ void vgaterm_putc(const term_hook_t* impl, char c) {
 
 void vgaterm_puts(const term_hook_t* impl, const char* s) {
     (void) impl;
-    for(size_t i = 0; s[i] != 0; i++) vgaterm_putc_stub(s[i]);
+    for(size_t i = 0; s[i]; i++) vgaterm_putc_stub(s[i]);
 #ifndef TERM_VGATEXT_NO_CURSOR
     vgaterm_update_cursor();
 #endif

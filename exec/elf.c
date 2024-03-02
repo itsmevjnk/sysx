@@ -20,7 +20,7 @@
 #endif
 
 enum elf_check_result elf_check_header(void* buf) {
-    if(buf == NULL) {
+    if(!buf) {
         kerror("null pointer passed for ELF header checking");
         return ERR_NULLBUF;
     }
@@ -123,7 +123,7 @@ enum elf_check_result elf_check_header(void* buf) {
 enum elf_load_result elf_read_header(vfs_node_t* file, void** bufptr, bool* is_elf64) {
     /* read ELF header */
     *bufptr = kmalloc(sizeof(Elf64_Ehdr)); // ELF64 header
-    if(*bufptr == NULL) {
+    if(!*bufptr) {
         kerror("cannot allocate memory for header");
         return ERR_ALLOC;
     }
@@ -163,7 +163,7 @@ enum elf_load_result elf_read_shdr(vfs_node_t* file, void* hdr, bool is_elf64, v
     }
 #endif
     *shdr_bufptr = kmalloc(*e_shentsize * *e_shnum);
-    if(*shdr_bufptr == NULL) {
+    if(!*shdr_bufptr) {
         kerror("cannot allocate memory for section headers");
         return ERR_ALLOC;
     }
@@ -207,7 +207,7 @@ enum elf_load_result elf_read_shdr(vfs_node_t* file, void* hdr, bool is_elf64, v
         (is_elf64) ? ((Elf64_Shdr*)shstrtab)->sh_size : ((Elf32_Shdr*)shstrtab)->sh_size
 #endif
     );
-    if(*shstrtab_bufptr == NULL) {
+    if(!*shstrtab_bufptr) {
         kerror("cannot allocate memory for section header string table");
         kfree(*shdr_bufptr); return ERR_ALLOC;
     }
@@ -259,10 +259,10 @@ enum elf_load_result elf_load_rel(vfs_node_t* file, void* shdr, bool is_elf64, s
 #endif
         // kdebug("section header entry %u: %s, type %u, flags 0x%x, offset 0x%x, size %u", i, &shstrtab_data[sh_name], sh_type, sh_flags, sh_off, sh_size);
         
-        if((sh_flags & SHF_ALLOC) && sh_size > 0 && (sh_type == SHT_PROGBITS || sh_type == SHT_NOBITS)) {
+        if((sh_flags & SHF_ALLOC) && sh_size && (sh_type == SHT_PROGBITS || sh_type == SHT_NOBITS)) {
             /* memory needs to be allocated for this section */
             uintptr_t vaddr = vmm_first_free(alloc_vmm, ELF_LOAD_ADDR_START, ELF_LOAD_ADDR_END, sh_size, 0, false);
-            if(vaddr == 0) {
+            if(!vaddr) {
                 kerror("cannot find virtual memory space for loading section");
                 return ERR_ALLOC;
             }
@@ -284,7 +284,7 @@ enum elf_load_result elf_load_rel(vfs_node_t* file, void* shdr, bool is_elf64, s
             (*prgload_result_len)++;
             elf_prgload_t* prgload_result_old = *prgload_result;
             *prgload_result = krealloc(*prgload_result, *prgload_result_len * sizeof(elf_prgload_t));
-            if(*prgload_result == NULL) {
+            if(!*prgload_result) {
                 kerror("cannot allocate memory for program loading result");
                 for(size_t j = 0; j < (sh_size + pmm_framesz() - 1) / pmm_framesz(); j++) pmm_free(vmm_get_paddr(alloc_vmm, vaddr + j * pmm_framesz()) / pmm_framesz());
                 vmm_unmap(vmm_current, vaddr, ((sh_size + pmm_framesz() - 1) / pmm_framesz()) * pmm_framesz());
@@ -341,7 +341,7 @@ enum elf_load_result elf_do_reloc(vfs_node_t* file, void* hdr, void* shdr, bool 
                     break;
                 }
             }
-            if(target == NULL) {
+            if(!target) {
                 // kdebug("relocation section %u applies to section %u which is not loaded, skipping", i, sh_info);
                 continue;
             }
@@ -375,7 +375,7 @@ enum elf_load_result elf_do_reloc(vfs_node_t* file, void* hdr, void* shdr, bool 
             if(sh_link != symtab_idx) {
                 /* (re)load symbol table (part 2) */
                 symtab = kmalloc(symtab_sh_size);
-                if(symtab == NULL) {
+                if(!symtab) {
                     kerror("cannot allocate memory for symbol table");
                     return ERR_ALLOC;
                 }
@@ -414,7 +414,7 @@ enum elf_load_result elf_do_reloc(vfs_node_t* file, void* hdr, void* shdr, bool 
                 size_t strtab_sh_size = (is_elf64) ? ((Elf64_Shdr*)strtab_shdr)->sh_size : ((Elf32_Shdr*)strtab_shdr)->sh_size;
 #endif
                 strtab_data = kmalloc(strtab_sh_size);
-                if(strtab_data == NULL) {
+                if(!strtab_data) {
                     kerror("cannot allocate memory for string table");
                     return ERR_INVALID_DATA;
                 }
@@ -433,7 +433,7 @@ enum elf_load_result elf_do_reloc(vfs_node_t* file, void* hdr, void* shdr, bool 
 
             /* load relocation section */
             void* rel = kmalloc(sh_size);
-            if(rel == NULL) {
+            if(!rel) {
                 kerror("cannot allocate memory for relocation section");
                 return ERR_ALLOC;
             }
@@ -478,7 +478,7 @@ enum elf_load_result elf_do_reloc(vfs_node_t* file, void* hdr, void* shdr, bool 
                     if(st_shndx == SHN_UNDEF) {
                         /* symbol is not defined here, so try to resolve it from the kernel symbols pool instead */
                         sym_entry_t* ent = sym_resolve(kernel_syms, &strtab_data[st_name]);
-                        if(ent == NULL) {
+                        if(!ent) {
                             kdebug("symbol %s (value 0x%x) cannot be resolved", &strtab_data[st_name], st_value);
                         } else st_value = ent->addr;
                     } else {
@@ -592,7 +592,7 @@ enum elf_load_result elf_load_syms(vfs_node_t* file, void* shdr, bool is_elf64, 
     (void) is_elf64;
 #endif
 
-    if(entry_ptr != NULL) *entry_ptr = 0; // return null pointer if entry point cannot be found
+    if(entry_ptr) *entry_ptr = 0; // return null pointer if entry point cannot be found
 
     void* shdr_ent = shdr;
     for(size_t i = 0; i < e_shnum; i++, shdr_ent = (void*) ((uintptr_t) shdr_ent + e_shentsize)) {
@@ -628,7 +628,7 @@ enum elf_load_result elf_load_syms(vfs_node_t* file, void* shdr, bool is_elf64, 
                 return ERR_INVALID_DATA;
             }
             char* strtab_data = kmalloc(sh_size);
-            if(strtab_data == NULL) {
+            if(!strtab_data) {
                 kerror("cannot allocate memory for string table");
                 return ERR_ALLOC;
             }
@@ -653,7 +653,7 @@ enum elf_load_result elf_load_syms(vfs_node_t* file, void* shdr, bool is_elf64, 
             size_t sh_entsize = (is_elf64) ? ((Elf64_Shdr*)shdr_ent)->sh_entsize : ((Elf32_Shdr*)shdr_ent)->sh_entsize;
 #endif
             void* symtab = kmalloc(sh_size);
-            if(symtab == NULL) {
+            if(!symtab) {
                 kerror("cannot allocate memory for symbol table");
                 kfree(strtab_data); return ERR_ALLOC;
             }
@@ -690,7 +690,7 @@ enum elf_load_result elf_load_syms(vfs_node_t* file, void* shdr, bool is_elf64, 
 #endif
                 // kdebug("0x%x %s: other %u shndx %u info 0x%x value 0x%x", sym, &strtab_data[st_name], st_other, st_shndx, st_info, st_value);
                 if(st_other != STV_HIDDEN && st_shndx != SHN_UNDEF && st_shndx != SHN_ABS && ELF_ST_TYPE(st_info) != STT_FILE && ELF_ST_TYPE(st_info) != STT_SECTION) {
-                    if(prgload_result != NULL && is_rel) {
+                    if(prgload_result && is_rel) {
                         /* symbol value is an offset */
                         bool resolved = false;
                         for(size_t k = 0; k < prgload_result_len; k++) {
@@ -705,10 +705,10 @@ enum elf_load_result elf_load_syms(vfs_node_t* file, void* shdr, bool is_elf64, 
 
                     // kdebug("symbol %s (0x%x)", &strtab_data[st_name], st_value);
                     
-                    if(entry_name != NULL && entry_ptr != NULL && *entry_ptr == 0 && !strcmp(&strtab_data[st_name], entry_name)) {
+                    if(entry_name && entry_ptr && !*entry_ptr && !strcmp(&strtab_data[st_name], entry_name)) {
                         kdebug("found entry point %s at 0x%x", entry_name, st_value);
                         *entry_ptr = st_value;
-                    } else if((ELF_ST_BIND(st_info) == STB_GLOBAL || ELF_ST_BIND(st_info) == STB_WEAK) && syms != NULL) {
+                    } else if((ELF_ST_BIND(st_info) == STB_GLOBAL || ELF_ST_BIND(st_info) == STB_WEAK) && syms) {
 #ifdef ELF_DEBUG_ADDSYM
                         kdebug("adding symbol %s (0x%x)", &strtab_data[st_name], st_value);
 #endif
@@ -753,7 +753,7 @@ enum elf_load_result elf_load_phdr(vfs_node_t* file, void* hdr, bool is_elf64, v
 
     /* allocate and load program headers */
     void* phdr = kmalloc(e_phentsize * e_phnum);
-    if(phdr == NULL) {
+    if(!phdr) {
         kerror("cannot allocate memory for program header table");
         return ERR_ALLOC;
     }
@@ -791,9 +791,9 @@ enum elf_load_result elf_load_phdr(vfs_node_t* file, void* hdr, bool is_elf64, v
         size_t pgsz = pmm_framesz(); // TODO: implement hugepage support here?
 
         /* find a place in our address space to map segments to for copying */
-        if(copy_dst == NULL) {
+        if(!copy_dst) {
             copy_dst = (void*) vmm_alloc_map(vmm_current, 0, pgsz, kernel_end, UINTPTR_MAX, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW); // TODO: will mapping and unmapping the entire segment be more efficient than mapping individual pages?
-            if(copy_dst == NULL) {
+            if(!copy_dst) {
                 kerror("cannot find space to map segment for copying data");
                 elf_unload_prg(alloc_vmm, *prgload_result, *prgload_result_len);
                 return ERR_ALLOC;
@@ -803,7 +803,7 @@ enum elf_load_result elf_load_phdr(vfs_node_t* file, void* hdr, bool is_elf64, v
         /* allocate memory for the segment */
         for(size_t j = 0; j < (p_memsz + p_vaddr % pgsz + pgsz - 1) / pgsz; j++) {
             uintptr_t vaddr = p_vaddr - p_vaddr % pgsz + j * pgsz; // page's virtual address
-            if(vmm_get_paddr(alloc_vmm, vaddr) == 0) {
+            if(!vmm_get_paddr(alloc_vmm, vaddr)) {
                 /* new page - allocate memory for it */
                 size_t frame = pmm_alloc_free(1);
                 if(frame == (size_t)-1) {
@@ -845,7 +845,7 @@ enum elf_load_result elf_load_phdr(vfs_node_t* file, void* hdr, bool is_elf64, v
         (*prgload_result_len)++;
         elf_prgload_t* prgload_result_old = *prgload_result;
         *prgload_result = krealloc(*prgload_result, *prgload_result_len * sizeof(elf_prgload_t));
-        if(*prgload_result == NULL) {
+        if(!*prgload_result) {
             kerror("cannot allocate memory for program loading result");
             elf_unload_prg(alloc_vmm, prgload_result_old, (*prgload_result_len) - 1);
             return ERR_ALLOC;
@@ -855,7 +855,7 @@ enum elf_load_result elf_load_phdr(vfs_node_t* file, void* hdr, bool is_elf64, v
         (*prgload_result)[*prgload_result_len - 1].vaddr = p_vaddr;
         (*prgload_result)[*prgload_result_len - 1].size = p_memsz;      
     }
-    if(copy_dst != NULL) vmm_pgunmap(vmm_current, (uintptr_t) copy_dst, 0);
+    if(copy_dst) vmm_pgunmap(vmm_current, (uintptr_t) copy_dst, 0);
 
     kfree(phdr);
     return LOAD_OK;
@@ -887,10 +887,10 @@ enum elf_load_result elf_load_exec(vfs_node_t* file, bool user, void* alloc_vmm,
     }
 
     /* return values to caller */
-    if(load_result != NULL) *load_result = prgload_result;
+    if(load_result) *load_result = prgload_result;
     else kfree(prgload_result);
-    if(load_result_len != NULL) *load_result_len = prgload_result_len;
-    if(entry_ptr != NULL)
+    if(load_result_len) *load_result_len = prgload_result_len;
+    if(entry_ptr)
 #if ELF_FORCE_CLASS == ELFCLASS64
         *entry_ptr = ((Elf64_Ehdr*)hdr)->e_entry;
 #elif ELF_FORCE_CLASS == ELFCLASS32
@@ -985,11 +985,11 @@ enum elf_load_result elf_load_kmod(vfs_node_t* file, elf_prgload_t** load_result
         kfree(prgload_result); kfree(shdr); kfree(hdr); kfree(shstrtab_data);
         return result;
     }
-    if(entry_ptr != NULL && *entry_ptr == 0) kwarn("cannot find entry point");
+    if(entry_ptr && !*entry_ptr) kwarn("cannot find entry point");
 
-    if(load_result != NULL) *load_result = prgload_result;
+    if(load_result) *load_result = prgload_result;
     else kfree(prgload_result); // no need to keep prgload_result if it's not requested
-    if(load_result_len != NULL) *load_result_len = prgload_result_len;
+    if(load_result_len) *load_result_len = prgload_result_len;
 
     kinfo("kernel module loading is complete");
     kfree(shstrtab_data);
@@ -1007,7 +1007,7 @@ void elf_unload_prg(void* alloc_vmm, elf_prgload_t* load_result, size_t load_res
             size_t paddr = vmm_get_paddr(alloc_vmm, vaddr);
             size_t pgsz_idx = vmm_get_pgsz(alloc_vmm, vaddr); pgsz = vmm_pgsz(pgsz_idx); // resolve for adding to variables
             vmm_pgunmap(alloc_vmm, vaddr, pgsz_idx);
-            if(paddr != 0) {
+            if(paddr) {
                 for(size_t j = 0; j < pgsz / framesz; j++) pmm_free(paddr / framesz + j);
             }
         }

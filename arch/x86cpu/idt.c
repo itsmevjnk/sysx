@@ -69,7 +69,7 @@ void intr_handle(uint8_t vector, void (*handler)(uint8_t vector, void* context))
 }
 
 bool intr_is_handled(uint8_t vector) {
-	return (idt_handlers[vector] != NULL);
+	return (idt_handlers[vector]);
 }
 
 /* IDT handler stub to be called by the low level handler portion */
@@ -109,7 +109,7 @@ void exc_stub(uint8_t vector, idt_context_t* context) {
 	/* unhandled exception */
 	asm("cli"); // no more interrupts!
 	kerror("unhandled exception 0x%x (code 0x%x) @ 0x%x", context->vector, context->exc_code, context->eip);
-	kerror("task_current=0x%x pid=%u", task_current, (task_current == NULL) ? 0 : task_common((void*) task_current)->pid);
+	kerror("task_current=0x%x pid=%u", task_current, (!task_current) ? 0 : task_common((void*) task_current)->pid);
 	kerror("eax=0x%08x ebx=0x%08x ecx=0x%08x edx=0x%08x", context->eax, context->ebx, context->ecx, context->edx);
 	kerror("esi=0x%08x edi=0x%08x esp=0x%08x ebp=0x%08x", context->esi, context->edi, context->esp, context->ebp);
 	kerror("cs=0x%04x ds=0x%04x es=0x%04x fs=0x%04x gs=0x%04x", context->cs, context->ds, context->es, context->fs, context->gs);
@@ -120,8 +120,8 @@ void exc_stub(uint8_t vector, idt_context_t* context) {
 // 	struct stkframe* stk = (struct stkframe*) context->ebp;
 // 	for(size_t i = 0; stk; i++) {
 // 		struct sym_addr* sym = NULL;
-// 		if(kernel_syms != NULL) sym = sym_addr2sym(kernel_syms, stk->eip);
-// 		if(sym != NULL) kdebug("%-4u [0x%08x]: 0x%08x (%s + 0x%08x)", i, (uint32_t) stk, stk->eip, sym->sym->name, sym->delta);
+// 		if(kernel_syms) sym = sym_addr2sym(kernel_syms, stk->eip);
+// 		if(sym) kdebug("%-4u [0x%08x]: 0x%08x (%s + 0x%08x)", i, (uint32_t) stk, stk->eip, sym->sym->name, sym->delta);
 // 		else kdebug("%-4u [0x%08x]: 0x%08x", i, (uint32_t) stk, stk->eip);
 // 		stk = stk->ebp;
 // 	}

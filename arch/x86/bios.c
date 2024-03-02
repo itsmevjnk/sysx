@@ -25,7 +25,7 @@ void* bios_find_tab(const char* sig, size_t sig_len, uintptr_t range_paddr, size
 
 uintptr_t bios_get_ebda_paddr() {
     uint16_t volatile* bda_window = (uint16_t*) vmm_alloc_map(vmm_kernel, 0x40E, 2, kernel_end, UINTPTR_MAX, 0, 0, false, VMM_FLAGS_PRESENT);
-    if(bda_window == NULL) {
+    if(!bda_window) {
         kerror("cannot map BDA");
         return 0;
     }

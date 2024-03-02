@@ -9,9 +9,9 @@ sym_table_t* sym_new_table(size_t initial_count) {
     if(initial_count < SYM_ALLOC_MIN) initial_count = SYM_ALLOC_MIN;
     sym_table_t* table = kcalloc(1, sizeof(sym_table_t));
     
-    if(table != NULL) {
+    if(table) {
         table->syms = kcalloc(initial_count, sizeof(sym_entry_t));
-        if(table->syms != NULL) table->max_count = initial_count;
+        if(table->syms) table->max_count = initial_count;
         else kerror("cannot allocate memory for %u symbol entry/entries", initial_count);
     } else kerror("cannot allocate memory for symbol table");
 
@@ -20,12 +20,12 @@ sym_table_t* sym_new_table(size_t initial_count) {
 
 sym_entry_t* sym_add_entry(sym_table_t* table, const char* name, uintptr_t addr) {
     sym_entry_t* entry = sym_resolve(table, name); // check if the symbol already exists
-    if(entry == NULL) {
+    if(!entry) {
         /* entry does not exist yet - let's allocate more entry */
         if(table->count == table->max_count) {
             /* allocate more entries */
             sym_entry_t* new_syms = krealloc(table->syms, (table->max_count + SYM_ALLOC_MIN) * sizeof(sym_entry_t));
-            if(new_syms == NULL) {
+            if(!new_syms) {
                 kerror("cannot allocate more memory to store %u extra symbol entries", SYM_ALLOC_MIN);
                 return NULL;
             }
@@ -51,10 +51,10 @@ sym_entry_t* sym_resolve(sym_table_t* table, const char* name) {
 
 struct sym_addr* sym_addr2sym(sym_table_t* table, uintptr_t addr) {
     struct sym_addr* result = kcalloc(1, sizeof(struct sym_addr));
-    if(result != NULL) {
+    if(result) {
         for(size_t i = 0; i < table->count; i++) {
             if(table->syms[i].addr > addr) break; // ignore symbols that cannot contain this address
-            if(result->sym == NULL) {
+            if(!result->sym) {
                 result->sym = &table->syms[i]; // initialize result
                 result->delta = addr - result->sym->addr;
             }
@@ -63,7 +63,7 @@ struct sym_addr* sym_addr2sym(sym_table_t* table, uintptr_t addr) {
                 result->delta = addr - result->sym->addr;
             }
         }
-        if(result->sym == NULL) {
+        if(!result->sym) {
             kfree(result);
             return NULL; // cannot find anything
         }
@@ -76,6 +76,6 @@ void sym_merge(sym_table_t* dest, sym_table_t* src) {
 }
 
 void sym_free_table(sym_table_t* table) {
-    kfree(table->syms); // will also work if syms == NULL
+    kfree(table->syms); // will also work if !syms
     kfree(table);
 }

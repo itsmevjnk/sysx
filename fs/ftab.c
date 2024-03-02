@@ -15,14 +15,14 @@ struct ftab* ftab_open(vfs_node_t* node, struct proc* proc, bool read, bool writ
     size_t idx = 0;
     mutex_acquire(&ftab_mutex);
     for(; idx < ftab_ents; idx++) {
-        if(ftab[idx].node == NULL || ftab[idx].node == node) {
+        if(!ftab[idx].node || ftab[idx].node == node) {
             break; // existing or empty entry
         }
     }
     if(idx == ftab_ents) {
         /* allocate more entries */
         struct ftab* new_ftab = krealloc(ftab, (ftab_ents + FTAB_ALLOCSZ) * sizeof(struct ftab));
-        if(new_ftab == NULL) {
+        if(!new_ftab) {
             kerror("cannot allocate memory for file table");
             mutex_release(&ftab_mutex);
             return NULL;
@@ -33,7 +33,7 @@ struct ftab* ftab_open(vfs_node_t* node, struct proc* proc, bool read, bool writ
     }
     
     mutex_acquire(&ftab[idx].mutex);
-    if(ftab[idx].node == NULL) {
+    if(!ftab[idx].node) {
         /* empty entry - file is opened for the first time */
         if(!vfs_open(node, read, write)) {
             kerror("opening VFS node 0x%x (%s) for r=%u,w=%u access failed", node, node->name, (read)?1:0, (write)?1:0);
@@ -48,13 +48,13 @@ struct ftab* ftab_open(vfs_node_t* node, struct proc* proc, bool read, bool writ
         /* non-empty entry - file is already opened */
          // make sure that no one's working on it
 
-        if(ftab[idx].excl != NULL && ftab[idx].excl != proc) {
+        if(ftab[idx].excl && ftab[idx].excl != proc) {
             kerror("attempting to access VFS node 0x%x (%s) exclusively held by another process", node, node->name);
             mutex_release(&ftab[idx].mutex);
             mutex_release(&ftab_mutex);
             return NULL;
         }
-        if(excl && ftab[idx].refs > 0) {
+        if(excl && ftab[idx].refs) {
             kerror("attempting to exclusively hold VFS node 0x%x (%s) which is already in use", node, node->name);
             mutex_release(&ftab[idx].mutex);
             mutex_release(&ftab_mutex);
@@ -82,13 +82,13 @@ struct ftab* ftab_open(vfs_node_t* node, struct proc* proc, bool read, bool writ
 }
 
 void ftab_close(struct ftab* ent, struct proc* proc) {
-    if(ent->excl != NULL && ent->excl != proc) {
+    if(ent->excl && ent->excl != proc) {
         kerror("non-accessing process attempting to close exclusively-accessed VFS node 0x%x (%s)", ent->node, ent->node->name);
         return;
     }
     mutex_acquire(&ent->mutex);
     ent->refs--;
-    if(ent->refs == 0) {
+    if(!ent->refs) {
         /* no one's opening this file, so we'll close it */
         vfs_close(ent->node);
         memset(ent, 0, sizeof(struct ftab));
@@ -100,7 +100,7 @@ uint64_t ftab_read(struct ftab* ent, struct proc* proc, uint64_t offset, uint64_
     mutex_acquire(&ent->mutex);
     
     uint64_t ret = 0;
-    if((ent->excl == NULL || ent->excl == proc) && ent->read) ret = vfs_read(ftab->node, offset, size, buf);
+    if((!ent->excl || ent->excl == proc) && ent->read) ret = vfs_read(ftab->node, offset, size, buf);
 
     mutex_release(&ent->mutex);
     return ret;
@@ -110,7 +110,7 @@ uint64_t ftab_write(struct ftab* ent, struct proc* proc, uint64_t offset, uint64
     mutex_acquire(&ent->mutex);
     
     uint64_t ret = 0;
-    if((ent->excl == NULL || ent->excl == proc) && ent->write) ret = vfs_write(ftab->node, offset, size, buf);
+    if((!ent->excl || ent->excl == proc) && ent->write) ret = vfs_write(ftab->node, offset, size, buf);
 
     mutex_release(&ent->mutex);
     return ret;

@@ -31,7 +31,7 @@ static size_t proc_pid_alloc(struct proc* proc) {
     mutex_acquire(&proc_mutex);
     size_t pid = 0;
     for(; pid < proc_pidtab_len; pid++) {
-        if(proc_pidtab[pid] == NULL) break;
+        if(!proc_pidtab[pid]) break;
     }
     if(pid == proc_pidtab_len) {
         if(proc_pidtab_len > PROC_PIDMAX || proc_pidtab_len >= (1 << TASK_PID_BITS)) {
@@ -40,7 +40,7 @@ static size_t proc_pid_alloc(struct proc* proc) {
             return (size_t)-1;
         }
         proc_t** new_pidtab = krealloc(proc_pidtab, (proc_pidtab_len + PROC_PIDTAB_ALLOCSZ) * sizeof(void*));
-        if(new_pidtab == NULL) {
+        if(!new_pidtab) {
             kerror("insufficient memory for PID allocation");
             mutex_release(&proc_mutex);
             return (size_t)-1;
@@ -68,14 +68,14 @@ struct proc* proc_get(size_t pid) {
 
 struct proc* proc_create(struct proc* parent, void* vmm, bool cow) {
     struct proc* proc = kcalloc(1, sizeof(struct proc));
-    if(proc == NULL) {
+    if(!proc) {
         kerror("cannot allocate memory for new process");
         return NULL;
     }
     
-    if(vmm != NULL) {
+    if(vmm) {
         proc->vmm = vmm_clone(vmm, cow);
-        if(proc->vmm == NULL) {
+        if(!proc->vmm) {
             kerror("cannot clone VMM for new process");
             kfree(proc);
             return NULL;
@@ -97,7 +97,7 @@ struct proc* proc_create(struct proc* parent, void* vmm, bool cow) {
     fd = proc_fd_open(proc, dev_console, true, false, true, false, false);
     if(fd != 2) kerror("cannot open stderr (proc_fd_open() returned unexpected value %u)", fd);
 
-    if(parent != NULL) proc->parent_pid = parent->pid;
+    if(parent) proc->parent_pid = parent->pid;
     return proc;
 }
 
@@ -112,14 +112,14 @@ void proc_delete(struct proc* proc) {
     /* delete all tasks */
     bool deleting_current = false; // set if deleting current task
     for(size_t i = 0; i < proc->num_tasks; i++) {
-        if(proc->tasks[i] != NULL) {
+        if(proc->tasks[i]) {
             if(proc->tasks[i] == task_current) deleting_current = true; // save for later
             else task_delete(proc->tasks[i]);
         }
     }
 
     /* unmap ELF segments (if there's any) */
-    if(proc->elf_segments != NULL) elf_unload_prg(proc->vmm, proc->elf_segments, proc->num_elf_segments); // we can do this since we're in kernel space and therefore have no need to return to the calling code if it's being deleted
+    if(proc->elf_segments) elf_unload_prg(proc->vmm, proc->elf_segments, proc->num_elf_segments); // we can do this since we're in kernel space and therefore have no need to return to the calling code if it's being deleted
 
     if(deleting_current) task_delete((void*) task_current); // stage current task for deletion too
 }
@@ -148,11 +148,11 @@ size_t proc_add_task(struct proc* proc, void* task) {
             mutex_release(&proc->mu_tasks);
             return i;
         }
-        if(proc->tasks[i] == NULL) break;
+        if(!proc->tasks[i]) break;
     }
     if(i == proc->num_tasks) {
         void** new_tasks = krealloc(proc->tasks, (proc->num_tasks + PROC_TASK_ALLOCSZ) * sizeof(void*));
-        if(new_tasks == NULL) {
+        if(!new_tasks) {
             kerror("insufficient memory to add task to process 0x%x", proc);
             mutex_release(&proc->mu_tasks);
             return (size_t)-1;
@@ -182,7 +182,7 @@ void proc_delete_task(struct proc* proc, void* task) {
 
 void proc_init() {
     proc_kernel = proc_create(NULL, NULL, false); // we'll set the VMM later
-    kassert(proc_kernel != NULL);
+    kassert(proc_kernel);
     proc_kernel->vmm = vmm_kernel;
     task_init();
     proc_add_task(proc_kernel, task_kernel);
@@ -191,7 +191,7 @@ void proc_init() {
 size_t proc_fd_open(struct proc* proc, vfs_node_t* node, bool duplicate, bool read, bool write, bool append, bool excl) {
     /* open the file in the file table (or return its entry in the file table) */
     struct ftab* ftab = ftab_open(node, proc, read, write, excl);
-    if(ftab == NULL) {
+    if(!ftab) {
         kerror("ftab_open() failed, cannot open file");
         return (size_t)-1;
     }
@@ -199,11 +199,11 @@ size_t proc_fd_open(struct proc* proc, vfs_node_t* node, bool duplicate, bool re
     mutex_acquire(&proc->mu_fds);
     size_t i = 0;
     for(; i < proc->num_fds; i++) {
-        if(proc->fds[i].ftab == NULL || (!duplicate && proc->fds[i].ftab == ftab)) break;
+        if(!proc->fds[i].ftab || (!duplicate && proc->fds[i].ftab == ftab)) break;
     }
     if(i == proc->num_fds) {
         fd_t* new_fds = krealloc(proc->fds, (proc->num_fds + PROC_FDS_ALLOCSZ) * sizeof(fd_t));
-        if(new_fds == NULL) {
+        if(!new_fds) {
             kerror("insufficient memory to add fd entry to process 0x%x", proc);
             mutex_release(&proc->mu_fds);
             return (size_t)-1;
@@ -231,7 +231,7 @@ bool proc_fd_check(struct proc* proc, size_t fd) {
     mutex_release(&proc->mu_fds);
     if(ret) {
         mutex_acquire(&proc->fds[fd].mutex);
-        ret = (proc->fds[fd].ftab != NULL);
+        ret = (proc->fds[fd].ftab);
         mutex_release(&proc->fds[fd].mutex);
     }
     return ret;
@@ -281,14 +281,14 @@ struct proc* proc_fork() {
     struct proc* src = proc_get(task_common((void*) task_current)->pid); // source (current) process
 
     struct proc* dst = proc_create(src, src->vmm, true);
-    if(dst == NULL) return NULL; // cannot create process
+    if(!dst) return NULL; // cannot create process
     dst->parent_pid = src->pid; // set parent PID
 
     /* TODO: deal with ELF segments */
 
     /* copy file descriptors */
     fd_t* new_fds = krealloc(dst->fds, src->num_fds * sizeof(fd_t));
-    if(new_fds == NULL) {
+    if(!new_fds) {
         kerror("cannot extend file descriptor table");
         proc_delete(dst);
         return NULL;
@@ -297,8 +297,8 @@ struct proc* proc_fork() {
     memcpy(dst->fds, src->fds, src->num_fds * sizeof(fd_t));
     for(size_t i = 3; i < dst->num_fds; i++) {
         /* reopen files */
-        if(dst->fds[i].ftab != NULL) {
-            if(dst->fds[i].ftab->excl != NULL) {
+        if(dst->fds[i].ftab) {
+            if(dst->fds[i].ftab->excl) {
                 kerror("file descriptor %u is being exclusively accessed, so the forked task will not be able to access it");
                 memset(&dst->fds[i], 0, sizeof(fd_t));
             } else {
@@ -311,7 +311,7 @@ struct proc* proc_fork() {
     
     /* copy current task */
     void* new_task = task_fork(dst);
-    if(new_task == NULL) {
+    if(!new_task) {
         kerror("cannot fork current task");
         proc_delete(dst);
         return NULL;

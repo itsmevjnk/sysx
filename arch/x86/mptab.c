@@ -10,15 +10,15 @@
 mp_fptr_t* mp_find_fptr() {    
     mp_fptr_t* ret = NULL;
 
-    if(ret == NULL) ret = bios_find_tab("_MP_", 4, bios_ebda_paddr, 1024, 16, kernel_end); // find in the first kilobyte of the EBDA
-    if(ret == NULL) ret = bios_find_tab("_MP_", 4, mb_info->mem_lower << 10, 1024, 16, kernel_end); // find in the last KiB of system base memory
-    if(ret == NULL) ret = bios_find_tab("_MP_", 4, 0xF0000, 0x10000, 16, kernel_end); // find in the BIOS ROM region
+    if(!ret) ret = bios_find_tab("_MP_", 4, bios_ebda_paddr, 1024, 16, kernel_end); // find in the first kilobyte of the EBDA
+    if(!ret) ret = bios_find_tab("_MP_", 4, mb_info->mem_lower << 10, 1024, 16, kernel_end); // find in the last KiB of system base memory
+    if(!ret) ret = bios_find_tab("_MP_", 4, 0xF0000, 0x10000, 16, kernel_end); // find in the BIOS ROM region
 
-    if(ret != NULL) {
+    if(ret) {
         /* whatever mp_find_fptr_stub returned was a physical address, so we'll need to map it in */
         kdebug("found MP floating pointer structure at 0x%x", (uintptr_t)ret);
         ret = (mp_fptr_t*) vmm_alloc_map(vmm_kernel, (uintptr_t) ret, sizeof(mp_fptr_t), kernel_end, UINTPTR_MAX, 0, 0, false, VMM_FLAGS_PRESENT);
-        if(ret == NULL) {
+        if(!ret) {
             kerror("cannot map MP floating pointer structure into virtual address space");
             return NULL;
         }
@@ -31,7 +31,7 @@ mp_cfg_t* mp_map_cfgtab(mp_fptr_t* fptr) {
     if(fptr->default_cfg) kwarn("caller is supposed to use default configuration #%u", fptr->default_cfg);
 
     mp_cfg_t* ret = (mp_cfg_t*) vmm_alloc_map(vmm_kernel, fptr->cfg_table, sizeof(mp_cfg_t) - sizeof(mp_cfg_entry_t), kernel_end, UINTPTR_MAX, 0, 0, false, VMM_FLAGS_PRESENT); // only map header first
-    if(ret == NULL) {
+    if(!ret) {
         kerror("cannot map configuration table header");
         return NULL;
     }
@@ -40,7 +40,7 @@ mp_cfg_t* mp_map_cfgtab(mp_fptr_t* fptr) {
     kdebug("MP configuration table is located at 0x%x (%u bytes)", fptr->cfg_table, len);
     vmm_unmap(vmm_kernel, (uintptr_t) ret, sizeof(mp_cfg_t) - sizeof(mp_cfg_entry_t)); // unmap for remapping the entire table
     ret = (mp_cfg_t*) vmm_alloc_map(vmm_kernel, fptr->cfg_table, len, (uintptr_t) ret & ~0xFFF, UINTPTR_MAX, 0, 0, false, VMM_FLAGS_PRESENT); // map the entire table
-    if(ret == NULL) {
+    if(!ret) {
         kerror("cannot map configuration table (%u bytes)", len);
         return NULL;
     }
@@ -55,7 +55,7 @@ int mp_busid_cnt = 0;
 
 bool mp_init() {
     mp_fptr = mp_find_fptr();
-    if(mp_fptr == NULL) {
+    if(!mp_fptr) {
         kerror("cannot find or map MP floating pointer structure");
         return false;
     }
@@ -63,7 +63,7 @@ bool mp_init() {
     if(mp_fptr->default_cfg) kinfo("system uses default configuration %u", mp_fptr->default_cfg);
     else {
         mp_cfg = mp_map_cfgtab(mp_fptr);
-        if(mp_cfg == NULL) {
+        if(!mp_cfg) {
             kerror("cannot map MP configuration table");
             vmm_unmap(vmm_kernel, (uintptr_t) mp_fptr, sizeof(mp_fptr_t));
             return false;
@@ -78,7 +78,7 @@ bool mp_init() {
 
         if(mp_busid_cnt) {
             mp_busid = kcalloc(mp_busid_cnt, sizeof(uint8_t));
-            if(mp_busid == NULL) {
+            if(!mp_busid) {
                 kerror("cannot allocate bus ID table");
                 mp_busid_cnt = 0;
                 return false;

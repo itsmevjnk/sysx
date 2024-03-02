@@ -23,9 +23,9 @@ void pci_cfg_write_dword_aligned(uint8_t bus, uint8_t dev, uint8_t func, uint8_t
 size_t pci_arch_get_irq_routing(uint8_t bus, uint8_t dev, uint8_t func, uint8_t pin, uint8_t* flags) {
     /* check if PCI device has been set up in advance */
     uint16_t irq = pci_cfg_read_word(bus, dev, func, PCI_CFG_H0_IRQ_LINE); // low byte = IRQ line, high byte = IRQ pin
-    if(((pin == (uint8_t)-1 && (irq >> 8) && (irq >> 8) <= 4) || (irq >> 8) == pin) && (irq & 0xFF) >= 0 && (irq & 0xFF) <= 15) {
+    if(((pin == (uint8_t)-1 && (irq >> 8) && (irq >> 8) <= 4) || (irq >> 8) == pin) && (irq & 0xFF) <= 15) {
         /* valid IRQ line set by the BIOS */
-        if(flags != NULL) *flags = PCI_IRQ_EDGE; // ISA: edge-triggered, active high
+        if(flags) *flags = PCI_IRQ_EDGE; // ISA: edge-triggered, active high
         if(apic_enabled) return ioapic_irq_gsi[irq & 0xFF]; // translate to APIC GSI
         else return (irq & 0xFF); // no translation if we're using legacy PIC
     }
@@ -41,7 +41,7 @@ size_t pci_arch_route_irq(uint8_t bus, uint8_t dev, uint8_t func, uint8_t pin, u
     size_t ret = (size_t)-1;
     
     /* routing via MP tables */
-    if(ret == (size_t)-1 && apic_enabled && mp_cfg != NULL && mp_busid_cnt) {
+    if(ret == (size_t)-1 && apic_enabled && mp_cfg && mp_busid_cnt) {
         mp_cfg_entry_t* entry = &mp_cfg->first_entry;
         for(size_t n = 0; n < mp_cfg->base_cnt; n++, entry = (mp_cfg_entry_t*) ((uintptr_t) entry + ((entry->type) ? 8 : 20))) {
             if(entry->type == MP_ETYPE_IRQ_ASSIGN) {
@@ -53,7 +53,7 @@ size_t pci_arch_route_irq(uint8_t bus, uint8_t dev, uint8_t func, uint8_t pin, u
                         for(size_t i = 0; i < ioapic_cnt; i++) {
                             if(ioapic_info[i].id == entry->data.irq_assign.id_dest) {
                                 ret = ioapic_info[i].gsi_base + entry->data.irq_assign.intin_dest;
-                                if(flags != NULL) *flags = ((entry->data.irq_assign.flags & (1 << 1)) ? PCI_IRQ_ACTIVE_LOW : 0) | ((entry->data.irq_assign.flags & (1 << 3)) ? 0 : PCI_IRQ_EDGE);
+                                if(flags) *flags = ((entry->data.irq_assign.flags & (1 << 1)) ? PCI_IRQ_ACTIVE_LOW : 0) | ((entry->data.irq_assign.flags & (1 << 3)) ? 0 : PCI_IRQ_EDGE);
                                 break;
                             }
                         }

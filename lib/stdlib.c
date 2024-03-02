@@ -11,13 +11,13 @@ void* kvalloc(size_t size) {
 
 void* kcalloc(size_t nitems, size_t size) {
     void* ptr = kmalloc(nitems * size);
-    if(ptr != NULL) memset(ptr, 0, nitems * size);
+    if(ptr) memset(ptr, 0, nitems * size);
     return ptr;
 }
 
 uint64_t strtoull(const char* str, char** endptr, int base) {
     if(*str == '+' || *str == '-') str++; // skip past sign
-    if(base == 0) {
+    if(!base) {
         /* autodetect base */
         if(*str == '0') {
             /* octal or hexadecimal */
@@ -30,7 +30,7 @@ uint64_t strtoull(const char* str, char** endptr, int base) {
     }
     uint64_t result = 0;
     for(; *str == '\t' || *str == '\n' || *str == '\v' || *str == '\f' || *str == '\r' || *str == ' '; str++); // skip whitespace characters
-    for(; *str != 0; str++) {
+    for(; *str; str++) {
         char c = *str;
         if(c >= 'a' && c <= 'z') c -= 'a' - 'A'; // convert to uppercase
 
@@ -46,7 +46,7 @@ uint64_t strtoull(const char* str, char** endptr, int base) {
         result += c;
     }
 
-    if(endptr != NULL) *endptr = (char*)str;
+    if(endptr) *endptr = (char*)str;
     return result;
 }
 
@@ -55,7 +55,7 @@ int64_t strtoll(const char* str, char** endptr, int base) {
     for(; *str == '\t' || *str == '\n' || *str == '\v' || *str == '\f' || *str == '\r' || *str == ' '; str++); // skip whitespace characters
     bool sign = (*str == '-'); // set if the number is negative
     if(*str == '+' || *str == '-') str++; // skip past sign
-    if(base == 0) {
+    if(!base) {
         /* autodetect base */
         if(*str == '0') {
             /* octal or hexadecimal */
@@ -66,7 +66,7 @@ int64_t strtoll(const char* str, char** endptr, int base) {
             } else base = 8;
         } else base = 10;
     }
-    for(; *str != 0; str++) {
+    for(; *str; str++) {
         char c = *str;
         if(c >= 'a' && c <= 'z') c -= 'a' - 'A'; // convert to uppercase
 
@@ -89,7 +89,7 @@ int64_t strtoll(const char* str, char** endptr, int base) {
         }
     }
 
-    if(endptr != NULL) *endptr = (char*)str;
+    if(endptr) *endptr = (char*)str;
     return result;
 }
 

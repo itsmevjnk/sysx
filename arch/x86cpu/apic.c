@@ -186,7 +186,7 @@ void ioapic_handler(uint8_t vector, void* context) {
 
     size_t n = 0;
     for(size_t i = 0; i < ioapic_handlers_cnt; i++) {
-        if(ioapic_handlers[i].handler != NULL && ioapic_handlers[i].irq == vector) {
+        if(ioapic_handlers[i].handler && ioapic_handlers[i].irq == vector) {
             ioapic_handlers[i].handler(vector, context);
             n++;
         }
@@ -210,7 +210,7 @@ void ioapic_legacy_handler(size_t gsi, void* context) {
     }
     size_t n = 0;
     for(size_t i = 0; i < pic_handlers_cnt; i++) {
-        if(pic_handlers[i].handler != NULL && pic_handlers[i].irq == irq) {
+        if(pic_handlers[i].handler && pic_handlers[i].irq == irq) {
             pic_handlers[i].handler(irq, context);
             n++;
         }
@@ -221,14 +221,14 @@ void ioapic_legacy_handler(size_t gsi, void* context) {
 size_t ioapic_handle(uint8_t gsi, void (*handler)(size_t gsi, void* context)) {
     size_t id = (size_t)-1;
     for(size_t i = 0; i < ioapic_handlers_cnt; i++) {
-        if(ioapic_handlers[i].handler == NULL) {
+        if(!ioapic_handlers[i].handler) {
             id = i;
             break;
         }
     }
     if(id == (size_t)-1) {
         void* new_handlers = krealloc(ioapic_handlers, (ioapic_handlers_cnt + IOAPIC_HANDLERS_ALLOCSZ) * sizeof(intr_handler_t));
-        if(new_handlers == NULL) {
+        if(!new_handlers) {
             kerror("cannot allocate more memory for handlers list");
             return id;
         }
@@ -245,7 +245,7 @@ size_t ioapic_handle(uint8_t gsi, void (*handler)(size_t gsi, void* context)) {
 
 bool ioapic_is_handled(uint8_t gsi) {
     for(size_t i = 0; i < ioapic_handlers_cnt; i++) {
-        if(ioapic_handlers[i].handler != NULL && ioapic_handlers[i].irq == gsi) return true;
+        if(ioapic_handlers[i].handler && ioapic_handlers[i].irq == gsi) return true;
     }
     return false;
 }
@@ -301,18 +301,18 @@ bool apic_init() {
 #ifdef FEAT_ACPI_LAI
         madt = laihost_scan("APIC", 0); // look for MADT
 #endif
-        if(madt == NULL) kerror("MADT not found");
+        if(!madt) kerror("MADT not found");
         else lapic_base_paddr = madt->lapic_base;
     }
 #endif
 
-    if(madt == NULL && mp_fptr == NULL) {
+    if(!madt && !mp_fptr) {
         kerror("no methods to gather information on LAPIC and IOAPIC");
         return false;
     }
 
     /* go through all the entries first to do some counting */
-    if(madt != NULL) {
+    if(madt) {
         /* using MADT */
         acpi_madt_entry_t* entry = &madt->first_entry;
         while((uintptr_t) entry < (uintptr_t) madt + madt->header.length) {
@@ -348,7 +348,7 @@ bool apic_init() {
             }
             entry = (acpi_madt_entry_t*) ((uintptr_t) entry + entry->length);
         }
-    } else if(mp_cfg != NULL) {
+    } else if(mp_cfg) {
         /* using specified MP configuration table */
         mp_cfg_entry_t* entry = &mp_cfg->first_entry;
         for(size_t n = 0; n < mp_cfg->base_cnt; n++, entry = (mp_cfg_entry_t*) ((uintptr_t) entry + ((entry->type) ? 8 : 20))) {
@@ -393,13 +393,13 @@ bool apic_init() {
 
     /* allocate IOAPIC and CPU info tables */
     ioapic_info = kcalloc(ioapic_cnt, sizeof(ioapic_info_t));
-    if(ioapic_cnt && ioapic_info == NULL) {
+    if(ioapic_cnt && !ioapic_info) {
         kerror("cannot allocate memory for IOAPIC information table");
         vmm_unmap(vmm_kernel, lapic_base, 0x400);
         return false;
     }
     apic_cpu_info = kcalloc(apic_cpu_cnt, sizeof(apic_cpu_info_t));
-    if(apic_cpu_cnt && apic_cpu_info == NULL) {
+    if(apic_cpu_cnt && !apic_cpu_info) {
         kerror("cannot allocate memory for CPU information table");
         kfree(ioapic_info);
         vmm_unmap(vmm_kernel, lapic_base, 0x400);
@@ -413,7 +413,7 @@ bool apic_init() {
     /* store CPU and IOAPIC information */
     size_t max_gsis = 0;
     size_t ioapic_i = 0, cpu_i = 0;
-    if(madt != NULL) {
+    if(madt) {
         acpi_madt_entry_t* entry = &madt->first_entry;
         while((uintptr_t) entry < (uintptr_t) madt + madt->header.length) {
             switch(entry->type) {
@@ -448,7 +448,7 @@ bool apic_init() {
             }
             entry = (acpi_madt_entry_t*) ((uintptr_t) entry + entry->length);
         }
-    } else if(mp_cfg != NULL) {
+    } else if(mp_cfg) {
         mp_cfg_entry_t* entry = &mp_cfg->first_entry;
         for(size_t n = 0; n < mp_cfg->base_cnt; n++, entry = (mp_cfg_entry_t*) ((uintptr_t) entry + ((entry->type) ? 8 : 20))) {
             switch(entry->type) {
@@ -501,7 +501,7 @@ bool apic_init() {
 
     /* allocate memory for GSI handler pointers */
     ioapic_handlers = kcalloc(max_gsis, sizeof(void*));
-    if(ioapic_handlers == NULL) {
+    if(!ioapic_handlers) {
         kerror("cannot allocate memory for IOAPIC GSI handler pointers");
         for(size_t i = 0; i < ioapic_cnt; i++) vmm_unmap(vmm_kernel, ioapic_info[i].base, 0x20);
         kfree(ioapic_info); kfree(apic_cpu_info);
@@ -521,7 +521,7 @@ bool apic_init() {
 
     /* set up IOAPIC interrupt handling */
     ioapic_handlers = kcalloc(max_gsis, sizeof(intr_handler_t));
-    if(ioapic_handlers == NULL) {
+    if(!ioapic_handlers) {
         kerror("cannot allocate memory for handlers list");
         return false;
     }
@@ -537,7 +537,7 @@ bool apic_init() {
     }
 
     /* set up LAPIC/IOAPIC NMIs and IOAPIC source overrides */
-    if(madt != NULL) {
+    if(madt) {
         acpi_madt_entry_t* entry = &madt->first_entry;
         size_t i;
         while((uintptr_t) entry < (uintptr_t) madt + madt->header.length) {
@@ -572,7 +572,7 @@ bool apic_init() {
             }
             entry = (acpi_madt_entry_t*) ((uintptr_t) entry + entry->length);
         }
-    } else if(mp_cfg != NULL) {
+    } else if(mp_cfg) {
         mp_cfg_entry_t* entry = &mp_cfg->first_entry;
         size_t i;
         for(size_t n = 0; n < mp_cfg->base_cnt; n++, entry = (mp_cfg_entry_t*) ((uintptr_t) entry + ((entry->type) ? 8 : 20))) {
@@ -620,7 +620,7 @@ bool apic_init() {
     uint16_t pic_irq_mask = pic_get_mask();
     uint16_t pic_handled_irqs = 0; // bitmask of handled IRQs
     for(size_t i = 0; i < pic_handlers_cnt; i++) {
-        if(pic_handlers[i].handler != NULL && !(pic_handled_irqs & (1 << pic_handlers[i].irq))) {
+        if(pic_handlers[i].handler && !(pic_handled_irqs & (1 << pic_handlers[i].irq))) {
             /* there's a PIC handler assigned - adapt this to APIC */
             pic_handled_irqs |= (1 << pic_handlers[i].irq);
             uint8_t gsi = ioapic_irq_gsi[pic_handlers[i].irq];

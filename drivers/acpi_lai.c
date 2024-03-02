@@ -8,11 +8,11 @@ bool acpi_impl_init() {
 }
 
 bool acpi_enable() {
-    return (lai_enable_acpi(0) == 0); // TODO: use APIC
+    return (!lai_enable_acpi(0)); // TODO: use APIC
 }
 
 bool acpi_disable() {
-    return (lai_disable_acpi() == 0);
+    return (!lai_disable_acpi());
 }
 
 bool acpi_enter_sleep(uint8_t state) {

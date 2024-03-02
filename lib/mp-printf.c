@@ -787,7 +787,7 @@ static int _vsnprintf(out_fct_type out, char* buffer, const size_t maxlen, const
       case 's' : {
         const char* p = va_arg(va, char*);
 #ifndef PRINTF_NULLOK
-        if(p == NULL) p = null_placeholder;
+        if(!p) p = null_placeholder;
 #endif
         unsigned int l = _strnlen_s(p, precision ? precision : (size_t)-1);
         // pre padding
@@ -861,7 +861,7 @@ static int _vsnprintf(out_fct_type out, char* buffer, const size_t maxlen, const
 
 static void pt_outfct(char character, void* arg) {
   struct ptstream* stream = arg;
-  if(stream != NULL && stream->write != NULL) stream->write(stream, (uint8_t) character);
+  if(stream && stream->write) stream->write(stream, (uint8_t) character);
 }
 
 int kvfprintf(ptstream_t* stream, const char* fmt, va_list arg) {

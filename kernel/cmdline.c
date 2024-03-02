@@ -9,10 +9,10 @@ static char* kernel_cmdline = NULL;
 
 void cmdline_init(const char* str) {
     size_t len = strlen(str);
-    if(len == 0) return; // no cmdline to work on here
+    if(!len) return; // no cmdline to work on here
 
     kernel_cmdline = kmalloc(len + 1);
-    kassert(kernel_cmdline != NULL);
+    kassert(kernel_cmdline);
     memcpy(kernel_cmdline, str, len + 1);
 
     /* tokenize */

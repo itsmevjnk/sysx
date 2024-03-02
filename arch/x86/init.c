@@ -46,7 +46,7 @@ int ktgt_preinit() {
     if(mb_info->flags & MULTIBOOT_INFO_MEM_MAP) {
         kdebug("memory map information: ");
 		struct multiboot_mmap_entry* entry = mb_traverse_mmap(NULL);
-		for(size_t i = 0; entry != NULL; i++) {
+		for(size_t i = 0; entry; i++) {
 			kdebug(" - entry %u: base %08x%08x len %08x%08x type %u", i, entry->addr_h, entry->addr_l, entry->len_h, entry->len_l, entry->type);
 			entry = mb_traverse_mmap(entry);
 		}

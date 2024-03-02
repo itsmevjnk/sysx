@@ -35,9 +35,9 @@ void pic_mask_bm(uint16_t bitmask) {
         return;
     }
     bitmask &= ~(1 << 2); // disallow masking of IRQ2, as it will kill the slave PIC
-    if((uint8_t) bitmask != 0)
+    if(((uint8_t) bitmask))
         outb(PIC1_DATA, inb(PIC1_DATA) | ((uint8_t) bitmask));
-    if((uint8_t) (bitmask >> 8) != 0)
+    if((uint8_t) (bitmask >> 8))
         outb(PIC2_DATA, inb(PIC2_DATA) | ((uint8_t) (bitmask >> 8)));
 }
 
@@ -111,7 +111,7 @@ void pic_handler_stub(uint8_t vector, void* context) {
 
     size_t n = 0;
     for(size_t i = 0; i < pic_handlers_cnt; i++) {
-        if(pic_handlers[i].handler != NULL && pic_handlers[i].irq == vector) {
+        if(pic_handlers[i].handler && pic_handlers[i].irq == vector) {
             pic_handlers[i].handler(vector, context);
             n++;
         }
@@ -123,14 +123,14 @@ void pic_handler_stub(uint8_t vector, void* context) {
 size_t pic_handle(uint8_t irq, void (*handler)(size_t irq, void* context)) {
     size_t id = (size_t)-1;
     for(size_t i = 0; i < pic_handlers_cnt; i++) {
-        if(pic_handlers[i].handler == NULL) {
+        if(!pic_handlers[i].handler) {
             id = i;
             break;
         }
     }
     if(id == (size_t)-1) {
         void* new_handlers = krealloc(pic_handlers, (pic_handlers_cnt + PIC_HANDLERS_ALLOCSZ) * sizeof(intr_handler_t));
-        if(new_handlers == NULL) {
+        if(!new_handlers) {
             kerror("cannot allocate more memory for handlers list");
             return id;
         }
@@ -154,7 +154,7 @@ void pic_unhandle(size_t id) {
 
 bool pic_is_handled(uint8_t irq) {
     for(size_t i = 0; i < pic_handlers_cnt; i++) {
-        if(pic_handlers[i].handler != NULL && pic_handlers[i].irq == irq) return true;
+        if(pic_handlers[i].handler && pic_handlers[i].irq == irq) return true;
     }
     return false;
 }
@@ -176,7 +176,7 @@ void pic_init() {
 
     /* set up interrupt handling */
     pic_handlers = kcalloc(16, sizeof(intr_handler_t));
-    if(pic_handlers == NULL) kerror("cannot allocate handlers list");
+    if(!pic_handlers) kerror("cannot allocate handlers list");
     else {
         pic_handlers_cnt = 16;
         for(size_t i = 0; i < 16; i++) intr_handle(PIC_VECT_BASE + i, pic_handler_stub);

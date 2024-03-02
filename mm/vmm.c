@@ -28,7 +28,7 @@ uintptr_t vmm_map(void* vmm, uintptr_t pa, uintptr_t va, size_t sz, size_t pgsz_
 	}
 	sz += delta;
 	if(sz % pgsz_min) sz += pgsz_min - sz % pgsz_min;
-	while(pgsz_max_idx > 0 && vmm_pgsz(pgsz_max_idx) > sz) pgsz_max_idx--; // reduce to most suitable maximum size
+	while(pgsz_max_idx && vmm_pgsz(pgsz_max_idx) > sz) pgsz_max_idx--; // reduce to most suitable maximum size
 	size_t va_end = va + sz; // ending virtual address
 	while(va < va_end) {
 		for(int i = pgsz_max_idx; i >= 0; i--) {
@@ -67,7 +67,7 @@ void vmm_unmap(void* vmm, uintptr_t va, size_t sz) {
 uintptr_t vmm_first_free(void* vmm, uintptr_t va_start, uintptr_t va_end, size_t sz, size_t align, bool reverse) {
 	/* convert virtual address to VMM page number */
 	size_t pgsz = vmm_pgsz(0); // minimum page size
-	if(va_start == 0) va_start = 1; // avoid null
+	if(!va_start) va_start++; // avoid null
 	else va_start = (va_start + pgsz - 1) / pgsz;
 	va_end /= pgsz;
 	sz = (sz + pgsz - 1) / pgsz; // sz now stores the number of pages required
@@ -119,10 +119,10 @@ vmm_trap_t* vmm_new_trap(void* vmm, uintptr_t vaddr, enum vmm_trap_type type) {
 			break;
 		}
 	}
-	if(trap == NULL) {
+	if(!trap) {
 		/* create new trap */
 		vmm_trap_t* new_trap = krealloc(vmm_traps, (vmm_traps_maxlen + VMM_TRAP_ALLOCSZ) * sizeof(vmm_trap_t));
-		if(new_trap == NULL) {
+		if(!new_trap) {
 			kerror("cannot allocate memory for new trap (type %u, vmm 0x%x, vaddr 0x%x)", type, vmm, vaddr);
 		} else {
 			trap = &new_trap[vmm_traps_maxlen];
@@ -131,7 +131,7 @@ vmm_trap_t* vmm_new_trap(void* vmm, uintptr_t vaddr, enum vmm_trap_type type) {
 			vmm_traps_maxlen += VMM_TRAP_ALLOCSZ;
 		}
 	}
-	if(trap != NULL) {
+	if(trap) {
 		trap->type = type;
 		trap->vmm = vmm;
 		trap->vaddr = vaddr;
@@ -141,7 +141,7 @@ vmm_trap_t* vmm_new_trap(void* vmm, uintptr_t vaddr, enum vmm_trap_type type) {
 }
 
 void vmm_delete_trap(vmm_trap_t* trap) {
-	if(trap == NULL) return;
+	if(!trap) return;
 	trap->type = VMM_TRAP_NONE;
 }
 
@@ -165,9 +165,9 @@ size_t vmm_cow_setup(void* vmm_src, uintptr_t vaddr_src, void* vmm_dst, uintptr_
 	while(done_sz < size) {
 		size_t pgsz_src = vmm_get_pgsz(vmm_src, vaddr_src); // source's page size
 		if(pgsz_src == (size_t)-1 || vmm_get_pgsz(vmm_dst, vaddr_dst) != (size_t)-1) break; // source is not mapped, or destination is mapped already
-		if(pgsz_src > 0 && vmm_pgsz(pgsz_src) > size - done_sz) {
+		if(pgsz_src && vmm_pgsz(pgsz_src) > size - done_sz) {
 			/* page is too big - subdivide the page here */
-			size_t pgsz_src_new = pgsz_src; while(pgsz_src_new > 0 && vmm_pgsz(pgsz_src_new) > size - done_sz) pgsz_src_new--; // suitable size
+			size_t pgsz_src_new = pgsz_src; while(pgsz_src_new && vmm_pgsz(pgsz_src_new) > size - done_sz) pgsz_src_new--; // suitable size
 			size_t flags = vmm_get_flags(vmm_src, vaddr_src); // store the flags before we proceed with unmapping and remapping
 			uintptr_t va_start = vaddr_src - vaddr_src % vmm_pgsz(pgsz_src);
 			uintptr_t pa_start = vmm_get_paddr(vmm_src, va_start);
@@ -181,7 +181,7 @@ size_t vmm_cow_setup(void* vmm_src, uintptr_t vaddr_src, void* vmm_dst, uintptr_
 		vmm_pgmap(vmm_dst, vmm_get_paddr(vmm_src, vaddr_src), vaddr_dst + done_sz, pgsz_src, (vmm_get_flags(vmm_src, vaddr_src + done_sz) & ~VMM_FLAGS_RW) | VMM_FLAGS_TRAPPED);
 		vmm_trap_t* src = vmm_new_trap(vmm_src, vaddr_src, VMM_TRAP_COW);
 		vmm_trap_t* dst = vmm_new_trap(vmm_dst, vaddr_dst, VMM_TRAP_COW);
-		if(src == NULL || dst == NULL) {
+		if(!src || !dst) {
 			/* cannot place COW order */
 			vmm_delete_trap(src);
 			vmm_delete_trap(dst);
@@ -226,7 +226,7 @@ bool vmm_cow_duplicate(void* vmm, uintptr_t vaddr, size_t pgsz) {
 	/* find virtual address space to map memory to for copying */
 	size_t framesz = pmm_framesz(); // PMM frame size
     void* copy_src = (void*) vmm_alloc_map(vmm_current, 0, 2 * framesz, kernel_end, UINTPTR_MAX, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW);
-	if(copy_src == NULL) {
+	if(!copy_src) {
 		kerror("cannot find virtual address space to map for copying");
 		return false;
 	}
@@ -311,11 +311,11 @@ void vmm_stage_free(void* vmm) {
 	mutex_acquire(&vmm_frstage_mutex);
 	size_t i = 0;
 	for(; i < vmm_frstage_len; i++) {
-		if(vmm_frstage[i] == NULL) break;
+		if(!vmm_frstage[i]) break;
 	}
 	if(i == vmm_frstage_len) {
 		void** new_frstage = krealloc(vmm_frstage, (vmm_frstage_len + VMM_FRSTAGE_ALLOCSZ) * sizeof(void*));
-		if(new_frstage == NULL) {
+		if(!new_frstage) {
 			kerror("cannot extend deallocation staging queue");
 			mutex_release(&vmm_frstage_mutex);
 			return;
@@ -333,7 +333,7 @@ void vmm_do_cleanup() {
 	if(mutex_test(&vmm_frstage_mutex)) return; // someone else is doing our work
 	mutex_acquire(&vmm_frstage_mutex);
 	for(size_t i = 0; i < vmm_frstage_len; i++) {
-		if(vmm_frstage[i] != NULL && vmm_frstage[i] != vmm_current) {
+		if(vmm_frstage[i] && vmm_frstage[i] != vmm_current) {
 			kdebug("deleting staged VMM 0x%x", vmm_frstage[i]);
 			vmm_free(vmm_frstage[i]);
 			vmm_frstage[i] = NULL;

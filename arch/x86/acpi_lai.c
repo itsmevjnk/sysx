@@ -26,7 +26,7 @@ static void* acpi_map_sdthdr(uintptr_t paddr) {
 static void acpi_add_sdt(acpi_header_t* header, size_t idx) {
     /* map the entire SDT */
     acpi_sdttab[idx] = (acpi_header_t*) vmm_alloc_map(vmm_kernel, vmm_get_paddr(vmm_kernel, (uintptr_t) header), header->length, kernel_end, UINTPTR_MAX, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_CACHE); // no need for RW access (since we're not supposed to write into this)
-    if(acpi_sdttab[idx] == NULL) {
+    if(!acpi_sdttab[idx]) {
         kerror("cannot find empty space to map SDT with signature %c%c%c%c (%u bytes)", header->signature[0], header->signature[1], header->signature[2], header->signature[3], header->length);
         return;
     }
@@ -44,7 +44,7 @@ void *laihost_scan(const char *sig, size_t index) {
         return acpi_sdttab[1];
     } else {
         for(size_t i = 0; i < acpi_sdttab_sz; i++) {
-            if(acpi_sdttab[i] != NULL && !memcmp(acpi_sdttab[i]->signature, sig, 4)) {
+            if(acpi_sdttab[i] && !memcmp(acpi_sdttab[i]->signature, sig, 4)) {
                 if(index == hit) {
                     // kdebug("occurrence #%u of %c%c%c%c found at 0x%x", index + 1, sig[0], sig[1], sig[2], sig[3], acpi_sdttab[i]);
                     return acpi_sdttab[i];
@@ -83,7 +83,7 @@ bool acpi_arch_init() {
     acpi_sdttab_sz = sdtptr_sz / ((acpi_version == 2) ? 8 : 4) + 2; // XSDT uses 64-bit pointers, while RSDT uses 32-bit. we also add 2 more entries for 
     kdebug("found %u SDTs including RSDT/XSDT", acpi_sdttab_sz);
     acpi_sdttab = kcalloc(acpi_sdttab_sz, sizeof(acpi_header_t*));
-    if(acpi_sdttab == NULL) {
+    if(!acpi_sdttab) {
         kerror("cannot allocate SDT lookup table (%u entries)", acpi_sdttab_sz);
         vmm_unmap(vmm_kernel, acpi_sdthdr_vaddr, 2 * 4096);
         return false;
@@ -97,11 +97,11 @@ bool acpi_arch_init() {
     for(size_t i = 2; i < acpi_sdttab_sz; i++, ptr = (void*) ((uintptr_t) ptr + ((acpi_version == 2) ? 8 : 4))) {
         acpi_header_t* header = acpi_map_sdthdr((acpi_version == 2) ? *((uint64_t*) ptr) : *((uint32_t*) ptr));
         acpi_add_sdt(header, i);
-        if(acpi_fadt == NULL && !memcmp(header->signature, "FACP", 4)) acpi_fadt = (acpi_fadt_t*) acpi_sdttab[i];
+        if(!acpi_fadt && !memcmp(header->signature, "FACP", 4)) acpi_fadt = (acpi_fadt_t*) acpi_sdttab[i];
     }
 
     /* add DSDT to lookup table */
-    if(acpi_fadt == NULL) kwarn("FADT not found");
+    if(!acpi_fadt) kwarn("FADT not found");
     else {
         // kinfo("FADT size: %u, signature %c%c%c%c, dsdt = 0x%x, x_dsdt = 0x%x", acpi_fadt->header.length, acpi_fadt->header.signature[0], acpi_fadt->header.signature[1], acpi_fadt->header.signature[2], acpi_fadt->header.signature[3], acpi_fadt->dsdt, acpi_fadt->x_dsdt);
         // uintptr_t paddr = (acpi_version == 2) ? acpi_fadt->x_dsdt : acpi_fadt->dsdt;
@@ -111,7 +111,7 @@ bool acpi_arch_init() {
             header = acpi_map_sdthdr(acpi_fadt->x_dsdt);
             if(memcmp(header->signature, "DSDT", 4)) header = NULL; // reject X_Dsdt
         }
-        if(header == NULL) header = acpi_map_sdthdr(acpi_fadt->dsdt);
+        if(!header) header = acpi_map_sdthdr(acpi_fadt->dsdt);
         kinfo("DSDT mapped to 0x%x, signature %c%c%c%c", header, header->signature[0], header->signature[1], header->signature[2], header->signature[3]);
         acpi_add_sdt(header, 1);
     }

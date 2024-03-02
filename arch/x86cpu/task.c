@@ -13,7 +13,7 @@ extern uint16_t x86ext_on;
 
 void* task_create_stub() {
     task_t* task = kmemalign(16, task_size);
-    if(task == NULL) {
+    if(!task) {
         kerror("cannot allocate memory for new task");
         return NULL;
     }

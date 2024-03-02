@@ -19,8 +19,8 @@ static void fbterm_newline() {
 static void fbterm_putc_stub(char c) {
     switch(c) {
         case '\b': // backspace character
-            if(fbterm_x > 0) fbterm_x--;
-            else if(fbterm_y > 0) {
+            if(fbterm_x) fbterm_x--;
+            else if(fbterm_y) {
                 fbterm_x = fbuf_impl->width / fbuf_font->width - 1;
                 fbterm_y--;
             }
@@ -35,7 +35,7 @@ static void fbterm_putc_stub(char c) {
             do {
                 fbuf_putc_stub(fbterm_x * fbuf_font->width, fbterm_y * fbuf_font->height, ' ', fbterm_fg, fbterm_bg, false);
                 fbterm_x++;
-            } while((int)fbuf_impl->width - (int)fbterm_x * fbuf_font->width >= fbuf_font->width && fbterm_x % TERM_FBUF_HTAB_LENGTH != 0);
+            } while((int)fbuf_impl->width - (int)fbterm_x * fbuf_font->width >= fbuf_font->width && (fbterm_x % TERM_FBUF_HTAB_LENGTH));
             if((int)fbuf_impl->width - (int)fbterm_x * fbuf_font->width < fbuf_font->width) fbterm_newline();
             break;
         default: // normal character
@@ -48,14 +48,14 @@ static void fbterm_putc_stub(char c) {
 
 void fbterm_putc(const term_hook_t* impl, char c) {
     (void) impl;
-    if(fbuf_impl == NULL || fbuf_font == NULL) return;
+    if(!fbuf_impl || !fbuf_font) return;
     fbterm_putc_stub(c);
     // fbuf_commit();
 }
 
 void fbterm_puts(const term_hook_t* impl, const char* s) {
     (void) impl;
-    if(fbuf_impl == NULL || fbuf_font == NULL) return;
+    if(!fbuf_impl || !fbuf_font) return;
     while(*s != '\0') {
         fbterm_putc_stub(*s);
         s++;
@@ -75,7 +75,7 @@ void fbterm_clear(const term_hook_t* impl) {
 #ifndef TERM_NO_XY
 void fbterm_get_dimensions(const term_hook_t* impl, size_t* width, size_t* height) {
     (void) impl;
-    if(fbuf_impl != NULL && fbuf_font != NULL) {
+    if(fbuf_impl && fbuf_font) {
         *width = fbuf_impl->width / fbuf_font->width;
         *height = fbuf_impl->height / fbuf_font->height;
     } else {

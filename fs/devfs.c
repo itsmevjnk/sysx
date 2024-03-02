@@ -6,10 +6,10 @@
 
 struct dirent* devfs_vfs_readdir(vfs_node_t* node, uint64_t idx) {
     node = node->link.ptr; // 1st device node
-    for(size_t i = 0; i < idx && node != NULL; i++) node = node->link.ptr; // traverse to next node
-    if(node == NULL) return NULL; // nothing to return
+    for(size_t i = 0; i < idx && node; i++) node = node->link.ptr; // traverse to next node
+    if(!node) return NULL; // nothing to return
     struct dirent* result = kmalloc(sizeof(struct dirent));
-    if(result != NULL) {
+    if(result) {
         strcpy(result->name, node->name);
         result->ino = node->inode;
     }
@@ -18,7 +18,7 @@ struct dirent* devfs_vfs_readdir(vfs_node_t* node, uint64_t idx) {
 
 struct vfs_node* devfs_vfs_finddir(vfs_node_t* node, const char* name) {
     node = node->link.ptr; // 1st device node
-    while(node != NULL) {
+    while(node) {
         if(!strcmp(node->name, name)) break; // we've found the node
         node = node->link.ptr; // traverse to next node
     }
@@ -39,10 +39,10 @@ const vfs_hook_t devfs_hook_root = {
 };
 
 vfs_node_t* devfs_mount(vfs_node_t* root) {
-    if(root == NULL) {
+    if(!root) {
         /* create new node */
         root = kcalloc(1, sizeof(vfs_node_t));
-        if(root == NULL) return NULL;
+        if(!root) return NULL;
         ksprintf(root->name, "devfs_%x", (uintptr_t) root);
     }
 #ifndef DEVFS_OVERRIDE_TYPE
@@ -79,30 +79,30 @@ vfs_node_t* devfs_create(
     /* find last node */
     vfs_node_t* last_node = NULL; // null if there are no nodes yet
     vfs_hook_t* hook = NULL; // optimise by trying to find an identical hook
-    if(root->link.ptr != NULL) {
+    if(root->link.ptr) {
         last_node = root->link.ptr; // first node
         while(1) {
-            if(hook == NULL &&  (uintptr_t) last_node->hook->read == (uintptr_t) read && 
+            if(!hook &&  (uintptr_t) last_node->hook->read == (uintptr_t) read && 
                                 (uintptr_t) last_node->hook->write == (uintptr_t) write && 
                                 (uintptr_t) last_node->hook->open == (uintptr_t) open && 
                                 (uintptr_t) last_node->hook->close == (uintptr_t) close && 
                                 (uintptr_t) last_node->hook->ioctl == (uintptr_t) ioctl)
                 hook = last_node->hook;
-            if(last_node->link.ptr != NULL) last_node = last_node->link.ptr; // traverse to the next node
+            if(last_node->link.ptr) last_node = last_node->link.ptr; // traverse to the next node
             else break; // we've reached the last node
         }
     }
 
     vfs_node_t* node = kcalloc(1, sizeof(vfs_node_t));
-    if(node == NULL) {
+    if(!node) {
         kdebug("cannot create node");
         return NULL;
     }
 
-    if(hook == NULL) {
+    if(!hook) {
         /* new hook required */
         hook = kcalloc(1, sizeof(vfs_hook_t));
-        if(hook == NULL) {
+        if(!hook) {
             kdebug("cannot create hook struct");
             kfree(node);
             return NULL;
@@ -123,7 +123,7 @@ vfs_node_t* devfs_create(
     node->length = size;
     node->hook = (void*) hook;
 
-    if(last_node == NULL) root->link.ptr = node;
+    if(!last_node) root->link.ptr = node;
     else {
         node->inode = last_node->inode + 1;
         last_node->link.ptr = node;
@@ -139,7 +139,7 @@ void devfs_remove(vfs_node_t* root, vfs_node_t* node) {
     }
 
     /* from this point root will be reused for the node before the node we are removing */
-    while(root->link.ptr != NULL && root->link.ptr != node) root = root->link.ptr;
+    while(root->link.ptr && root->link.ptr != node) root = root->link.ptr;
 
     if(root->link.ptr != node) {
         root->link.ptr = node->link.ptr;
@@ -148,5 +148,5 @@ void devfs_remove(vfs_node_t* root, vfs_node_t* node) {
 }
 
 bool vfs_is_valid(vfs_node_t* root) {
-    return (root != NULL && root->hook == &devfs_hook_root);
+    return (root && root->hook == &devfs_hook_root);
 }

@@ -108,7 +108,7 @@ void stdio_stderr_init() {
     enum stderr_out output = KSTDERR_OUT_DEFAULT;
 
     const char* stderr_cmd = cmdline_find_kvp("kstderr");
-    if(stderr_cmd != NULL) {
+    if(stderr_cmd) {
         if(!strcmp(stderr_cmd, "none")) output = KSTDERR_NONE;
         else if(!strcmp(stderr_cmd, "serial")) output = KSTDERR_SER;
         else if(!strcmp(stderr_cmd, "log")) output = KSTDERR_LOG;
@@ -150,7 +150,7 @@ void stdio_init() {
 }
 
 int kputc(int c, ptstream_t* stream) {
-    if(stream != NULL && stream->write != NULL) stream->write(stream, (uint8_t) c);
+    if(stream && stream->write) stream->write(stream, (uint8_t) c);
     return c;
 }
 
@@ -163,7 +163,7 @@ int kputs(const char* str) {
 }
 
 int kprintf(const char* fmt, ...) {
-    if(kstdout == NULL) return 0; // don't even bother
+    if(!kstdout) return 0; // don't even bother
     va_list arg; va_start(arg, fmt);
     int ret = kvfprintf(kstdout, fmt, arg);
     va_end(arg);
@@ -171,7 +171,7 @@ int kprintf(const char* fmt, ...) {
 }
 
 int kfprintf(ptstream_t* stream, const char* fmt, ...) {
-    if(stream == NULL) return 0; // don't even bother
+    if(!stream) return 0; // don't even bother
     va_list arg; va_start(arg, fmt);
     int ret = kvfprintf(stream, fmt, arg);
     va_end(arg);

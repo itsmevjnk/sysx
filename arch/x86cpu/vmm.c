@@ -88,7 +88,7 @@ void vmm_pgmap_small(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 	bool pd_map = (vmm != vmm_current); // set if we need to map the page directory and page table to our VMM config
 	vmm_pde_t* pd = ((pd_map) ? (vmm_pde_t*) vmm_alloc_map(vmm_current, (uintptr_t) vmm, 4096, 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW) : vmm_pd(&__rmap_start)); // page directory
 	vmm_pte_t* pt = NULL; // page table
-	if(pd == NULL) {
+	if(!pd) {
 		kerror("cannot map page directory");
 		return;
 	} else if(pd[pde].dword && !pd[pde].entry.pgsz) {
@@ -96,7 +96,7 @@ void vmm_pgmap_small(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 		if(pd_map) {
 			/* map page table if needed */
 			pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].entry.pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW); // speed up lookup by basing it off pd
-			if(pt == NULL) {
+			if(!pt) {
 				kerror("cannot map page table");
 				vmm_pgunmap(vmm_current, (uintptr_t) pd, 0);
 				return;
@@ -111,7 +111,7 @@ void vmm_pgmap_small(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 	bool pse = (pde_orig.entry.present && pde_orig.entry.pgsz); // set if this is a huge (PSE/4M) page
 	if(pse) invalidate_tlb = invalidate_tlb || (pde_orig.entry_pse.global); // invalidate TLB if this was a global hugepage
 
-	if(pt == NULL) {
+	if(!pt) {
 		/* allocate page table */
 		size_t frame = pmm_alloc_free(1); // ask for a single contiguous free frame
 		if(frame == (size_t)-1) kerror("no more free frames, brace for impact");
@@ -127,7 +127,7 @@ void vmm_pgmap_small(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 			if(pd_map) {
 				/* map PT */
 				pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].entry.pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW); // speed up lookup by basing it off pd
-				if(pt == NULL) {
+				if(!pt) {
 					kerror("cannot map page table");
 					vmm_pgunmap(vmm_current, (uintptr_t) pd, 0);
 					return;
@@ -139,10 +139,10 @@ void vmm_pgmap_small(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 			}
 			memset(pt, 0, 4096); // clear out the newly allocated page table
 			
-			if(task_kernel != NULL && va >= kernel_start) {
+			if(task_kernel && va >= kernel_start) {
 				/* propagate kernel pages to all tasks' VMM configs */
 				vmm_pde_t* task_vmm_pd = (vmm_pde_t*) vmm_alloc_map(vmm_current, 0, 4096, (pd_map) ? ((uintptr_t) pt + 4096) : 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW);
-				if(task_vmm_pd == NULL) kerror("cannot map task VMM configurations for page table propagation");
+				if(!task_vmm_pd) kerror("cannot map task VMM configurations for page table propagation");
 				else {
 					task_t* task = task_kernel;
 					struct proc* proc = proc_get(task_common(task)->pid);
@@ -213,7 +213,7 @@ void vmm_pgmap_huge(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 
 	bool pd_map = (vmm != vmm_current); // set if we need to map the page directory and page table to our VMM config
 	vmm_pde_t* pd = ((pd_map) ? (vmm_pde_t*) vmm_alloc_map(vmm_current, (uintptr_t) vmm, 4096, 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW) : vmm_pd(&__rmap_start)); // page directory
-	if(pd == NULL) {
+	if(!pd) {
 		kerror("cannot map page directory");
 		return;
 	}
@@ -240,10 +240,10 @@ void vmm_pgmap_huge(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 	pd_entry->entry_pse.accessed = 0; pd_entry->entry_pse.dirty = 0;
 	pd_entry->entry_pse.avail = (flags & VMM_FLAGS_TRAPPED) ? VMM_AVAIL_TRAPPED : 0;
 
-	if(task_kernel != NULL && va >= kernel_start) {
+	if(task_kernel && va >= kernel_start) {
 		/* propagate kernel pages to all tasks' VMM configs */
 		vmm_pde_t* task_vmm_pd = (vmm_pde_t*) vmm_alloc_map(vmm_current, 0, 4096, (pd_map) ? ((uintptr_t) pd + 4096) : 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW);
-		if(task_vmm_pd == NULL) kerror("cannot map task VMM configurations for page table propagation");
+		if(!task_vmm_pd) kerror("cannot map task VMM configurations for page table propagation");
 		else {
 			task_t* task = task_kernel;
 			struct proc* proc = proc_get(task_common(task)->pid);
@@ -289,7 +289,7 @@ void vmm_pgmap(void* vmm, uintptr_t pa, uintptr_t va, size_t pgsz_idx, size_t fl
 static void vmm_unmap_resolve_cow(void* vmm, uintptr_t va, size_t pgsz) {
 	/* resolve any remaining CoW traps */
 	vmm_trap_t* cow = vmm_is_cow(vmm, va, true);
-	while(cow != NULL) {
+	while(cow) {
 		vmm_trap_t* src = (vmm_trap_t*) cow->info;
 		// kdebug("resolving CoW: 0x%x:0x%x <-- 0x%x:0x%x", src->vmm, src->vaddr, cow->vmm, cow->vaddr);
 		vmm_cow_duplicate(src->vmm, src->vaddr, pgsz);
@@ -302,7 +302,7 @@ void vmm_pgunmap_huge(void* vmm, uintptr_t va) {
 
 	bool pd_map = (vmm != vmm_current); // set if we need to map the page directory and page table to our VMM config
 	vmm_pde_t* pd = ((pd_map) ? (vmm_pde_t*) vmm_alloc_map(vmm_current, (uintptr_t) vmm, 4096, 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW) : vmm_pd(&__rmap_start)); // page directory
-	if(pd == NULL) {
+	if(!pd) {
 		kerror("cannot map page directory");
 		return;
 	}
@@ -343,7 +343,7 @@ void vmm_pgunmap_small(void* vmm, uintptr_t va) {
 	bool pd_map = (vmm != vmm_current); // set if we need to map the page directory and page table to our VMM config
 	vmm_pde_t* pd = ((pd_map) ? (vmm_pde_t*) vmm_alloc_map(vmm_current, (uintptr_t) vmm, 4096, 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW) : vmm_pd(&__rmap_start)); // page directory
 	vmm_pte_t* pt = NULL; // page table
-	if(pd == NULL) {
+	if(!pd) {
 		kerror("cannot map page directory");
 		return;
 	} else if(pd[pde].dword && !pd[pde].entry.pgsz) {
@@ -351,7 +351,7 @@ void vmm_pgunmap_small(void* vmm, uintptr_t va) {
 		if(pd_map) {
 			/* map page table if needed */
 			pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].entry.pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW); // speed up lookup by basing it off pd
-			if(pt == NULL) {
+			if(!pt) {
 				kerror("cannot map page table");
 				vmm_pgunmap(vmm_current, (uintptr_t) pd, 0);
 				return;
@@ -392,7 +392,7 @@ done:
 	if(pd_map) {
 		/* unmap PD and PT */
 		vmm_pgunmap(vmm_current, (uintptr_t) pd, 0);
-		if(pt != NULL) vmm_pgunmap(vmm_current, (uintptr_t) pt, 0);
+		if(pt) vmm_pgunmap(vmm_current, (uintptr_t) pt, 0);
 	}
 }
 
@@ -416,7 +416,7 @@ size_t vmm_get_pgsz(void* vmm, uintptr_t va) {
 
 	bool pd_map = (vmm != vmm_current); // set if we need to map the page directory and page table to our VMM config
 	vmm_pde_t* pd = ((pd_map) ? (vmm_pde_t*) vmm_alloc_map(vmm_current, (uintptr_t) vmm, 4096, 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT) : vmm_pd(&__rmap_start)); // page directory
-	if(pd == NULL) {
+	if(!pd) {
 		kerror("cannot map page directory");
 		return (size_t)-1;
 	}
@@ -433,7 +433,7 @@ size_t vmm_get_pgsz(void* vmm, uintptr_t va) {
 		if(pd_map) {
 			/* map page table if needed */
 			pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].entry.pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT); // speed up lookup by basing it off pd
-			if(pt == NULL) {
+			if(!pt) {
 				kerror("cannot map page table");
 				vmm_pgunmap(vmm_current, (uintptr_t) pd, 0);
 				return (size_t)-1;
@@ -450,7 +450,7 @@ uintptr_t vmm_get_paddr(void* vmm, uintptr_t va) {
 
 	bool pd_map = (vmm != vmm_current); // set if we need to map the page directory and page table to our VMM config
 	vmm_pde_t* pd = ((pd_map) ? (vmm_pde_t*) vmm_alloc_map(vmm_current, (uintptr_t) vmm, 4096, 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT) : vmm_pd(&__rmap_start)); // page directory
-	if(pd == NULL) {
+	if(!pd) {
 		kerror("cannot map page directory");
 		return 0;
 	}
@@ -465,7 +465,7 @@ uintptr_t vmm_get_paddr(void* vmm, uintptr_t va) {
 		if(pd_map) {
 			/* map page table if needed */
 			pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].entry.pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT); // speed up lookup by basing it off pd
-			if(pt == NULL) {
+			if(!pt) {
 				kerror("cannot map page table");
 				vmm_pgunmap(vmm_current, (uintptr_t) pd, 0);
 				return 0;
@@ -485,7 +485,7 @@ void vmm_set_paddr(void* vmm, uintptr_t va, uintptr_t pa) {
 
 	bool pd_map = (vmm != vmm_current); // set if we need to map the page directory and page table to our VMM config
 	vmm_pde_t* pd = ((pd_map) ? (vmm_pde_t*) vmm_alloc_map(vmm_current, (uintptr_t) vmm, 4096, 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW) : vmm_pd(&__rmap_start)); // page directory
-	if(pd == NULL) {
+	if(!pd) {
 		kerror("cannot map page directory");
 		return;
 	}
@@ -506,7 +506,7 @@ void vmm_set_paddr(void* vmm, uintptr_t va, uintptr_t pa) {
 		if(pd_map) {
 			/* map page table if needed */
 			pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].entry.pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW); // speed up lookup by basing it off pd
-			if(pt == NULL) {
+			if(!pt) {
 				kerror("cannot map page table");
 				vmm_pgunmap(vmm_current, (uintptr_t) pd, 0);
 				return;
@@ -537,7 +537,7 @@ void* vmm_clone(void* src, bool cow) {
 	/* get source's PD */
 	bool pd_map = (src != vmm_current); // set if we need to map the page directory and page table to our VMM config
 	vmm_pde_t* pd_src = ((pd_map) ? (vmm_pde_t*) vmm_alloc_map(vmm_current, (uintptr_t) src, 4096, 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT) : vmm_pd(&__rmap_start)); // page directory
-	if(pd_src == NULL) {
+	if(!pd_src) {
 		kerror("cannot map source page directory");
 		return NULL;
 	}
@@ -549,7 +549,7 @@ void* vmm_clone(void* src, bool cow) {
 		return NULL;
 	}
 	vmm_pde_t* pd_dst = (vmm_pde_t*) vmm_alloc_map(vmm_current, dst_frame << 12, 4096, (pd_map) ? ((uintptr_t) pd_src + 4096) : 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW);
-	if(pd_dst == NULL) {
+	if(!pd_dst) {
 		kerror("cannot map destination page directory");
 		pmm_free(dst_frame);
 		return NULL;
@@ -568,7 +568,7 @@ void* vmm_clone(void* src, bool cow) {
 
 	/* clone non-kernel page tables */
 	vmm_pte_t* pt_src = (vmm_pte_t*) vmm_alloc_map(vmm_current, 0, (cow) ? 4096 : 8192, (pd_map) ? (uintptr_t)pd_src : 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW); // source PT (placeholder for now)
-	if(pt_src == NULL) {
+	if(!pt_src) {
 		kerror("cannot map source and destination page tables");
 		vmm_pgunmap(vmm_current, (uintptr_t) pd_dst, 0); pmm_free(dst_frame); // deallocate destination PD
 		return NULL;
@@ -629,7 +629,7 @@ void vmm_free(void* vmm) {
 	}
 
 	vmm_pde_t* pd = (vmm_pde_t*) vmm_alloc_map(vmm_current, (uintptr_t) vmm, 4096, 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT); // map PD
-	if(pd == NULL) {
+	if(!pd) {
 		kerror("cannot map page directory");
 		return;
 	}
@@ -649,7 +649,7 @@ size_t vmm_get_flags(void* vmm, uintptr_t va) {
 
 	bool pd_map = (vmm != vmm_current); // set if we need to map the page directory and page table to our VMM config
 	vmm_pde_t* pd = ((pd_map) ? (vmm_pde_t*) vmm_alloc_map(vmm_current, (uintptr_t) vmm, 4096, 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT) : vmm_pd(&__rmap_start)); // page directory
-	if(pd == NULL) {
+	if(!pd) {
 		kerror("cannot map page directory");
 		return 0;
 	}
@@ -671,7 +671,7 @@ size_t vmm_get_flags(void* vmm, uintptr_t va) {
 		if(pd_map) {
 			/* map page table if needed */
 			pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].entry.pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT); // speed up lookup by basing it off pd
-			if(pt == NULL) {
+			if(!pt) {
 				kerror("cannot map page table");
 				vmm_pgunmap(vmm_current, (uintptr_t) pd, 0);
 				return 0;
@@ -698,7 +698,7 @@ void vmm_set_flags(void* vmm, uintptr_t va, size_t flags) {
 
 	bool pd_map = (vmm != vmm_current); // set if we need to map the page directory and page table to our VMM config
 	vmm_pde_t* pd = ((pd_map) ? (vmm_pde_t*) vmm_alloc_map(vmm_current, (uintptr_t) vmm, 4096, 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT) : vmm_pd(&__rmap_start)); // page directory
-	if(pd == NULL) {
+	if(!pd) {
 		kerror("cannot map page directory");
 		return;
 	}
@@ -727,7 +727,7 @@ void vmm_set_flags(void* vmm, uintptr_t va, size_t flags) {
 		if(pd_map) {
 			/* map page table if needed */
 			pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].entry.pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW); // speed up lookup by basing it off pd
-			if(pt == NULL) {
+			if(!pt) {
 				kerror("cannot map page table");
 				vmm_pgunmap(vmm_current, (uintptr_t) pd, 0);
 				return;
@@ -756,7 +756,7 @@ bool vmm_get_dirty(void* vmm, uintptr_t va) {
 
 	bool pd_map = (vmm != vmm_current); // set if we need to map the page directory and page table to our VMM config
 	vmm_pde_t* pd = ((pd_map) ? (vmm_pde_t*) vmm_alloc_map(vmm_current, (uintptr_t) vmm, 4096, 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT) : vmm_pd(&__rmap_start)); // page directory
-	if(pd == NULL) {
+	if(!pd) {
 		kerror("cannot map page directory");
 		return true; // assume page is dirty (TODO?)
 	}
@@ -771,7 +771,7 @@ bool vmm_get_dirty(void* vmm, uintptr_t va) {
 		if(pd_map) {
 			/* map page table if needed */
 			pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].entry.pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT); // speed up lookup by basing it off pd
-			if(pt == NULL) {
+			if(!pt) {
 				kerror("cannot map page table");
 				vmm_pgunmap(vmm_current, (uintptr_t) pd, 0);
 				return true;
@@ -791,7 +791,7 @@ void vmm_set_dirty(void* vmm, uintptr_t va, bool dirty) {
 
 	bool pd_map = (vmm != vmm_current); // set if we need to map the page directory and page table to our VMM config
 	vmm_pde_t* pd = ((pd_map) ? (vmm_pde_t*) vmm_alloc_map(vmm_current, (uintptr_t) vmm, 4096, 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT) : vmm_pd(&__rmap_start)); // page directory
-	if(pd == NULL) {
+	if(!pd) {
 		kerror("cannot map page directory");
 		return;
 	}
@@ -805,7 +805,7 @@ void vmm_set_dirty(void* vmm, uintptr_t va, bool dirty) {
 		if(pd_map) {
 			/* map page table if needed */
 			pt = (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].entry.pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT); // speed up lookup by basing it off pd
-			if(pt == NULL) {
+			if(!pt) {
 				kerror("cannot map page table");
 				vmm_pgunmap(vmm_current, (uintptr_t) pd, 0);
 				return;

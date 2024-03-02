@@ -51,7 +51,7 @@ const vfs_hook_t memfs_hook_rw = {
 };
 
 vfs_node_t* memfs_mount(vfs_node_t* node, void* ptr, size_t size, bool rw) {
-    if(node == NULL) {
+    if(!node) {
         /* create new node */
         node = kcalloc(1, sizeof(vfs_node_t));
         node->flags = VFS_FILE;

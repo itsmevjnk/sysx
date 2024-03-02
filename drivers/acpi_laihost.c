@@ -56,36 +56,36 @@ void laihost_unmap(void* pointer, size_t count) {
 #ifdef FEAT_PCI
 
 void laihost_pci_writeb(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t fun, uint16_t offset, uint8_t val) {
-    if(seg != 0) kwarn("attempting to access non-zero PCI segment %u (device %02x:%02x.%x)", seg, bus, slot, fun); // TODO: implement PCI segments
+    if(seg) kwarn("attempting to access non-zero PCI segment %u (device %02x:%02x.%x)", seg, bus, slot, fun); // TODO: implement PCI segments
     else pci_cfg_write_byte(bus, slot, fun, offset, val);
 }
 
 void laihost_pci_writew(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t fun, uint16_t offset, uint16_t val) {
-    if(seg != 0) kwarn("attempting to access non-zero PCI segment %u (device %02x:%02x.%x)", seg, bus, slot, fun); // TODO: implement PCI segments
+    if(seg) kwarn("attempting to access non-zero PCI segment %u (device %02x:%02x.%x)", seg, bus, slot, fun); // TODO: implement PCI segments
     else pci_cfg_write_word(bus, slot, fun, offset, val);
 }
 
 void laihost_pci_writed(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t fun, uint16_t offset, uint32_t val) {
-    if(seg != 0) kwarn("attempting to access non-zero PCI segment %u (device %02x:%02x.%x)", seg, bus, slot, fun); // TODO: implement PCI segments
+    if(seg) kwarn("attempting to access non-zero PCI segment %u (device %02x:%02x.%x)", seg, bus, slot, fun); // TODO: implement PCI segments
     else pci_cfg_write_dword(bus, slot, fun, offset, val);
 }
 
 uint8_t laihost_pci_readb(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t fun, uint16_t offset) {
-    if(seg != 0) {
+    if(seg) {
         kwarn("attempting to access non-zero PCI segment %u (device %02x:%02x.%x)", seg, bus, slot, fun); // TODO: implement PCI segments
         return 0xFF;
     } else return pci_cfg_read_byte(bus, slot, fun, offset);
 }
 
 uint16_t laihost_pci_readw(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t fun, uint16_t offset) {
-    if(seg != 0) {
+    if(seg) {
         kwarn("attempting to access non-zero PCI segment %u (device %02x:%02x.%x)", seg, bus, slot, fun); // TODO: implement PCI segments
         return 0xFFFF;
     } else return pci_cfg_read_word(bus, slot, fun, offset);
 }
 
 uint32_t laihost_pci_readd(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t fun, uint16_t offset) {
-    if(seg != 0) {
+    if(seg) {
         kwarn("attempting to access non-zero PCI segment %u (device %02x:%02x.%x)", seg, bus, slot, fun); // TODO: implement PCI segments
         return 0xFFFFFFFF;
     } else return pci_cfg_read_dword(bus, slot, fun, offset);

@@ -10,41 +10,41 @@ size_t fbuf_process_color(uint32_t* color) {
     *color &= 0x00FFFFFF;
     switch(fbuf_impl->type) {
         case FBUF_15BPP_BGR555:
-            if(color != NULL)
+            if(color)
                 *color = ((FBUF_B(*color) >> 3) << 10) | ((FBUF_G(*color) >> 3) << 5) | ((FBUF_R(*color) >> 3) << 0);
             return 2;
         case FBUF_15BPP_BGR555_RE:
-            if(color != NULL) {
+            if(color) {
                 *color = ((FBUF_B(*color) >> 3) << 10) | ((FBUF_G(*color) >> 3) << 5) | ((FBUF_R(*color) >> 3) << 0);
                 *color = ((*color & 0x00FF) << 8) | ((*color & 0xFF00) >> 8);
             }
             return 2;
         case FBUF_15BPP_RGB555:
-            if(color != NULL)
+            if(color)
                 *color = ((FBUF_R(*color) >> 3) << 10) | ((FBUF_G(*color) >> 3) << 5) | ((FBUF_B(*color) >> 3) << 0);
             return 2;
         case FBUF_15BPP_RGB555_RE:
-            if(color != NULL) {
+            if(color) {
                 *color = ((FBUF_R(*color) >> 3) << 10) | ((FBUF_G(*color) >> 3) << 5) | ((FBUF_B(*color) >> 3) << 0);
                 *color = ((*color & 0x00FF) << 8) | ((*color & 0xFF00) >> 8);
             }
             return 2;
         case FBUF_16BPP_BGR565:
-            if(color != NULL)
+            if(color)
                 *color = (((FBUF_B(*color) >> 3) << 11) | ((FBUF_G(*color) >> 2) << 5) | ((FBUF_R(*color) >> 3) << 0));
             return 2;
         case FBUF_16BPP_BGR565_RE:
-            if(color != NULL) {
+            if(color) {
                 *color = ((FBUF_B(*color) >> 3) << 11) | ((FBUF_G(*color) >> 2) << 5) | ((FBUF_R(*color) >> 3) << 0);
                 *color = ((*color & 0x00FF) << 8) | ((*color & 0xFF00) >> 8);
             }
             return 2;
         case FBUF_16BPP_RGB565:
-            if(color != NULL)
+            if(color)
                 *color = ((FBUF_R(*color) >> 3) << 11) | ((FBUF_G(*color) >> 2) << 5) | ((FBUF_B(*color) >> 3) << 0);
             return 2;
         case FBUF_16BPP_RGB565_RE:
-            if(color != NULL) {
+            if(color) {
                 *color = ((FBUF_R(*color) >> 3) << 11) | ((FBUF_G(*color) >> 2) << 5) | ((FBUF_B(*color) >> 3) << 0);
                 *color = ((*color & 0x00FF) << 8) | ((*color & 0xFF00) >> 8);
             }
@@ -54,17 +54,17 @@ size_t fbuf_process_color(uint32_t* color) {
         case FBUF_24BPP_RGB888:
             return 3;
         case FBUF_32BPP_BGR888:
-            if(color != NULL)
+            if(color)
                 *color = (FBUF_R(*color) << 0) | (FBUF_G(*color) << 8) | (FBUF_B(*color) << 16);
             return 4;
         case FBUF_32BPP_BGR888_RE:
-            if(color != NULL)
+            if(color)
                 *color = (FBUF_R(*color) << 24) | (FBUF_G(*color) << 16) | (FBUF_B(*color) << 8);
             return 4;
         case FBUF_32BPP_RGB888:
             return 4;
         case FBUF_32BPP_RGB888_RE:
-            if(color != NULL)
+            if(color)
                 *color = ((*color & 0x000000FF) << 24) | ((*color & 0x0000FF00) << 8) | ((*color & 0x00FF00000) >> 8);
             return 4;
         default:
@@ -119,22 +119,22 @@ static void fbuf_putpixel_stub(void* ptr, size_t x, size_t y, size_t n, uint32_t
 }
 
 void fbuf_putpixel(size_t x, size_t y, size_t n, uint32_t color) {
-    if(fbuf_impl == NULL || n == 0 || x >= fbuf_impl->width || y >= fbuf_impl->height) return;
+    if(!fbuf_impl || !n || x >= fbuf_impl->width || y >= fbuf_impl->height) return;
 
     size_t bytes_per_pixel = fbuf_process_color(&color); // find out number of bytes per pixel and do color data re-shuffling if needed
 
-    if(fbuf_impl->backbuffer != NULL)
+    if(fbuf_impl->backbuffer)
         fbuf_putpixel_stub(fbuf_impl->backbuffer, x, y, n, color, bytes_per_pixel); // write to backbuffer
-    if(fbuf_impl->dbuf_direct_write || fbuf_impl->backbuffer == NULL)
+    if(fbuf_impl->dbuf_direct_write || !fbuf_impl->backbuffer)
         fbuf_putpixel_stub(fbuf_impl->framebuffer, x, y, n, color, bytes_per_pixel); // write to front buffer if backbuffer is not available or direct writing is enabled
 }
 
 void fbuf_getpixel(size_t x, size_t y, size_t n, uint32_t* color) {
-    if(fbuf_impl == NULL || n == 0 || x >= fbuf_impl->width || y >= fbuf_impl->height) return;
+    if(!fbuf_impl || !n || x >= fbuf_impl->width || y >= fbuf_impl->height) return;
 
     size_t bytes_per_pixel = fbuf_process_color(NULL); // find out number of bytes per pixel
 
-    bool double_buf = (fbuf_impl->backbuffer != NULL);
+    bool double_buf = (fbuf_impl->backbuffer);
     void* ptr = (void*) ((uintptr_t)((double_buf) ? fbuf_impl->backbuffer : fbuf_impl->framebuffer) + y * fbuf_impl->pitch + x * bytes_per_pixel); // write to backbuffer if we have one
     uintptr_t line_offset = fbuf_impl->pitch - fbuf_impl->width * bytes_per_pixel;
     
@@ -214,7 +214,7 @@ void fbuf_getpixel(size_t x, size_t y, size_t n, uint32_t* color) {
 }
 
 void fbuf_fill_stub(void* ptr, size_t y_start, size_t lines, uint32_t color) {
-    if(lines == 0) return;
+    if(!lines) return;
 
     size_t bytes_per_pixel = fbuf_process_color(&color); 
 
@@ -225,7 +225,7 @@ void fbuf_fill_stub(void* ptr, size_t y_start, size_t lines, uint32_t color) {
     } else {
         ptr = (void*) ((uintptr_t) ptr + y_start * fbuf_impl->pitch); // write to backbuffer if we have one
 
-        if(fbuf_impl->pitch % bytes_per_pixel == 0) { // one single memset for the entire framebuffer
+        if(!(fbuf_impl->pitch % bytes_per_pixel)) { // one single memset for the entire framebuffer
             switch(bytes_per_pixel) {
                 case 2: memset16(ptr, color, fbuf_impl->pitch * lines / 2); break;
                 case 4: memset32(ptr, color, fbuf_impl->pitch * lines / 4); break;
@@ -245,18 +245,18 @@ void fbuf_fill_stub(void* ptr, size_t y_start, size_t lines, uint32_t color) {
 }
 
 void fbuf_fill(uint32_t color) {
-    if(fbuf_impl == NULL) return;
-    if(fbuf_impl->backbuffer != NULL)
+    if(!fbuf_impl) return;
+    if(fbuf_impl->backbuffer)
         fbuf_fill_stub(fbuf_impl->backbuffer, 0, fbuf_impl->height, color);
-    if(fbuf_impl->dbuf_direct_write || fbuf_impl->backbuffer == NULL)
+    if(fbuf_impl->dbuf_direct_write || !fbuf_impl->backbuffer)
         fbuf_fill_stub(fbuf_impl->framebuffer, 0, fbuf_impl->height, color);
 }
 
 void fbuf_commit() {
-    if(fbuf_impl->dbuf_direct_write || fbuf_impl->backbuffer == NULL) return; // no back buffer or changes have already been committed - don't do anything
+    if(fbuf_impl->dbuf_direct_write || !fbuf_impl->backbuffer) return; // no back buffer or changes have already been committed - don't do anything
     bool intr = intr_test();
     intr_disable();
-    if(fbuf_impl->flip != NULL) fbuf_impl->flip(fbuf_impl); // use accelerated flip function
+    if(fbuf_impl->flip) fbuf_impl->flip(fbuf_impl); // use accelerated flip function
     else {        
         size_t fb_size = fbuf_impl->pitch * fbuf_impl->height; // framebuffer size
         size_t pgsz = 0; // VMM page size - we'll set it according to the page in question later
@@ -290,18 +290,18 @@ void fbuf_commit() {
 fbuf_font_t* fbuf_font = NULL;
 
 void fbuf_putc_stub(size_t x, size_t y, char c, uint32_t fg, uint32_t bg, bool transparent) {
-    if(fbuf_font == NULL || fbuf_font->draw == NULL || x >= fbuf_impl->width || y >= fbuf_impl->height) return;
+    if(!fbuf_font || !fbuf_font->draw || x >= fbuf_impl->width || y >= fbuf_impl->height) return;
     fbuf_font->draw(fbuf_font, x, y, c, fg, bg, transparent);
 }
 
 void fbuf_putc(size_t x, size_t y, char c, uint32_t fg, uint32_t bg, bool transparent) {
-    if(fbuf_font == NULL || fbuf_font->draw == NULL || x >= fbuf_impl->width || y >= fbuf_impl->height) return;
+    if(!fbuf_font || !fbuf_font->draw || x >= fbuf_impl->width || y >= fbuf_impl->height) return;
     fbuf_font->draw(fbuf_font, x, y, c, fg, bg, transparent);
     fbuf_commit();
 }
 
 void fbuf_puts_stub(size_t x, size_t y, char* s, uint32_t fg, uint32_t bg, bool transparent) {
-    if(fbuf_font == NULL || fbuf_font->draw == NULL || x >= fbuf_impl->width || y >= fbuf_impl->height) return;
+    if(!fbuf_font || !fbuf_font->draw || x >= fbuf_impl->width || y >= fbuf_impl->height) return;
     while(*s != '\0') {
         fbuf_font->draw(fbuf_font, x, y, *s, fg, bg, transparent);
         x += fbuf_font->width;
@@ -315,7 +315,7 @@ void fbuf_puts_stub(size_t x, size_t y, char* s, uint32_t fg, uint32_t bg, bool 
 }
 
 void fbuf_puts(size_t x, size_t y, char* s, uint32_t fg, uint32_t bg, bool transparent) {
-    if(fbuf_font == NULL || fbuf_font->draw == NULL || x >= fbuf_impl->width || y >= fbuf_impl->height) return;
+    if(!fbuf_font || !fbuf_font->draw || x >= fbuf_impl->width || y >= fbuf_impl->height) return;
     fbuf_puts_stub(x, y, s, fg, bg, transparent);
     fbuf_commit();
 }
@@ -326,16 +326,16 @@ static void fbuf_scroll_up_stub(void* ptr_dst, void* ptr_src, size_t lines, uint
 }
 
 void fbuf_scroll_up(size_t lines, uint32_t color) {
-    if(fbuf_impl == NULL || lines == 0) return;
+    if(!fbuf_impl || !lines) return;
     if(lines > fbuf_impl->height) lines = fbuf_impl->height;
 
-    if(fbuf_impl->scroll_up != NULL) {
+    if(fbuf_impl->scroll_up) {
         fbuf_impl->scroll_up(fbuf_impl, lines);
-        fbuf_fill_stub((fbuf_impl->backbuffer != NULL) ? fbuf_impl->backbuffer : fbuf_impl->framebuffer, fbuf_impl->height - lines, lines, color);
+        fbuf_fill_stub((fbuf_impl->backbuffer) ? fbuf_impl->backbuffer : fbuf_impl->framebuffer, fbuf_impl->height - lines, lines, color);
     } else {
-        if(fbuf_impl->dbuf_direct_write || fbuf_impl->backbuffer == NULL)
+        if(fbuf_impl->dbuf_direct_write || !fbuf_impl->backbuffer)
             fbuf_scroll_up_stub(fbuf_impl->framebuffer, fbuf_impl->backbuffer, lines, color);
-        if(fbuf_impl->backbuffer != NULL) {
+        if(fbuf_impl->backbuffer) {
             fbuf_scroll_up_stub(fbuf_impl->backbuffer, fbuf_impl->backbuffer, lines, color);
             fbuf_impl->flip_all = true; // since we've modified the entire framebuffer
         }
@@ -348,16 +348,16 @@ static void fbuf_scroll_down_stub(void* ptr_dst, void* ptr_src, size_t lines, ui
 }
 
 void fbuf_scroll_down(size_t lines, uint32_t color) {
-    if(fbuf_impl == NULL || lines == 0) return;
+    if(!fbuf_impl || !lines) return;
     if(lines > fbuf_impl->height) lines = fbuf_impl->height;
 
-    if(fbuf_impl->scroll_down != NULL) {
+    if(fbuf_impl->scroll_down) {
         fbuf_impl->scroll_down(fbuf_impl, lines);
-        fbuf_fill_stub((fbuf_impl->backbuffer != NULL) ? fbuf_impl->backbuffer : fbuf_impl->framebuffer, 0, lines, color);
+        fbuf_fill_stub((fbuf_impl->backbuffer) ? fbuf_impl->backbuffer : fbuf_impl->framebuffer, 0, lines, color);
     } else {
-        if(fbuf_impl->dbuf_direct_write || fbuf_impl->backbuffer == NULL)
+        if(fbuf_impl->dbuf_direct_write || !fbuf_impl->backbuffer)
             fbuf_scroll_down_stub(fbuf_impl->framebuffer, fbuf_impl->backbuffer, lines, color);
-        if(fbuf_impl->backbuffer != NULL) {
+        if(fbuf_impl->backbuffer) {
             fbuf_scroll_down_stub(fbuf_impl->backbuffer, fbuf_impl->backbuffer, lines, color);
             fbuf_impl->flip_all = true; // since we've modified the entire framebuffer
         }
@@ -365,12 +365,12 @@ void fbuf_scroll_down(size_t lines, uint32_t color) {
 }
 
 void fbuf_unload() {
-    if(fbuf_impl == NULL) return; // nothing to unload
+    if(!fbuf_impl) return; // nothing to unload
 
     fbuf_t* fbuf_impl_old = fbuf_impl;
     fbuf_impl = NULL; // say no more
 
     bool unload_seg = true;
-    if(fbuf_impl_old->unload != NULL) unload_seg = fbuf_impl_old->unload(fbuf_impl_old); // do pre-unload tasks
-    if(unload_seg && fbuf_impl_old->elf_segments != NULL) elf_unload_prg(vmm_kernel, fbuf_impl_old->elf_segments, fbuf_impl_old->num_elf_segments); // unload kernel module from memory
+    if(fbuf_impl_old->unload) unload_seg = fbuf_impl_old->unload(fbuf_impl_old); // do pre-unload tasks
+    if(unload_seg && fbuf_impl_old->elf_segments) elf_unload_prg(vmm_kernel, fbuf_impl_old->elf_segments, fbuf_impl_old->num_elf_segments); // unload kernel module from memory
 }

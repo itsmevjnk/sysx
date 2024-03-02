@@ -7,9 +7,9 @@ kbd_info_t kbd_list[KBD_MAXNUM] = {{NULL, 0, 0}};
 
 size_t kbd_register(char* keymap) {
     for(size_t i = 0; i < KBD_MAXNUM; i++) {
-        if(kbd_list[i].in_use == 0) {
-            kbd_list[i].in_use = 1;
-            kbd_list[i].keymap = (keymap == NULL) ? (char*)&keymap_us_qwerty : keymap;
+        if(!kbd_list[i].in_use) {
+            kbd_list[i].in_use++;
+            kbd_list[i].keymap = (!keymap) ? (char*)&keymap_us_qwerty : keymap;
             kbd_list[i].mod = 0;
             return i;
         }
@@ -34,10 +34,10 @@ kbd_event_t* kbd_event_peek(size_t id, size_t* rdidx_out, bool last) {
     size_t rdidx = kbd_events_rdidx;
     kbd_event_t* last_event = NULL; size_t last_rdidx = 0;
     while(rdidx != kbd_events_wridx) {
-        if((id == (size_t)-1 || kbd_events[rdidx].id == id) && kbd_events[rdidx].code != 0) {
+        if((id == (size_t)-1 || kbd_events[rdidx].id == id) && kbd_events[rdidx].code) {
             if(!last) {
                 /* return first event */
-                if(rdidx_out != NULL) *rdidx_out = rdidx; // also return read index if requested
+                if(rdidx_out) *rdidx_out = rdidx; // also return read index if requested
                 return &kbd_events[rdidx];
             } else {
                 /* return last event - will do later */
@@ -48,16 +48,16 @@ kbd_event_t* kbd_event_peek(size_t id, size_t* rdidx_out, bool last) {
         rdidx = (rdidx + 1) % KBD_MAXEVENTS;
     }
 
-    if(last && last_event != NULL) {
+    if(last && last_event) {
         /* got last event */
-        if(rdidx_out != NULL) *rdidx_out = last_rdidx;
+        if(rdidx_out) *rdidx_out = last_rdidx;
         return last_event;
     }
     else return NULL; // cannot get anything
 }
 
 kbd_event_t* kbd_keypress(size_t id, bool pressed, uint8_t code) {
-    if(id >= KBD_MAXNUM || kbd_list[id].in_use == 0) {
+    if(id >= KBD_MAXNUM || !kbd_list[id].in_use) {
         kdebug("invalid keyboard ID %u", id);
         return NULL;
     }
@@ -124,7 +124,7 @@ size_t kbd_event_available(size_t id) {
     size_t result = 0;
     size_t rdidx = kbd_events_rdidx;
     while(rdidx != kbd_events_wridx) {
-        if((id == (size_t)-1 || kbd_events[rdidx].id == id) && kbd_events[rdidx].code != 0) result++;
+        if((id == (size_t)-1 || kbd_events[rdidx].id == id) && kbd_events[rdidx].code) result++;
         rdidx = (rdidx + 1) % KBD_MAXEVENTS;
     }
     return result;
@@ -133,13 +133,13 @@ size_t kbd_event_available(size_t id) {
 kbd_event_t* kbd_event_read(size_t id, kbd_event_t* buf) {
     size_t rdidx = 0;
     kbd_event_t* result = kbd_event_peek(id, &rdidx, false); // get first event
-    if(result == NULL) return NULL; // no events
+    if(!result) return NULL; // no events
     memcpy(buf, result, sizeof(kbd_event_t));
 
     result->code = 0; // invalidate event
     if(rdidx == kbd_events_rdidx) {
         /* we are reading the first event to be read in the buffer */
-        while(kbd_events[kbd_events_rdidx].code == 0 && kbd_events_rdidx != kbd_events_wridx) kbd_events_rdidx = (kbd_events_rdidx + 1) % KBD_MAXEVENTS; // increment and skip invalidated events
+        while(!kbd_events[kbd_events_rdidx].code && kbd_events_rdidx != kbd_events_wridx) kbd_events_rdidx = (kbd_events_rdidx + 1) % KBD_MAXEVENTS; // increment and skip invalidated events
     }
 
     return buf;
@@ -149,7 +149,7 @@ size_t kbd_char_available(size_t id) {
     size_t result = 0;
     size_t rdidx = kbd_events_rdidx;
     while(rdidx != kbd_events_wridx) {
-        if((id == (size_t)-1 || kbd_events[rdidx].id == id) && kbd_events[rdidx].c != 0) result++;
+        if((id == (size_t)-1 || kbd_events[rdidx].id == id) && kbd_events[rdidx].c) result++;
         rdidx = (rdidx + 1) % KBD_MAXEVENTS;
     }
     return result;
@@ -158,7 +158,7 @@ size_t kbd_char_available(size_t id) {
 char kbd_char_read(size_t id) {
     size_t rdidx = kbd_events_rdidx;
     while(rdidx != kbd_events_wridx) {
-        if((id == (size_t)-1 || kbd_events[rdidx].id == id) && kbd_events[rdidx].c != 0) {
+        if((id == (size_t)-1 || kbd_events[rdidx].id == id) && kbd_events[rdidx].c) {
             /* we've found a character */
             kbd_events[rdidx].code = 0; // invalidate event
             size_t rdidx2 = kbd_events_rdidx;

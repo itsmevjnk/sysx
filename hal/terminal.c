@@ -3,7 +3,7 @@
 term_hook_t* term_impl = NULL;
 
 void term_putc(char c) {
-    if(term_impl != NULL && term_impl->putc != NULL) {
+    if(term_impl && term_impl->putc) {
         mutex_acquire(&term_impl->mutex_out);
         term_impl->putc(term_impl, c);
         mutex_release(&term_impl->mutex_out);
@@ -11,7 +11,7 @@ void term_putc(char c) {
 }
 
 size_t term_available() {
-    if(term_impl != NULL && term_impl->available != NULL) {
+    if(term_impl && term_impl->available) {
         mutex_acquire(&term_impl->mutex_in);
         size_t ret = term_impl->available(term_impl);
         mutex_release(&term_impl->mutex_in);
@@ -21,10 +21,10 @@ size_t term_available() {
 }
 
 char term_getc_noecho() {
-    if(term_impl == NULL || term_impl->getc == NULL) return 0;
-    if(term_impl->available != NULL) {
+    if(!term_impl || !term_impl->getc) return 0;
+    if(term_impl->available) {
         mutex_acquire(&term_impl->mutex_in);
-        while(term_impl->available(term_impl) == 0);
+        while(!term_impl->available(term_impl));
         mutex_release(&term_impl->mutex_in);
     }
     mutex_acquire(&term_impl->mutex_in);
@@ -34,7 +34,7 @@ char term_getc_noecho() {
 }
 
 void term_clear() {
-    if(term_impl != NULL && term_impl->clear != NULL) {
+    if(term_impl && term_impl->clear) {
         mutex_acquire(&term_impl->mutex_out);
         term_impl->clear(term_impl);
         mutex_release(&term_impl->mutex_out);
@@ -42,7 +42,7 @@ void term_clear() {
 }
 
 void term_get_dimensions(size_t* width, size_t* height) {
-    if(term_impl != NULL && term_impl->get_dimensions != NULL) {
+    if(term_impl && term_impl->get_dimensions) {
         mutex_acquire(&term_impl->mutex_out);
         term_impl->get_dimensions(term_impl, width, height);
         mutex_release(&term_impl->mutex_out);
@@ -50,7 +50,7 @@ void term_get_dimensions(size_t* width, size_t* height) {
 }
 
 void term_set_xy(size_t x, size_t y) {
-    if(term_impl != NULL && term_impl->set_xy != NULL) {
+    if(term_impl && term_impl->set_xy) {
         mutex_acquire(&term_impl->mutex_out);
         term_impl->set_xy(term_impl, x, y);
         mutex_release(&term_impl->mutex_out);
@@ -58,7 +58,7 @@ void term_set_xy(size_t x, size_t y) {
 }
 
 void term_get_xy(size_t* x, size_t* y) {
-    if(term_impl != NULL && term_impl->get_xy != NULL) {
+    if(term_impl && term_impl->get_xy) {
         mutex_acquire(&term_impl->mutex_out);
         term_impl->get_xy(term_impl, x, y);
         mutex_release(&term_impl->mutex_out);
@@ -66,11 +66,11 @@ void term_get_xy(size_t* x, size_t* y) {
 }
 
 void term_puts(const char* s) {
-    if(term_impl != NULL) {
+    if(term_impl) {
         mutex_acquire(&term_impl->mutex_out);
-        if(term_impl->puts != NULL) term_impl->puts(term_impl, s);
-        else if(term_impl->putc != NULL) {
-            for(size_t i = 0; s[i] != 0; i++) term_impl->putc(term_impl, s[i]);
+        if(term_impl->puts) term_impl->puts(term_impl, s);
+        else if(term_impl->putc) {
+            for(size_t i = 0; s[i]; i++) term_impl->putc(term_impl, s[i]);
         }
         mutex_release(&term_impl->mutex_out);
     }
@@ -78,14 +78,14 @@ void term_puts(const char* s) {
 }
 
 char term_getc() {
-    if(term_impl == NULL || term_impl->getc == NULL) return 0;
+    if(!term_impl || !term_impl->getc) return 0;
     char c = term_getc_noecho();
     term_putc(c);
     return c;
 }
 
 void term_gets_noecho(char* s) {
-    if(term_impl == NULL || term_impl->getc == NULL) return;
+    if(!term_impl || !term_impl->getc) return;
     size_t i = 0;
     while(1) {
         char c = term_getc_noecho();
@@ -94,7 +94,7 @@ void term_gets_noecho(char* s) {
                 s[i] = '\0';
                 return;
             case '\b':
-                if(i > 0) i--;
+                if(i) i--;
                 break;
             default:
                 s[i++] = c;
@@ -104,7 +104,7 @@ void term_gets_noecho(char* s) {
 }
 
 void term_gets(char* s) {
-    if(term_impl == NULL || term_impl->getc == NULL) return;
+    if(!term_impl || !term_impl->getc) return;
     size_t i = 0;
     while(1) {
         char c = term_getc_noecho();
@@ -114,7 +114,7 @@ void term_gets(char* s) {
                 term_puts("\r\n");
                 return;
             case '\b':
-                if(i > 0) i--;
+                if(i) i--;
                 term_puts("\b \b"); // backspace, space, then backspace to clear character
                 break;
             default:
@@ -163,15 +163,15 @@ static const uint32_t term_color_palette[] = {
 #endif
 
 bool term_setbg_indexed(size_t idx) {
-    if(idx > 255 || term_impl == NULL) return false;
-    if(term_impl->setbg_indexed != NULL) {
+    if(idx > 255 || !term_impl) return false;
+    if(term_impl->setbg_indexed) {
         mutex_acquire(&term_impl->mutex_out);
         bool ret = term_impl->setbg_indexed(term_impl, idx);
         mutex_release(&term_impl->mutex_out);
         return ret;
     }
 #ifndef TERM_NO_IDXCOLOR_EMULATION
-    else if(term_impl->setbg_rgb != NULL) {
+    else if(term_impl->setbg_rgb) {
         mutex_acquire(&term_impl->mutex_out);
         bool ret = term_impl->setbg_rgb(term_impl, term_color_palette[idx]);
         mutex_release(&term_impl->mutex_out);
@@ -182,15 +182,15 @@ bool term_setbg_indexed(size_t idx) {
 }
 
 bool term_setfg_indexed(size_t idx) {
-    if(idx > 255 || term_impl == NULL) return false;
-    if(term_impl->setfg_indexed != NULL) {
+    if(idx > 255 || !term_impl) return false;
+    if(term_impl->setfg_indexed) {
         mutex_acquire(&term_impl->mutex_out);
         bool ret = term_impl->setfg_indexed(term_impl, idx);
         mutex_release(&term_impl->mutex_out);
         return ret;
     }
 #ifndef TERM_NO_IDXCOLOR_EMULATION
-    else if(term_impl->setfg_rgb != NULL) {
+    else if(term_impl->setfg_rgb) {
         mutex_acquire(&term_impl->mutex_out);
         bool ret = term_impl->setfg_rgb(term_impl, term_color_palette[idx]);
         mutex_release(&term_impl->mutex_out);
@@ -201,15 +201,15 @@ bool term_setfg_indexed(size_t idx) {
 }
 
 size_t term_getbg_indexed() {
-    if(term_impl == NULL) return (size_t)-1;
-    if(term_impl->getbg_indexed != NULL) {
+    if(!term_impl) return (size_t)-1;
+    if(term_impl->getbg_indexed) {
         mutex_acquire(&term_impl->mutex_out);
         size_t ret = term_impl->getbg_indexed(term_impl);
         mutex_release(&term_impl->mutex_out);
         return ret;
     }
 #ifndef TERM_NO_IDXCOLOR_EMULATION
-    else if(term_impl->getbg_rgb != NULL) {
+    else if(term_impl->getbg_rgb) {
         mutex_acquire(&term_impl->mutex_out);
         uint32_t color = term_impl->getbg_rgb(term_impl);
         mutex_release(&term_impl->mutex_out);
@@ -222,15 +222,15 @@ size_t term_getbg_indexed() {
 }
 
 size_t term_getfg_indexed() {
-    if(term_impl == NULL) return (size_t)-1;
-    if(term_impl->getfg_indexed != NULL) {
+    if(!term_impl) return (size_t)-1;
+    if(term_impl->getfg_indexed) {
         mutex_acquire(&term_impl->mutex_out);
         size_t ret = term_impl->getfg_indexed(term_impl);
         mutex_release(&term_impl->mutex_out);
         return ret;
     }
 #ifndef TERM_NO_IDXCOLOR_EMULATION
-    else if(term_impl->getfg_rgb != NULL) {
+    else if(term_impl->getfg_rgb) {
         mutex_acquire(&term_impl->mutex_out);
         uint32_t color = term_impl->getfg_rgb(term_impl);
         mutex_release(&term_impl->mutex_out);
@@ -243,7 +243,7 @@ size_t term_getfg_indexed() {
 }
 
 bool term_setbg_rgb(uint32_t color) {
-    if(color > 0xFFFFFF || term_impl == NULL || term_impl->setbg_rgb == NULL) return false;
+    if(color > 0xFFFFFF || !term_impl || !term_impl->setbg_rgb) return false;
     mutex_acquire(&term_impl->mutex_out);
     bool ret = term_impl->setbg_rgb(term_impl, color);
     mutex_release(&term_impl->mutex_out);
@@ -251,7 +251,7 @@ bool term_setbg_rgb(uint32_t color) {
 }
 
 bool term_setfg_rgb(uint32_t color) {
-    if(color > 0xFFFFFF || term_impl == NULL || term_impl->setfg_rgb == NULL) return false;
+    if(color > 0xFFFFFF || !term_impl || !term_impl->setfg_rgb) return false;
     mutex_acquire(&term_impl->mutex_out);
     bool ret = term_impl->setfg_rgb(term_impl, color);
     mutex_release(&term_impl->mutex_out);
@@ -259,15 +259,15 @@ bool term_setfg_rgb(uint32_t color) {
 }
 
 uint32_t term_getbg_rgb() {
-    if(term_impl == NULL) return false;
-    if(term_impl->getbg_rgb != NULL) {
+    if(!term_impl) return false;
+    if(term_impl->getbg_rgb) {
         mutex_acquire(&term_impl->mutex_out);
         uint32_t ret = term_impl->getbg_rgb(term_impl);
         mutex_release(&term_impl->mutex_out);
         return ret;
     }
 #ifndef TERM_NO_IDXCOLOR_EMULATION
-    else if(term_impl->getbg_indexed != NULL) {
+    else if(term_impl->getbg_indexed) {
         mutex_acquire(&term_impl->mutex_out);
         size_t idx = term_impl->getbg_indexed(term_impl);
         mutex_release(&term_impl->mutex_out);
@@ -278,15 +278,15 @@ uint32_t term_getbg_rgb() {
 }
 
 uint32_t term_getfg_rgb() {
-    if(term_impl == NULL) return false;
-    if(term_impl->getfg_rgb != NULL) {
+    if(!term_impl) return false;
+    if(term_impl->getfg_rgb) {
         mutex_acquire(&term_impl->mutex_out);
         uint32_t ret = term_impl->getfg_rgb(term_impl);
         mutex_release(&term_impl->mutex_out);
         return ret;
     }
 #ifndef TERM_NO_IDXCOLOR_EMULATION
-    else if(term_impl->getfg_indexed != NULL) {
+    else if(term_impl->getfg_indexed) {
         mutex_acquire(&term_impl->mutex_out);
         size_t idx = term_impl->getfg_indexed(term_impl);
         mutex_release(&term_impl->mutex_out);
