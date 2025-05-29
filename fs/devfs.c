@@ -8,11 +8,9 @@ struct dirent* devfs_vfs_readdir(vfs_node_t* node, uint64_t idx) {
     node = node->link.ptr; // 1st device node
     for(size_t i = 0; i < idx && node; i++) node = node->link.ptr; // traverse to next node
     if(!node) return NULL; // nothing to return
-    struct dirent* result = kmalloc(sizeof(struct dirent));
-    if(result) {
-        strcpy(result->name, node->name);
-        result->ino = node->inode;
-    }
+    struct dirent* result = vfs_alloc_dirent();
+    strcpy(result->name, node->name);
+    result->ino = node->inode;
     return result;
 }
 

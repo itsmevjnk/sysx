@@ -56,11 +56,9 @@ struct dirent* tar_vfs_readdir(struct vfs_node* node, uint64_t idx) {
         if((uintptr_t) info->hierarchy[i].parent == (uintptr_t) node) {
             if(n == idx) {
                 /* found the entry we need */
-                struct dirent* result = kmalloc(sizeof(struct dirent));
-                if(result) {
-                    strcpy(result->name, info->hierarchy[i].node->name);
-                    result->ino = info->hierarchy[i].node->inode;
-                } else kerror("cannot allocate space for dirent");
+                struct dirent* result = vfs_alloc_dirent();
+                strcpy(result->name, info->hierarchy[i].node->name);
+                result->ino = info->hierarchy[i].node->inode;
                 return result;
             } else n++;
         }

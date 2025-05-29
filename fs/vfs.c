@@ -108,3 +108,16 @@ void vfs_ioctl(vfs_node_t* node, size_t request, void* buf) {
     node = vfs_traverse_symlink(node);
     if(node && node->hook->ioctl) return node->hook->ioctl((void*)node, request, buf);
 }
+
+#ifndef VFS_DIRENT_SIZE // number of dirents to maintain by VFS buffer
+#define VFS_DIRENT_SIZE                 1024
+#endif
+static struct dirent vfs_dirent_buf[VFS_DIRENT_SIZE];
+static size_t vfs_dirent_idx = 0;
+
+struct dirent* vfs_alloc_dirent() {
+    struct dirent* ret = &vfs_dirent_buf[vfs_dirent_idx++];
+    if(vfs_dirent_idx == VFS_DIRENT_SIZE) vfs_dirent_idx = 0;
+    memset(ret, 0, sizeof(struct dirent));
+    return ret;
+}

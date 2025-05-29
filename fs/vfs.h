@@ -145,4 +145,14 @@ bool vfs_remove(vfs_node_t* node);
  */
 void vfs_ioctl(vfs_node_t* node, size_t request, void* buf);
 
+/* VFS helper */
+
+/*
+ * struct dirent* vfs_alloc_dirent()
+ *  Allocates a new dirent object from the internal buffer.
+ *  FS implementations should use this instead of dynamically
+ *  allocating dirent objects on readdir().
+ */
+struct dirent* vfs_alloc_dirent();
+
 #endif
