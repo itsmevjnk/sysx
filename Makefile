@@ -38,6 +38,9 @@ ifneq (,$(findstring FEAT_ACPI_LAI,$(CFLAGS)))
 	CFLAGS := $(CFLAGS) -isystem drivers/lai/include
 endif
 
+# for dlmalloc
+CFLAGS := $(CFLAGS) -DMORECORE=kmorecore -DMORECORE_CANNOT_TRIM -DLACKS_UNISTD_H -DUSE_DL_PREFIX -DLACKS_SYS_PARAM_H -DHAVE_MMAP=0 -DMALLOC_FAILURE_ACTION
+
 .PHONY: all clean
 .SUFFIXES: .o .c .s .asm
 
