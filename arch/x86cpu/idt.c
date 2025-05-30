@@ -113,7 +113,8 @@ void exc_stub(uint8_t vector, idt_context_t* context) {
 	kerror("eax=0x%08x ebx=0x%08x ecx=0x%08x edx=0x%08x", context->eax, context->ebx, context->ecx, context->edx);
 	kerror("esi=0x%08x edi=0x%08x esp=0x%08x ebp=0x%08x", context->esi, context->edi, context->esp, context->ebp);
 	kerror("cs=0x%04x ds=0x%04x es=0x%04x fs=0x%04x gs=0x%04x", context->cs, context->ds, context->es, context->fs, context->gs);
-	kerror("user ss=0x%04x user esp=0x%08x eflags=0x%08x", context->ss_usr, context->esp_usr, context->eflags);
+	kerror("eflags=0x%08x", context->eflags);
+	if(context->cs & 0b11 == 0b11) kerror("user ss=0x%04x user esp=0x%08x", context->ss_usr, context->esp_usr); // only show this for user SS/ESP - otherwise we may have bigger issues :)
 	kerror("cr0=0x%08x cr2=0x%08x cr3=0x%08x cr4=0x%08x", cr0, cr2, cr3, cr4);
 // #ifdef DEBUG
 // 	kdebug("stack trace:");

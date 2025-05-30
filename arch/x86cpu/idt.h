@@ -18,10 +18,11 @@
  *  to interrupt handlers.
  */
 typedef struct {
-  uint32_t gs, fs, es, ds;
-  uint32_t edi, esi, ebp, esp, ebx, edx, ecx, eax;
-  uint32_t vector, exc_code; // exc_code is for exceptions
-  uint32_t eip, cs, eflags, esp_usr, ss_usr;
+  /* 0 */ uint32_t gs, fs, es, ds;
+  /* 16 */ uint32_t edi, esi, ebp, esp, ebx, edx, ecx, eax;
+  /* 48 */ uint32_t vector, exc_code; // exc_code is for exceptions
+  /* 56 */ uint32_t eip, cs, eflags;
+  /* 68 */ uint32_t esp_usr, ss_usr; // only available if entering from ring 3 (as evident by first 2 bits of CS being 0b11)
 } idt_context_t;
 
 /*
