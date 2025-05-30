@@ -21,21 +21,34 @@ extern uintptr_t __kheap_end;
 #define KHEAP_BLOCK_MIN_SIZE                        4 // minimum size of a memory block (to prevent fragmentation)
 #endif
 
-static uintptr_t kheap_brk = KHEAP_BASE_ADDRESS;
+static size_t kheap_size = 0;
 void* kmorecore(intptr_t incr) {
-    if(incr < 0) return (void*)UINTPTR_MAX; // MORECORE does not need to handle negative
+    if(kheap_size + incr < 0 || kheap_size + incr > KHEAP_MAX_SIZE) return (void*)UINTPTR_MAX; // cannot expand/trim further
 
-    intptr_t size = kheap_brk - KHEAP_BASE_ADDRESS; // previous heap size
-    if(size + incr < 0 || size + incr > KHEAP_MAX_SIZE) return (void*)UINTPTR_MAX; // cannot expand further
-
-    void* prev_brk = (void*) kheap_brk;
+    void* prev_brk = (void*)(KHEAP_BASE_ADDRESS + kheap_size);
 
     if(incr) {
-        size_t framesz = pmm_framesz(); incr = (incr + framesz - 1) / framesz; // convert incr to frames
-        for(size_t i = 0; i < incr; i++, kheap_brk += framesz) {
-            size_t frame = pmm_alloc_free(1);
-            if(frame == (size_t)-1) return (void*)UINTPTR_MAX; // out of memory
-            vmm_pgmap(vmm_current, frame * framesz, kheap_brk, 0, VMM_FLAGS_PRESENT | VMM_FLAGS_RW | VMM_FLAGS_GLOBAL | VMM_FLAGS_CACHE); // map new frame to heap memory space
+        size_t old_size = kheap_size; kheap_size += incr;
+        size_t framesz = pmm_framesz(); 
+        size_t old_frames = (old_size + framesz - 1) / framesz, new_frames = (kheap_size + framesz - 1) / framesz; // to get difference between old and new frames
+        if(old_frames < new_frames) { // expand
+            uintptr_t vaddr = KHEAP_BASE_ADDRESS + old_frames * framesz; // virtual address of end of heap
+            for(size_t i = 0; i < new_frames - old_frames; i++, vaddr += framesz) {
+                size_t frame = pmm_alloc_free(1);
+                if(frame == (size_t)-1) return (void*)UINTPTR_MAX; // out of memory
+                vmm_pgmap(vmm_current, frame * framesz, vaddr, 0, VMM_FLAGS_PRESENT | VMM_FLAGS_RW | VMM_FLAGS_GLOBAL | VMM_FLAGS_CACHE); // map new frame to heap memory space
+            }
+        } else { // trim
+            uintptr_t vaddr = KHEAP_BASE_ADDRESS + (old_frames - 1) * framesz; // virtual address of last page of heap
+            for(size_t i = 0; i < old_frames - new_frames; i++, vaddr -= framesz) {
+                uintptr_t paddr = vmm_get_paddr(vmm_current, vaddr);
+                if(!paddr) {
+                    kerror("virtual address 0x%x is not mapped", vaddr);
+                    continue;
+                }
+                vmm_pgunmap(vmm_current, vaddr, 0); // unmap from VMM
+                pmm_free(paddr / framesz); // free this frame
+            }
         }
     }
 
