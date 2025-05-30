@@ -153,7 +153,7 @@ void kinit() {
             if(ret < 0) {
                 kinfo("   unloading module");
                 elf_unload_prg(vmm_kernel, load_result, load_result_len);
-            } else kfree(load_result); // save kernel heap and free the loading result (since we'll discard it anyway)
+            }
         } else kwarn(" - module does not have an init function");
     }
 
