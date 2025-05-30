@@ -23,7 +23,7 @@ extern uintptr_t __kheap_end;
 
 static size_t kheap_size = 0;
 void* kmorecore(intptr_t incr) {
-    if(kheap_size + incr < 0 || kheap_size + incr > KHEAP_MAX_SIZE) return (void*)UINTPTR_MAX; // cannot expand/trim further
+    if((intptr_t)kheap_size + incr < 0 || kheap_size + incr > KHEAP_MAX_SIZE) return (void*)UINTPTR_MAX; // cannot expand/trim further
 
     void* prev_brk = (void*)(KHEAP_BASE_ADDRESS + kheap_size);
 
@@ -53,6 +53,10 @@ void* kmorecore(intptr_t incr) {
     }
 
     return prev_brk;
+}
+
+size_t kheap_get_size() {
+    return kheap_size;
 }
 
 void* kmalloc(size_t size) {
