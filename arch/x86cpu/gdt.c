@@ -78,7 +78,7 @@ void gdt_init() {
   /* set up TSS */
   memset(&tss_entry, 0, sizeof(tss_t));
   tss_entry.ss0 = 0x10;
-  asm volatile("mov %%esp, %0" : "=r"(tss_entry.esp0)); // it does not really matter how far this is off from the actual stack bottom
+  __asm__ __volatile__("mov %%esp, %0" : "=r"(tss_entry.esp0)); // it does not really matter how far this is off from the actual stack bottom
   gdt_add_entry(7, (uintptr_t)&tss_entry, sizeof(tss_t), false, false, true, false, 0, false, false); // TSS (0x38)
   gdt_entries[7].accessed = 1; // set accessed bit too
 

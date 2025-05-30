@@ -50,7 +50,7 @@ kernel.elf: $(OBJS) $(ARCHDIR)/link.ld
 	$(CC) -T $(ARCHDIR)/link.ld -o $@ $(OBJS) $(LDFLAGS)
 
 .c.o:
-	$(CC) -c $< -o $@ $(CFLAGS) -isystem . -isystem lib
+	$(CC) -c $< -o $@ $(CFLAGS) -isystem . -isystem lib -std=c11
 
 .s.o:
 	$(AS) -c $< -o $@ $(ASFLAGS)

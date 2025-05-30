@@ -135,7 +135,7 @@ void vmm_pgmap_small(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 			} else {
 				/* make use of recursive mapping */
 				pt = vmm_pt(&__rmap_start, pde);
-				asm volatile("invlpg (%0)" : : "r"(pt) : "memory"); // invalidate TLB entry for our PT so we don't end up with wrong page faults
+				__asm__ __volatile__("invlpg (%0)" : : "r"(pt) : "memory"); // invalidate TLB entry for our PT so we don't end up with wrong page faults
 			}
 			memset(pt, 0, 4096); // clear out the newly allocated page table
 			
@@ -199,7 +199,7 @@ void vmm_pgmap_small(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 	pt_entry->entry.accessed = 0; pt_entry->entry.dirty = 0;
 	pt_entry->entry.avail = (flags & VMM_FLAGS_TRAPPED) ? VMM_AVAIL_TRAPPED : 0;
 
-	if(invalidate_tlb) asm volatile("invlpg (%0)" : : "r"(va) : "memory"); // invalidate TLB if needed
+	if(invalidate_tlb) __asm__ __volatile__("invlpg (%0)" : : "r"(va) : "memory"); // invalidate TLB if needed
 
 	if(pd_map) {
 		/* unmap PD and PT */
@@ -225,7 +225,7 @@ void vmm_pgmap_huge(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 		/* there's a page table for this PDE - deallocate it to avoid confusion */
 		pmm_free(((vmm_pde_t*)pd_entry)->entry.pt);
 		pd_entry->dword = 0; // quick way to unmap page
-		if(!pd_map) asm volatile("invlpg (%0)" : : "r"(vmm_pt(&__rmap_start, pde)) : "memory"); // invalidate TLB entry for the PT as a safety measure
+		if(!pd_map) __asm__ __volatile__("invlpg (%0)" : : "r"(vmm_pt(&__rmap_start, pde)) : "memory"); // invalidate TLB entry for the PT as a safety measure
 	}
 	
 	invalidate_tlb = invalidate_tlb || (pd_entry->entry_pse.global) || (flags & VMM_FLAGS_GLOBAL); // set if the page was global, or will be global
@@ -262,7 +262,7 @@ void vmm_pgmap_huge(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 	if(invalidate_tlb) {
 		/* invalidate TLB if needed */
 		for(size_t i = 0; i < 1024; i++, va += 1024) {
-			asm volatile("invlpg (%0)" : : "r"(va) : "memory");
+			__asm__ __volatile__("invlpg (%0)" : : "r"(va) : "memory");
 		}
 	}
 
@@ -315,11 +315,11 @@ void vmm_pgunmap_huge(void* vmm, uintptr_t va) {
 		/* there's a PT behind this - deallocate it. but first we'll need to invalidate the TLB of global pages if there's any (and if it's needed) */
 		vmm_pte_t* pt = ((pd_map) ? (vmm_pte_t*) vmm_alloc_map(vmm_current, pd[pde].entry.pt << 12, 4096, (uintptr_t) pd + 4096, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT) : vmm_pt(&__rmap_start, pde));
 		for(size_t i = 0; i < 1024; i++) {
-			if(!invalidate_tlb && pt[i].entry.global) asm volatile("invlpg (%0)" : : "r"(va | (i << 12)) : "memory");
+			if(!invalidate_tlb && pt[i].entry.global) __asm__ __volatile__("invlpg (%0)" : : "r"(va | (i << 12)) : "memory");
 			if(pt[i].entry.avail & VMM_AVAIL_TRAPPED) vmm_unmap_resolve_cow(vmm, va | (i << 12), 0);
 		}
 		pmm_free(pd_entry->entry.pt);
-		if(!pd_map) asm volatile("invlpg (%0)" : : "r"(pt) : "memory");
+		if(!pd_map) __asm__ __volatile__("invlpg (%0)" : : "r"(pt) : "memory");
 		else vmm_pgunmap(vmm_current, (uintptr_t) pt, 0);
 	} else if(pd_entry->entry_pse.avail & VMM_AVAIL_TRAPPED) vmm_unmap_resolve_cow(vmm, va, 1); // resolve CoW if needed
 
@@ -327,7 +327,7 @@ void vmm_pgunmap_huge(void* vmm, uintptr_t va) {
 
 	if(invalidate_tlb) {
 		for(size_t i = 0; i < 1024; i++, va += 4096) {
-			asm volatile("invlpg (%0)" : : "r"(va) : "memory");
+			__asm__ __volatile__("invlpg (%0)" : : "r"(va) : "memory");
 		}
 	}
 
@@ -386,7 +386,7 @@ void vmm_pgunmap_small(void* vmm, uintptr_t va) {
 		}
 	}
 
-	if(invalidate_tlb) asm volatile("invlpg (%0)" : : "r"(va) : "memory");
+	if(invalidate_tlb) __asm__ __volatile__("invlpg (%0)" : : "r"(va) : "memory");
 
 done:
 	if(pd_map) {
@@ -498,7 +498,7 @@ void vmm_set_paddr(void* vmm, uintptr_t va, uintptr_t pa) {
 		if(vmm == vmm_current || pd[pde].entry_pse.global) {
 			/* invalidate TLB */
 			va &= 0xFFC00000;
-			for(size_t i = 0; i < 1024; i++, va += 4096) asm volatile("invlpg (%0)" : : "r"(va) : "memory");
+			for(size_t i = 0; i < 1024; i++, va += 4096) __asm__ __volatile__("invlpg (%0)" : : "r"(va) : "memory");
 		}
 	} else {
 		/* small page */
@@ -514,7 +514,7 @@ void vmm_set_paddr(void* vmm, uintptr_t va, uintptr_t pa) {
 		} else pt = vmm_pt(&__rmap_start, pde);
 		if(pt[pte].dword) {
 			pt[pte].entry.pa = pa >> 12;
-			if(vmm == vmm_current || pt[pte].entry.global) asm volatile("invlpg (%0)" : : "r"(va & ~0xFFF) : "memory"); // invalidate TLB
+			if(vmm == vmm_current || pt[pte].entry.global) __asm__ __volatile__("invlpg (%0)" : : "r"(va & ~0xFFF) : "memory"); // invalidate TLB
 		}
 		if(pd_map) vmm_pgunmap(vmm_current, (uintptr_t) pt, 0);
 	}
@@ -525,7 +525,7 @@ done:
 
 void vmm_switch(void* vmm) {
 	if(vmm_current == vmm) return; // no need to do anything
-	asm volatile("mov %0, %%cr3" : : "r"(vmm) : "memory");
+	__asm__ __volatile__("mov %0, %%cr3" : : "r"(vmm) : "memory");
 	vmm_current = vmm;
 }
 
@@ -719,7 +719,7 @@ void vmm_set_flags(void* vmm, uintptr_t va, size_t flags) {
 		pd[pde].entry_pse.avail = (flags & VMM_FLAGS_TRAPPED) ? VMM_AVAIL_TRAPPED : 0;
 		if(invalidate_tlb) {
 			va &= 0xFFC00000;
-			for(size_t i = 0; i < 1024; i++, va += 4096) asm volatile("invlpg (%0)" : : "r"(va) : "memory");
+			for(size_t i = 0; i < 1024; i++, va += 4096) __asm__ __volatile__("invlpg (%0)" : : "r"(va) : "memory");
 		}
 	} else {
 		/* small page - there's a PT to access too */
@@ -742,7 +742,7 @@ void vmm_set_flags(void* vmm, uintptr_t va, size_t flags) {
 			pt[pte].entry.ncache = (flags & VMM_FLAGS_CACHE) ? 0 : 1;
 			pt[pte].entry.wthru = (flags & VMM_FLAGS_CACHE_WTHRU) ? 1 : 0;
 			pt[pde].entry.avail = (flags & VMM_FLAGS_TRAPPED) ? VMM_AVAIL_TRAPPED : 0;
-			if(invalidate_tlb) asm volatile("invlpg (%0)" : : "r"(va) : "memory");
+			if(invalidate_tlb) __asm__ __volatile__("invlpg (%0)" : : "r"(va) : "memory");
 		}
 		if(pd_map) vmm_pgunmap(vmm_current, (uintptr_t) pt, 0);
 	}

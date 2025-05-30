@@ -630,7 +630,7 @@ bool apic_init() {
     }
 
     /* enable local APIC */
-    asm volatile("wrmsr" : : "c"(0x1B), "d"(0), "a"((lapic_base_paddr & ~0xFFF) | (1 << 11))); // write APIC base and enable bit to IA32_APIC_BASE MSR
+    __asm__ __volatile__("wrmsr" : : "c"(0x1B), "d"(0), "a"((lapic_base_paddr & ~0xFFF) | (1 << 11))); // write APIC base and enable bit to IA32_APIC_BASE MSR
     intr_handle(LAPIC_SPURIOUS_VECT, apic_spurious_handler);
     lapic_reg_write(LAPIC_REG_SIVR, LAPIC_SPURIOUS_VECT | (1 << 8)); // software enable LAPIC and set spurious interrupt vector
     pic_mask_bm(0xFFFF); // mask all PIC interrupts as we will be using the APIC

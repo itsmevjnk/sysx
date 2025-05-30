@@ -57,11 +57,11 @@ void (*idt_handlers[256])(uint8_t vector, void* context) = {NULL};
 
 /* functions for intr.h */
 void intr_enable() {
-	asm("sti");
+	__asm__ __volatile__("sti");
 }
 
 void intr_disable() {
-	asm("cli");
+	__asm__ __volatile__("cli");
 }
 
 void intr_handle(uint8_t vector, void (*handler)(uint8_t vector, void* context)) {
@@ -93,10 +93,10 @@ void exc_stub(uint8_t vector, idt_context_t* context) {
 	(void) vector;
 
 	uint32_t cr0, cr2, cr3, cr4;
-	asm volatile("mov %%cr0, %0" : "=r"(cr0));
-	asm volatile("mov %%cr2, %0" : "=r"(cr2));
-	asm volatile("mov %%cr3, %0" : "=r"(cr3));
-	asm volatile("mov %%cr4, %0" : "=r"(cr4));
+	__asm__ __volatile__("mov %%cr0, %0" : "=r"(cr0));
+	__asm__ __volatile__("mov %%cr2, %0" : "=r"(cr2));
+	__asm__ __volatile__("mov %%cr3, %0" : "=r"(cr3));
+	__asm__ __volatile__("mov %%cr4, %0" : "=r"(cr4));
 
 	switch(vector) {
 	case 0x0E: // page fault
@@ -107,7 +107,7 @@ void exc_stub(uint8_t vector, idt_context_t* context) {
 	}
 
 	/* unhandled exception */
-	asm("cli"); // no more interrupts!
+	__asm__ __volatile__("cli"); // no more interrupts!
 	kerror("unhandled exception 0x%x (code 0x%x) @ 0x%x", context->vector, context->exc_code, context->eip);
 	kerror("task_current=0x%x pid=%u", task_current, (!task_current) ? 0 : task_common((void*) task_current)->pid);
 	kerror("eax=0x%08x ebx=0x%08x ecx=0x%08x edx=0x%08x", context->eax, context->ebx, context->ecx, context->edx);

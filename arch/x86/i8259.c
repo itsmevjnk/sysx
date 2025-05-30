@@ -160,7 +160,7 @@ bool pic_is_handled(uint8_t irq) {
 }
 
 void pic_init() {
-    asm volatile("cli"); // disable interrupts
+    __asm__ __volatile__("cli"); // disable interrupts
 
     /* initialize the PIC */
     outb(PIC1_CMD, ICW1_INIT | ICW1_ICW4); io_wait(); // give the PIC some time to do its thing
@@ -184,6 +184,6 @@ void pic_init() {
 
     pic_eoi_inline(15); // EOI on both PICs in case some interrupt managed to fire
 
-    asm volatile("sti"); // re-enable interrupts
+    __asm__ __volatile__("sti"); // re-enable interrupts
 
 }
