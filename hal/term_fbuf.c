@@ -167,5 +167,7 @@ term_hook_t fbterm_hook = {
     {0},
     {0},
 
-    NULL
+    NULL,
+
+    false
 };

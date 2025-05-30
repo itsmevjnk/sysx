@@ -29,6 +29,7 @@ typedef struct term_hook {
     mutex_t mutex_in; // mutex for input operations (available/getc)
     mutex_t mutex_out; // mutex for output operations (putc/puts/clear/get_dimensions/set_xy/get_xy/set(get)bg(fg))
     void* data; // other data if needed
+    bool out_irq; // set if output operations require interrupts to work, in which case mutex_out guarding will not disable interrupts
 } term_hook_t;
 extern term_hook_t* term_impl; // terminal implementation
 

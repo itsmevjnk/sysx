@@ -173,7 +173,9 @@ term_hook_t serterm_hook = {
     {0},
     {0},
     
-    NULL
+    NULL,
+
+    false
 };
 
 void term_init() {

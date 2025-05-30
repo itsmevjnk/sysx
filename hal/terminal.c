@@ -1,12 +1,47 @@
 #include <hal/terminal.h>
+#include <hal/intr.h>
 
 term_hook_t* term_impl = NULL;
 
+/* output guard functions */
+
+/*
+ * static bool term_outguard_start()
+ *  Start guarding the output operation, which includes saving the
+ *  interrupt state and disabling interrupt (if term_impl->out_irq
+ *  is not set), followed by acquiring term_impl->mutex_out.
+ *  This function returns the saved interrupt state (or false if
+ *  term_impl->out_irq is set). This should be passed onto
+ *  term_outguard_end() at the end of the guarded section.
+ */
+static bool term_outguard_start() {
+    bool irq = false;
+    if(!term_impl->out_irq) {
+        irq = intr_test();
+        intr_disable();
+    }
+    mutex_acquire(&term_impl->mutex_out);
+    return irq;
+}
+
+/*
+ * static void term_outguard_end(bool enable_irq)
+ *  End guarding the output operaton, which includes releasing the 
+ *  term_impl->mutex_out mutex, followed by enabling interrupts if
+ *  enable_irq (returned from term_outguard_start()) is set.
+ *  Note that term_outguard_start() will always return false if
+ *  term_impl->out_irq is set.
+ */
+static void term_outguard_end(bool enable_irq) {
+    mutex_release(&term_impl->mutex_out);
+    if(enable_irq) intr_enable();
+}
+
 void term_putc(char c) {
     if(term_impl && term_impl->putc) {
-        mutex_acquire(&term_impl->mutex_out);
+        bool irq = term_outguard_start();
         term_impl->putc(term_impl, c);
-        mutex_release(&term_impl->mutex_out);
+        term_outguard_end(irq);
     }
 }
 
@@ -22,12 +57,10 @@ size_t term_available() {
 
 char term_getc_noecho() {
     if(!term_impl || !term_impl->getc) return 0;
+    mutex_acquire(&term_impl->mutex_in); // acquire terminal for this character
     if(term_impl->available) {
-        mutex_acquire(&term_impl->mutex_in);
         while(!term_impl->available(term_impl));
-        mutex_release(&term_impl->mutex_in);
     }
-    mutex_acquire(&term_impl->mutex_in);
     char c = term_impl->getc(term_impl);
     mutex_release(&term_impl->mutex_in);
     return c;
@@ -35,44 +68,44 @@ char term_getc_noecho() {
 
 void term_clear() {
     if(term_impl && term_impl->clear) {
-        mutex_acquire(&term_impl->mutex_out);
+        bool irq = term_outguard_start();
         term_impl->clear(term_impl);
-        mutex_release(&term_impl->mutex_out);
+        term_outguard_end(irq);
     }
 }
 
 void term_get_dimensions(size_t* width, size_t* height) {
     if(term_impl && term_impl->get_dimensions) {
-        mutex_acquire(&term_impl->mutex_out);
+        bool irq = term_outguard_start();
         term_impl->get_dimensions(term_impl, width, height);
-        mutex_release(&term_impl->mutex_out);
+        term_outguard_end(irq);
     }
 }
 
 void term_set_xy(size_t x, size_t y) {
     if(term_impl && term_impl->set_xy) {
-        mutex_acquire(&term_impl->mutex_out);
+        bool irq = term_outguard_start();
         term_impl->set_xy(term_impl, x, y);
-        mutex_release(&term_impl->mutex_out);
+        term_outguard_end(irq);
     }
 }
 
 void term_get_xy(size_t* x, size_t* y) {
     if(term_impl && term_impl->get_xy) {
-        mutex_acquire(&term_impl->mutex_out);
+        bool irq = term_outguard_start();
         term_impl->get_xy(term_impl, x, y);
-        mutex_release(&term_impl->mutex_out);
+        term_outguard_end(irq);
     }
 }
 
 void term_puts(const char* s) {
     if(term_impl) {
-        mutex_acquire(&term_impl->mutex_out);
+        bool irq = term_outguard_start();
         if(term_impl->puts) term_impl->puts(term_impl, s);
         else if(term_impl->putc) {
             for(size_t i = 0; s[i]; i++) term_impl->putc(term_impl, s[i]);
         }
-        mutex_release(&term_impl->mutex_out);
+        term_outguard_end(irq);
     }
     
 }
@@ -165,16 +198,16 @@ static const uint32_t term_color_palette[] = {
 bool term_setbg_indexed(size_t idx) {
     if(idx > 255 || !term_impl) return false;
     if(term_impl->setbg_indexed) {
-        mutex_acquire(&term_impl->mutex_out);
+        bool irq = term_outguard_start();
         bool ret = term_impl->setbg_indexed(term_impl, idx);
-        mutex_release(&term_impl->mutex_out);
+        term_outguard_end(irq);
         return ret;
     }
 #ifndef TERM_NO_IDXCOLOR_EMULATION
     else if(term_impl->setbg_rgb) {
-        mutex_acquire(&term_impl->mutex_out);
+        bool irq = term_outguard_start();
         bool ret = term_impl->setbg_rgb(term_impl, term_color_palette[idx]);
-        mutex_release(&term_impl->mutex_out);
+        term_outguard_end(irq);
         return ret;
     }
 #endif
@@ -184,16 +217,16 @@ bool term_setbg_indexed(size_t idx) {
 bool term_setfg_indexed(size_t idx) {
     if(idx > 255 || !term_impl) return false;
     if(term_impl->setfg_indexed) {
-        mutex_acquire(&term_impl->mutex_out);
+        bool irq = term_outguard_start();
         bool ret = term_impl->setfg_indexed(term_impl, idx);
-        mutex_release(&term_impl->mutex_out);
+        term_outguard_end(irq);
         return ret;
     }
 #ifndef TERM_NO_IDXCOLOR_EMULATION
     else if(term_impl->setfg_rgb) {
-        mutex_acquire(&term_impl->mutex_out);
+        bool irq = term_outguard_start();
         bool ret = term_impl->setfg_rgb(term_impl, term_color_palette[idx]);
-        mutex_release(&term_impl->mutex_out);
+        term_outguard_end(irq);
         return ret;
     }
 #endif
@@ -203,16 +236,16 @@ bool term_setfg_indexed(size_t idx) {
 size_t term_getbg_indexed() {
     if(!term_impl) return (size_t)-1;
     if(term_impl->getbg_indexed) {
-        mutex_acquire(&term_impl->mutex_out);
+        bool irq = term_outguard_start();
         size_t ret = term_impl->getbg_indexed(term_impl);
-        mutex_release(&term_impl->mutex_out);
+        term_outguard_end(irq);
         return ret;
     }
 #ifndef TERM_NO_IDXCOLOR_EMULATION
     else if(term_impl->getbg_rgb) {
-        mutex_acquire(&term_impl->mutex_out);
+        bool irq = term_outguard_start();
         uint32_t color = term_impl->getbg_rgb(term_impl);
-        mutex_release(&term_impl->mutex_out);
+        term_outguard_end(irq);
         for(size_t i = 0; i < 256; i++) {
             if(term_color_palette[i] == color) return i;
         }
@@ -224,16 +257,16 @@ size_t term_getbg_indexed() {
 size_t term_getfg_indexed() {
     if(!term_impl) return (size_t)-1;
     if(term_impl->getfg_indexed) {
-        mutex_acquire(&term_impl->mutex_out);
+        bool irq = term_outguard_start();
         size_t ret = term_impl->getfg_indexed(term_impl);
-        mutex_release(&term_impl->mutex_out);
+        term_outguard_end(irq);
         return ret;
     }
 #ifndef TERM_NO_IDXCOLOR_EMULATION
     else if(term_impl->getfg_rgb) {
-        mutex_acquire(&term_impl->mutex_out);
+        bool irq = term_outguard_start();
         uint32_t color = term_impl->getfg_rgb(term_impl);
-        mutex_release(&term_impl->mutex_out);
+        term_outguard_end(irq);
         for(size_t i = 0; i < 256; i++) {
             if(term_color_palette[i] == color) return i;
         }
@@ -244,33 +277,33 @@ size_t term_getfg_indexed() {
 
 bool term_setbg_rgb(uint32_t color) {
     if(color > 0xFFFFFF || !term_impl || !term_impl->setbg_rgb) return false;
-    mutex_acquire(&term_impl->mutex_out);
+    bool irq = term_outguard_start();
     bool ret = term_impl->setbg_rgb(term_impl, color);
-    mutex_release(&term_impl->mutex_out);
+    term_outguard_end(irq);
     return ret;
 }
 
 bool term_setfg_rgb(uint32_t color) {
     if(color > 0xFFFFFF || !term_impl || !term_impl->setfg_rgb) return false;
-    mutex_acquire(&term_impl->mutex_out);
+    bool irq = term_outguard_start();
     bool ret = term_impl->setfg_rgb(term_impl, color);
-    mutex_release(&term_impl->mutex_out);
+    term_outguard_end(irq);
     return ret;
 }
 
 uint32_t term_getbg_rgb() {
     if(!term_impl) return false;
     if(term_impl->getbg_rgb) {
-        mutex_acquire(&term_impl->mutex_out);
+        bool irq = term_outguard_start();
         uint32_t ret = term_impl->getbg_rgb(term_impl);
-        mutex_release(&term_impl->mutex_out);
+        term_outguard_end(irq);
         return ret;
     }
 #ifndef TERM_NO_IDXCOLOR_EMULATION
     else if(term_impl->getbg_indexed) {
-        mutex_acquire(&term_impl->mutex_out);
+        bool irq = term_outguard_start();
         size_t idx = term_impl->getbg_indexed(term_impl);
-        mutex_release(&term_impl->mutex_out);
+        term_outguard_end(irq);
         if(idx <= 255) return term_color_palette[idx];
     }
 #endif
@@ -280,16 +313,16 @@ uint32_t term_getbg_rgb() {
 uint32_t term_getfg_rgb() {
     if(!term_impl) return false;
     if(term_impl->getfg_rgb) {
-        mutex_acquire(&term_impl->mutex_out);
+        bool irq = term_outguard_start();
         uint32_t ret = term_impl->getfg_rgb(term_impl);
-        mutex_release(&term_impl->mutex_out);
+        term_outguard_end(irq);
         return ret;
     }
 #ifndef TERM_NO_IDXCOLOR_EMULATION
     else if(term_impl->getfg_indexed) {
-        mutex_acquire(&term_impl->mutex_out);
+        bool irq = term_outguard_start();
         size_t idx = term_impl->getfg_indexed(term_impl);
-        mutex_release(&term_impl->mutex_out);
+        term_outguard_end(irq);
         if(idx <= 255) return term_color_palette[idx];
     }
 #endif
