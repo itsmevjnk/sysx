@@ -5,6 +5,7 @@
 #include <kernel/kernel.h>
 #include <kernel/log.h>
 #include <string.h>
+#include <stdatomic.h>
 
 void* task_kernel = NULL;
 volatile void* task_current = NULL;
@@ -143,12 +144,12 @@ void task_init_stub() {
     // common->ready = 1;
 }
 
-static volatile size_t task_yield_block_cnt = 0;
+static volatile atomic_size_t task_yield_block_cnt = 0;
 
 volatile timer_tick_t task_yield_tick = 0;
 
 void task_yield(void* context) {
-    if(task_yield_block_cnt || !task_kernel) return; // cannot switch yet
+    if(!task_kernel || atomic_load(&task_yield_block_cnt)) return; // cannot switch yet
     vmm_do_cleanup(); // remove any VMM config that have been staged for deletion
     if(!task_current) {
         if(task_get_ready(task_kernel)) {
@@ -184,11 +185,14 @@ void task_yield(void* context) {
 }
 
 void task_yield_block() {
-    task_yield_block_cnt++;
+    atomic_fetch_add_explicit(&task_yield_block_cnt, 1, memory_order_relaxed);
 }
 
 void task_yield_unblock() {
-    if(task_yield_block_cnt) task_yield_block_cnt--;
+    size_t expected = atomic_load_explicit(&task_yield_block_cnt, memory_order_relaxed);
+    while (expected > 0 && !atomic_compare_exchange_weak_explicit(&task_yield_block_cnt, &expected, expected - 1, memory_order_acquire, memory_order_relaxed)) {
+        // expected is updated by atomic_compare_exchange_weak
+    }
 }
 
 void* task_fork_stub(struct proc* proc) {
