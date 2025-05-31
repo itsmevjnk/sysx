@@ -626,6 +626,12 @@ void vmm_free(void* vmm) {
 	
 	if(vmm == vmm_current) {
 		vmm_stage_free(vmm);
+		return;
+	}
+
+	if(!vmm_trap_remove(vmm)) {
+		kerror("cannot remove traps from VMM 0x%x", (uintptr_t)vmm);
+		return;
 	}
 
 	vmm_pde_t* pd = (vmm_pde_t*) vmm_alloc_map(vmm_current, (uintptr_t) vmm, 4096, 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT); // map PD

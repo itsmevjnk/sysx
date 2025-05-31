@@ -208,6 +208,18 @@ size_t vmm_cow_setup(void* vmm_src, uintptr_t vaddr_src, void* vmm_dst, uintptr_
 bool vmm_cow_duplicate(void* vmm, uintptr_t vaddr, size_t pgsz);
 
 /*
+ * bool vmm_trap_remove(void* vmm)
+ *  Removes the specified VMM structure's relations in the traps list.
+ *  This includes the following:
+ *   - Resolving the first CoW order of each address whose source is vmm
+ *     and pointing any subsequent order to that VMM structure.
+ *   - Deleting traps that apply on vmm.
+ *  This function is to be called by vmm_free before deallocating vmm,
+ *  and wil return true on success.
+ */
+bool vmm_trap_remove(void* vmm);
+
+/*
  * vmm_trap_t* vmm_is_cow(void* vmm, uintptr_t vaddr, bool validated)
  *  Checks if the specified virtual address is mapped as CoW.
  *  The validated flag indicates whether the address is guaranteed

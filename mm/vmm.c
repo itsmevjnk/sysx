@@ -221,13 +221,13 @@ bool vmm_cow_duplicate(void* vmm, uintptr_t vaddr, size_t pgsz) {
 	}
 	vmm_trap_t* dst = &vmm_traps[idx_dst];
 	vmm_trap_t* src = dst->info;
-	mutex_release(&vmm_traps_mutex);
 
 	/* find virtual address space to map memory to for copying */
 	size_t framesz = pmm_framesz(); // PMM frame size
     void* copy_src = (void*) vmm_alloc_map(vmm_current, 0, 2 * framesz, kernel_end, UINTPTR_MAX, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW);
 	if(!copy_src) {
 		kerror("cannot find virtual address space to map for copying");
+		mutex_release(&vmm_traps_mutex);
 		return false;
 	}
 
@@ -236,6 +236,7 @@ bool vmm_cow_duplicate(void* vmm, uintptr_t vaddr, size_t pgsz) {
 	size_t frame = pmm_alloc_free(rq_frames);
 	if(frame == (size_t)-1) {
 		kerror("cannot allocate memory for COW");
+		mutex_release(&vmm_traps_mutex);
 		return false;
 	}
 
@@ -264,7 +265,73 @@ bool vmm_cow_duplicate(void* vmm, uintptr_t vaddr, size_t pgsz) {
 	/* delete traps */
 	vmm_delete_trap(src);
 	vmm_delete_trap(dst);
+
+	mutex_release(&vmm_traps_mutex);
 	
+	return true;
+}
+
+bool vmm_trap_remove(void* vmm) {
+	mutex_acquire(&vmm_traps_mutex);
+
+	size_t resolved_cnt = 0, resolved_maxcnt = 0; // TODO: something like a hashmap would be more appropriate here
+	uintptr_t* resolved = NULL; // resolved[3k] = vaddr, resolved[3k+1] = corresponding new source vmm, resolved[3k+2] = corresponding new source vaddr
+
+	for(size_t i = 0; i < vmm_traps_maxlen; i++) {
+		vmm_trap_t* trap = &vmm_traps[i];
+		if(trap->type == VMM_TRAP_NONE) continue;
+
+		/* resolve CoW orders */
+		if(trap->type == VMM_TRAP_COW && ((vmm_trap_t*)trap->info)->vmm == vmm) { // CoW order sourcing from vmm
+			bool done = false;
+			for(size_t j = 0; j < resolved_cnt; j++) { // check if it has been resolved before
+				if(resolved[j * 3] == trap->vaddr) {
+					void* dst_vmm = trap->vmm; uintptr_t dst_vaddr = trap->vaddr;
+					void* src_vmm = (void*)resolved[j * 3 + 1]; uintptr_t src_vaddr = resolved[j * 3 + 2];
+					size_t pgsz = vmm_get_pgsz(dst_vmm, dst_vaddr);
+					vmm_delete_trap((vmm_trap_t*)trap->info); vmm_delete_trap(trap); // delete old relation
+					if(pgsz == (size_t)-1) { // unmapped - nothing to do here
+						done = true;
+						break;
+					} else pgsz = vmm_pgsz(pgsz); // convert to bytes
+					if(!vmm_cow_setup(src_vmm, src_vaddr, dst_vmm, dst_vaddr, pgsz)) {
+						kerror("cannot set up new CoW relation: vmm:vaddr 0x%x:0x%x <-> 0x%x:0x%x", (uintptr_t)src_vmm, src_vaddr, (uintptr_t)dst_vmm, dst_vaddr);
+						mutex_release(&vmm_traps_mutex);
+						kfree(resolved);
+						return false;
+					}
+					done = true;
+					break;
+				}
+			}
+			if(done) continue;
+
+			/* first occurrence */
+			if(resolved_maxcnt == resolved_cnt) {
+				resolved_maxcnt += VMM_TRAP_ALLOCSZ;
+				resolved = krealloc(resolved, resolved_maxcnt * 3 * sizeof(uintptr_t));
+				if(!resolved) {
+					kerror("cannot allocate CoW resolution tracking table");
+					mutex_release(&vmm_traps_mutex);
+					return false;
+				}
+			}
+			void* dst_vmm = trap->vmm; uintptr_t dst_vaddr = trap->vaddr;
+			vmm_set_flags(dst_vmm, dst_vaddr, vmm_get_flags(dst_vmm, dst_vaddr) | VMM_FLAGS_RW); // destination now owns the frame
+			vmm_delete_trap((vmm_trap_t*)trap->info); vmm_delete_trap(trap);
+			resolved[resolved_cnt * 3] = trap->vaddr;
+			resolved[resolved_cnt * 3 + 1] = (uintptr_t)dst_vmm;
+			resolved[resolved_cnt * 3 + 2] = dst_vaddr;
+			resolved_cnt++;
+		}
+		else if(trap->vmm == vmm) { // traps targeting this vmm in general
+			vmm_delete_trap(trap);
+		}
+	}
+
+	kfree(resolved);
+
+	mutex_release(&vmm_traps_mutex);
 	return true;
 }
 
