@@ -11,7 +11,7 @@ static size_t task_size = sizeof(task_t); // size of each task structure (includ
 
 extern uint16_t x86ext_on;
 
-void* task_create_stub() {
+void* task_create_stub(bool user) {
     task_t* task = kmemalign(16, task_size);
     if(!task) {
         kerror("cannot allocate memory for new task");
@@ -20,6 +20,8 @@ void* task_create_stub() {
 
     memset(task, 0, task_size); // new task
 
+    task->regs.cs = (user) ? 0x1B : 0x08;
+    task->regs.ss_usr = 0x23; // this is only relevant if this is a usermode task
     task->regs.eflags |= (1 << 9); // enable interrupts in all cases
     // set MXCSR; not sure if this is needed but we'll do it anyway
     if(x86ext_on & (1 << 3)) task->regs_ext[6] = 0x1F80;
@@ -41,11 +43,17 @@ void task_set_iptr(void* task, uintptr_t iptr) {
 }
 
 uintptr_t task_get_sptr(void* task) {
-    return ((task_t*)task)->regs.esp;
+    task_t* task_struct = (task_t*)task;
+    return (task_struct->common.type == TASK_TYPE_USER) ? task_struct->regs.esp_usr : (task_struct->regs.esp + 4 * (2 + 3));
+    // the maths behind the kernel ESP can be found in task_lowlevel.asm
 }
 
 void task_set_sptr(void* task, uintptr_t sptr) {
-    ((task_t*)task)->regs.esp = sptr;
+    task_t* task_struct = (task_t*)task;
+    if(task_struct->common.type == TASK_TYPE_USER)
+        task_struct->regs.esp_usr = sptr;
+    else
+        task_struct->regs.esp = sptr - 4 * (2 + 3);
 }
 
 task_common_t* task_common(void* task) {

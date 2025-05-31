@@ -18,57 +18,31 @@ task_switch:
 cli ; ensure that interrupt is off, otherwise it will mess up the task switch
 cld ; for movsb
 
-mov ebp, [task_current] ; task_current
-test ebp, ebp
-jz .switch_pd ; skip storing context
+mov edi, [task_current] ; task_current
+test edi, edi
+jz .switch_pd ; skip storing context if task_current is null
 
-mov eax, [ebp + (4 * 10)] ; task_current->type/ready/pid
-and eax, 0x00000007 ; extract type
-test eax, eax
+.save_general: ; save general registers from context
 mov esi, [esp + (4 * 2)] ; context
-jz .store_ctx ; kernel tasks do not need the following (ring 3 task running ring 0/3 code) handling
+add esi, (4 * 4) ; skip DS/ES/FS/GS (which is to be derived from CS)
+; EDI set to task_current->regs
+mov ecx, (4 * 8) ; EDI, ESI, EBP, ESP, EBX, EDX, ECX, EAX (in this order)
+rep movsb
+add esi, (4 * 2) ; skip vector and exc_code
+mov ecx, (4 * 3) ; EIP, CS, EFLAGS (in this order)
+rep movsb
+mov eax, [edi - (4 * 2)] ; read CS into EAX (to check ring)
+test eax, 0b11 ; either one of these set is enough for us (since we don't use rings 1 or 2)
+jz .no_save_usr ; interrupt occurred from ring 0 - skip saving user SS and ESP (which aren't valid anyway)
+.save_usr:
+mov ecx, (4 * 2) ; user ESP, user SS (in this order)
+rep movsb
+jmp .save_ext
+.no_save_usr:
+add edi, (4 * 2) ; not saving anything, so we skip
 
-mov eax, [ebp + (4 * 10)] ; read type/ready/pid again
-and eax, ~0x7 ; get ready to change type
-cmp dword [esi], 0x10 ; GS = DS = 0x10 means we're in ring 0 at the time of switching
-jne .user_task_ring3
-.user_task_ring0:
-or eax, 2
-jmp .user_task_cont
-.user_task_ring3:
-or eax, 1
-.user_task_cont:
-mov [ebp + (4 * 10)], eax
-
-mov eax, [timer_tick]
-mov [ebp + (4 * 13)], eax ; task_current->t_switch
-
-.store_ctx: ; store context into current task
-add esi, (4 * 4) ; skip DS/ES/FS/GS
-mov edi, [task_current]
-mov ecx, (4 * 3)
-rep movsb ; EDI, ESI, EBP
-cmp eax, 1 ; were we in ring 3 at the time of the switch? (EAX is from previously)
-jne .store_kernel_esp
-.store_user_esp:
-add esi, 4 ; skip pushed ESP
-mov eax, [esi + (4 * 9)] ; user ESP
-jmp .store_ctx_cont
-.store_kernel_esp:
-lodsd ; ESP pushed via PUSHA - this is the value at the point after the vector and exception code are pushed
-add eax, (4 * 5) ; to rewrite EIP, CS and EFLAGS
-.store_ctx_cont: ; EAX contains user/kernel ESP
-stosd
-mov ecx, (4 * 4)
-rep movsb ; EBX, EDX, ECX, EAX
-add esi, (4 * 2) ; skip vector and exception code
-movsd ; EIP
-add esi, (4 * 1) ; skip CS
-movsd ; EFLAGS
-
-mov edi, [task_current]
-add edi, 64 ; start of regs_ext
-
+.save_ext: ; save extended (FPU/MMX/SSE) regs
+add edi, 24 ; skip task_current->common
 test word [x86ext_on], (1 << 3)
 jz .no_fxsave
 .fxsave:
@@ -95,96 +69,71 @@ movaps [edi + 108 + 4 + 7*16], xmm7
 mov ebp, [esp + (4 * 1)] ; task
 mov dword [task_current], ebp ; change task_current since we will not be working on it
 
-mov eax, [ebp + (4 * 10)] ; task->type/ready/pid
+mov eax, [ebp + (4 * 8 + 4 * 5)] ; task->type/ready/pid
 or eax, (1 << 3) ; set ready flag (as we're switching into it, so it has to be ready)
-mov [ebp + (4 * 10)], eax
+mov [ebp + (4 * 8 + 4 * 5)], eax
 shr eax, 4 ; discard type and ready
 shl eax, 2 ; multiply by 4
 add eax, dword [proc_pidtab] ; address into proc_pidtab
-mov eax, [eax]
+mov eax, [eax] ; proc
 mov eax, [eax + 2 * 4] ; proc->vmm - TODO: do we need mutex_acquire and mutex_release here?
 cmp eax, dword [vmm_current]
-je .load_esp0 ; no need to reload CR3 (and cause TLB flushes)
-mov cr3, eax ; no more stack beyond this point!
+je .load_esp0
+mov cr3, eax
 mov [vmm_current], eax
 
 .load_esp0: ; load ring 0 ESP
-mov eax, [ebp + (4 * 11)] ; task->stack_bottom
+mov eax, [ebp + 4 * (8 + 5 + 1)] ; task->stack_bottom
 mov dword [tss_entry + (4 * 1)], eax ; tss_entry.esp0
 
-.load_regs_s0: ; load FPU/MMX/SSE registers
-mov edi, ebp
-add edi, 64 ; start of regs_ext
+.load_ext: ; load FPU/MMX/SSE registers
+mov esi, ebp ; task
+add esi, (4 * 8 + 4 * 5 + 24) ; start of regs_ext
 test word [x86ext_on], (1 << 3)
 jz .no_fxrstor
 .fxrstor:
-fxrstor [edi]
-jmp .load_regs_s1
+fxrstor [esi]
+jmp .load_general
 
 .no_fxrstor:
 test word [x86ext_on], (1 << 0) | (1 << 1)
-jz .load_regs_s1 ; there ain't no way a processor can support SSE without supporting FPU or MMX - correct me if I'm wrong...
-frstor [edi] ; MMX uses the same regs as FPU so this is enough
+jz .load_general ; there ain't no way a processor can support SSE without supporting FPU or MMX - correct me if I'm wrong...
+frstor [esi] ; MMX uses the same regs as FPU so this is enough
 test word [x86ext_on], (1 << 2)
-jz .load_regs_s1 ; no SSE
-ldmxcsr [edi + 108] ; load new MXCSR
-movaps xmm0, [edi + 108 + 4 + 0*16]
-movaps xmm1, [edi + 108 + 4 + 1*16]
-movaps xmm2, [edi + 108 + 4 + 2*16]
-movaps xmm3, [edi + 108 + 4 + 3*16]
-movaps xmm4, [edi + 108 + 4 + 4*16]
-movaps xmm5, [edi + 108 + 4 + 5*16]
-movaps xmm6, [edi + 108 + 4 + 6*16]
-movaps xmm7, [edi + 108 + 4 + 7*16]
+jz .load_general ; no SSE
+ldmxcsr [esi + 108] ; load new MXCSR
+movaps xmm0, [esi + 108 + 4 + 0*16]
+movaps xmm1, [esi + 108 + 4 + 1*16]
+movaps xmm2, [esi + 108 + 4 + 2*16]
+movaps xmm3, [esi + 108 + 4 + 3*16]
+movaps xmm4, [esi + 108 + 4 + 4*16]
+movaps xmm5, [esi + 108 + 4 + 5*16]
+movaps xmm6, [esi + 108 + 4 + 6*16]
+movaps xmm7, [esi + 108 + 4 + 7*16]
 
-.load_regs_s1: ; load general purpose registers from specified task
-mov edi, [ebp + (4 * 0)]
-mov esi, [ebp + (4 * 1)]
-; EBP will be restored later
-; ESP will be restored later
-mov ebx, [ebp + (4 * 4)]
-mov edx, [ebp + (4 * 5)]
-mov ecx, [ebp + (4 * 6)]
-; EAX will be restored later
-
-; load ESP and set up stack for IRET
-.load_esp:
-mov eax, [ebp + (4 * 10)] ; task->type/ready/pid
-and eax, 0x00000007 ; extract type
-cmp eax, 1
-jne .ring0_iret_prep
-.ring3_iret_prep:
-push 0x23 ; user SS
-mov eax, [ebp + (4 * 3)]
-push eax ; user ESP
-mov eax, [ebp + (4 * 9)]
-push eax ; EFLAGS
-push 0x1B ; user CS
-mov eax, [ebp + (4 * 8)]
-push eax ; EIP
-jmp .load_dseg
-.ring0_iret_prep:
-mov esp, [ebp + (4 * 3)] ; load ESP
-mov eax, [ebp + (4 * 9)]
-push eax ; EFLAGS
-push 0x08 ; kernel CS
-mov eax, [ebp + (4 * 8)]
-push eax ; EIP
-
-; ESP is either restored previously (if switching into ring 0)
-;     or will be restored by IRET (if switching into ring 3)
-
-.load_dseg: ; load data segments
-mov eax, [ebp + (4 * 10)] ; task->type/ready/pid
-and eax, 0x00000007 ; extract type
-cmp eax, 1
-jne .eoi ; skip setting DS/ES/FS/GS for ring 0 since this has been done by the IDT handler
-.load_ring3_dseg:
-mov ax, 0x23
+.load_general: ; load general purpose registers
+mov esi, ebp ; task
+mov eax, [esi + (4 * 9)] ; read CS
+add eax, 0x08 ; turn it into DS
 mov ds, ax
 mov es, ax
 mov fs, ax
 mov gs, ax
+
+; figure out where to put stack in
+test eax, 0b11 ; test for ring 3 again
+jz .load_general_ring0
+.load_general_ring3: ; ring 3 - use ring 0 reentry stack
+mov edi, [esp + (4 * 2)] ; reuse context to save on stack - after all, we're not going back to idt_handler_stub
+mov ecx, (4 * 8 + 4 * 5) ; task->regs is definitely smaller than context, so we can copy everything in
+jmp .load_general_copy ; by the end of this we need to have the stack address pushed on the stack (so it can be popped out in .jump)
+.load_general_ring0: ; ring 0 - append to destination task's stack
+mov edi, [ebp + (4 * 3)] ; read ESP (which should point at interrupt vector number - idt_context_t offset 48)
+sub edi, (4 * (8 + 3)) - (4 * (2 + 3)) ; ESP + 4 * 2 (EIP) + 4 * 3 (stack top before interrupt) - 4 * 3 (for iret) - 4 * 8 (for popa)
+mov ecx, (4 * 8 + 4 * 3) ; do not put user stuff in
+.load_general_copy:
+mov esp, edi ; point ESP to where we'll do the dump
+rep movsb
 
 .eoi: ; send EOI to all PICs on the PIC handler's behalf (since we'll be skipping over it)
 mov eax, apic_enabled
@@ -197,7 +146,7 @@ jz .pic_eoi ; APIC is supported but is not enabled
 mov eax, [lapic_base]
 add eax, 0x0B0 ; LAPIC EOI register
 mov dword [eax], 0
-jmp .load_regs_s2
+jmp .jump
 .pic_eoi:
 mov al, 0x20
 out 0xA0, al
@@ -208,10 +157,9 @@ mov al, 0x0C
 out 0x70, al
 in al, 0x71
 
-.load_regs_s2: ; load the rest of the general purpose registers, and finally EFLAGS and CS:EIP via IRET (plus SS:ESP if switching to ring 3)
-mov eax, [ebp + (4 * 7)]
-mov ebp, [ebp + (4 * 2)]
-iretd ; reload EFLAGS and EIP in one go
+.jump:
+popa
+iret ; and we're out :)
 
 ; void* task_fork(struct proc* proc)
 ;  Forks the current task and returns the child task.
@@ -232,8 +180,7 @@ add esp, 4
 test eax, eax ; test EAX = NULL
 jz .done ; cannot create task - exit here.
 
-; save context
-.save_ctx:
+.save_ctx: ; save context
 pushf
 cli ; for safety
 cld ; for string instructions - although DF should have been cleared already
@@ -249,8 +196,8 @@ rep movsb
 mov eax, [ebp] ; the EBP that we pushed previously
 ; fix EBP (EBP + new stack bottom - old stack bottom)
 mov edx, [task_current]
-mov edx, [edx + 10 * 4 + 1 * 4] ; task_current->stack_bottom
-sub edx, [edi + 2 * 4 + 1 * 4] ; task->stack_bottom
+mov edx, [edx + (8 + 5) * 4 + 1 * 4] ; task_current->stack_bottom
+sub edx, [edi + 5 * 4 + 1 * 4] ; task->stack_bottom
 neg edx ; EDX = new stack bottom - old stack bottom
 add eax, edx
 mov [edi - 6 * 4], eax
@@ -266,11 +213,18 @@ mov [edi - 5 * 4], eax
 mov eax, [ebp + 1 * 4] ; return address pushed onto the stack by the caller
 stosd
 
+; store CS
+xor eax, eax
+mov ax, cs
+stosd
+
 ; store EFLAGS
 movsd ; ESI points at EFLAGS in the stack (pushed with PUSHF), and EDI points at task->regs.eflags (incremented by STOSD)
 
-; store FPU/MMX and SSE registers
-add edi, 64 - 4 * 10 ; start of regs_ext
+; no need to store user SS or ESP at this point since we're returning into ring 0 on the child task
+
+.save_ext: ; store FPU/MMX and SSE registers
+add edi, (4 * 2) + 24 ; start of regs_ext
 test word [x86ext_on], (1 << 3)
 jz .no_fxsave
 .fxsave: ; use FXSAVE to save FPU/MMX and SSE registers in one go
@@ -293,9 +247,8 @@ movaps [edi + 108 + 4 + 6*16], xmm6
 movaps [edi + 108 + 4 + 7*16], xmm7
 
 popa
+or dword [eax + 13 * 4], (1 << 3) ; task->ready = 1 - do this before re-enabling interrupts
 popf
-
-or dword [eax + 10 * 4 + 0 * 4], (1 << 3) ; task->ready = 1
 
 .done:
 leave ; short for mov esp, ebp & pop ebp

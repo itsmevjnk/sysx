@@ -10,6 +10,7 @@ void syscall_exit(size_t retval) {
 
 size_t syscall_fork() {
     proc_t* proc_child = proc_fork();
+    if(!proc_child) return SIZE_MAX; // fork failed
     if(task_common((void*) task_current)->pid == proc_child->pid) return 0; // we're on the child process now
     kdebug("PID %u forked into child PID %u", proc_child->parent_pid, proc_child->pid);
     return proc_child->pid;

@@ -62,10 +62,12 @@ typedef struct {
  *  The current context will be discarded if task_current is NULL;
  *  otherwise, the current context will be saved to task_current, before
  *  it is set to the switching task.
+ *  This function is not supposed to return back to its caller, and
+ *  it should instead exit into the new context.
  *  This is an architecture-specific function and is called in ring 0
  *  by the timer interrupt handler.
  */
-void task_switch(void* task, void* context);
+__attribute__((noreturn)) void task_switch(void* task, void* context);
 
 /*
  * void task_yield(void* context)
@@ -109,11 +111,11 @@ void task_init_stub();
 void task_init();
 
 /*
- * void* task_create_stub()
+ * void* task_create_stub(bool user)
  *  Allocates space for a new task.
  *  This is an architecture-specific function and is called in ring 0.
  */
-void* task_create_stub();
+void* task_create_stub(bool user);
 
 /*
  * void* task_create(bool user, struct proc* proc, size_t stack_sz, uintptr_t entry, uintptr_t stack_bottom)

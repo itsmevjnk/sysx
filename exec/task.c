@@ -31,7 +31,7 @@ void task_insert(void* task, void* target) {
 
 void* task_create(bool user, struct proc* proc, size_t stack_sz, uintptr_t entry, uintptr_t stack_bottom) {
     /* allocate memory for new task */
-    void* task = task_create_stub();
+    void* task = task_create_stub(user);
     if(!task) {
         kerror("task_create_stub() cannot create new task");
         return NULL;
@@ -46,7 +46,6 @@ void* task_create(bool user, struct proc* proc, size_t stack_sz, uintptr_t entry
     task_common_t* common = task_common(task);
     
     /* allocate memory for stack */
-    if(user) stack_sz += TASK_KERNEL_STACK_SIZE; // allocate memory for kernel stack too
     size_t stack_frames = 0; // number of allocated stack frames
     size_t framesz = pmm_framesz();
     if(stack_sz % framesz) stack_sz += framesz - stack_sz % framesz; // frame-align stack size
@@ -131,7 +130,7 @@ void task_delete(void* task) {
 }
 
 void task_init_stub() {
-    void* task = task_create_stub(NULL);
+    void* task = task_create_stub(false); // kernel task
     task_common_t* common = task_common(task);
     common->pid = 0; common->type = TASK_TYPE_KERNEL;
     common->prev = task; common->next = task;
@@ -153,7 +152,7 @@ void task_yield(void* context) {
     vmm_do_cleanup(); // remove any VMM config that have been staged for deletion
     if(!task_current) {
         if(task_get_ready(task_kernel)) {
-            task_yield_tick = timer_tick;
+            task_yield_tick = task_common(task_kernel)->t_switch = timer_tick;
             task_switch(task_kernel, context); // switch into kernel task
         }
     } else {
@@ -162,6 +161,7 @@ void task_yield(void* context) {
         void* task = (void*) task_current;
         while(1) {
             task = task_common(task)->next;
+            kassert((uintptr_t)task >= (uintptr_t)&kernel_start);
             if(task == task_current) break;
             task_common_t* common = task_common(task);
             if(!common->ready) continue; // task is not ready - discard this one
@@ -178,7 +178,7 @@ void task_yield(void* context) {
                 task_do_delete((void*) task_current);
                 task_current = NULL;
             }
-            task_yield_tick = timer_tick;
+            task_yield_tick = task_common(task_selected)->t_switch = timer_tick;
             task_switch(task_selected, context);
         }
     }
