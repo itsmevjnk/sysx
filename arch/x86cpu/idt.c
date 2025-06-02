@@ -5,7 +5,6 @@
 #include <exec/syms.h>
 #include <mm/vmm.h>
 #include <hal/fbuf.h>
-#include <exec/task.h>
 
 //#define IDT_DEBUG // uncomment for log hell
 
@@ -109,7 +108,7 @@ void exc_stub(uint8_t vector, idt_context_t* context) {
 	/* unhandled exception */
 	__asm__ __volatile__("cli"); // no more interrupts!
 	kerror("unhandled exception 0x%x (code 0x%x) @ 0x%x", context->vector, context->exc_code, context->eip);
-	kerror("task_current=0x%x pid=%u", task_current, (!task_current) ? 0 : task_common((void*) task_current)->pid);
+	// kerror("task_current=0x%x pid=%u", task_current, (!task_current) ? 0 : task_common((void*) task_current)->pid);
 	kerror("eax=0x%08x ebx=0x%08x ecx=0x%08x edx=0x%08x", context->eax, context->ebx, context->ecx, context->edx);
 	kerror("esi=0x%08x edi=0x%08x esp=0x%08x ebp=0x%08x", context->esi, context->edi, context->esp, context->ebp);
 	kerror("cs=0x%04x ds=0x%04x es=0x%04x fs=0x%04x gs=0x%04x", context->cs, context->ds, context->es, context->fs, context->gs);
@@ -130,7 +129,7 @@ void exc_stub(uint8_t vector, idt_context_t* context) {
 
 	if(term_impl == &fbterm_hook) fbuf_commit();
 	
-	proc_abort(); // abort current process
+	// proc_abort(); // abort current process
 }
 
 /* giant bomb of code */

@@ -1,5 +1,4 @@
 #include <hal/timer.h>
-#include <exec/task.h>
 #include <hal/fbuf.h>
 
 volatile timer_tick_t timer_tick = 0;
@@ -11,15 +10,15 @@ void timer_handler(size_t delta, void* context) {
         fbuf_commit();
     }
 
-    if(task_kernel && (!task_current || timer_tick - task_yield_tick >= TASK_QUANTUM)) {
-        task_yield(context);
-    }
+    // if(task_kernel && (!task_current || timer_tick - task_yield_tick >= TASK_QUANTUM)) {
+    //     task_yield(context);
+    // }
 }
 
 void timer_delay_us(uint64_t us) {
     volatile timer_tick_t t_start = timer_tick;
     while(timer_tick - t_start < us) {
-        task_yield_noirq();
+        // task_yield_noirq();
     }
 }
 

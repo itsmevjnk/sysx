@@ -22,9 +22,6 @@
 
 #include <exec/elf.h>
 #include <exec/syms.h>
-#include <exec/usermode.h>
-#include <exec/task.h>
-#include <exec/syscall.h>
 
 #include <drivers/pci.h>
 #include <drivers/acpi.h>
@@ -108,12 +105,6 @@ void kinit() {
     kinfo("seeding PRNG using timer tick"); // for architectures without hardware pseudorandom number generation capabilities and additional entropy for those that do
     srand(timer_tick);
 
-    kinfo("creating kernel process and task");
-    proc_init();
-
-    kinfo("initializing syscall");
-    syscall_init();
-
 #ifdef FEAT_PCI
     kinfo("initializing PCI");
     pci_init();
@@ -158,70 +149,4 @@ void kinit() {
     }
 
     kinfo("kernel init finished, current timer tick: %llu", (uint64_t)timer_tick);
-
-    /* create another task for testing */
-    // kinfo("creating another task");
-    // task_create(false, NULL, (uintptr_t) &kmain); // NOTE: we cannot create an user task since kernel code is not mapped as user-accessible (for security reasons)
-
-    kinfo("starting kernel task");
-    task_set_ready(task_kernel, true);
-}
-
-void kmain() {
-    kinfo("kernel task (kmain), PID %u", task_get_pid((void*) task_current));
-    vfs_node_t* bin_node = vfs_traverse_path(NULL, BIN_ROOT);
-    if(!bin_node) {
-        kerror(BIN_ROOT " not found");
-        while(1);
-    }
-
-    kprintf("Available binaries: ");
-    for(size_t i = 0; ; i++) {
-        struct dirent* ent = vfs_readdir(bin_node, i);
-        if(!ent) {
-            kprintf(".\n");
-            break;
-        }
-        if(i) kprintf(", ");
-        kprintf("%s", ent->name);
-    }
-
-    while(1) {
-        kputchar('>');
-        char buf[100]; term_gets(buf);
-        if(buf[0] == '\0') continue; // quicker than strlen(buf) == 0
-        
-        vfs_node_t* file = vfs_finddir(bin_node, buf);
-        if(!file) {
-            kprintf("Binary %s not found\n\n");
-            continue;
-        }
-        
-        // kputs(buf);
-
-        kinfo("creating new process");
-        proc_t* proc = proc_create(proc_kernel, vmm_kernel, false);
-        if(!proc) {
-            kprintf("Cannot create process\n\n");
-            continue;
-        }
-
-        kinfo("loading ELF executable");
-        elf_prgload_t* load_result; size_t load_result_len; uintptr_t entry;
-        enum elf_load_result result = elf_load_exec(file, true, proc->vmm, &load_result, &load_result_len, &entry);
-        if(result != LOAD_OK) {
-            kprintf("Cannot load file (elf_load_exec() returned %d)", result);
-            proc_delete(proc);
-            continue;
-        } else kinfo("loaded %u segment(s), entry point: 0x%x", load_result_len, entry);
-        proc->elf_segments = load_result; proc->num_elf_segments = load_result_len;
-
-        kinfo("creating new task");
-        void* task = task_create(true, proc, TASK_INITIAL_STACK_SIZE, entry, 0);
-        if(!task) {
-            kprintf("Cannot create task");
-            proc_delete(proc);
-            continue;
-        }
-    }
 }

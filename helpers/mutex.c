@@ -1,8 +1,8 @@
 #include <helpers/mutex.h>
-#include <exec/task.h>
 
 __attribute__((weak)) void mutex_acquire(mutex_t* m) {
-    while(atomic_flag_test_and_set_explicit(&m->locked, memory_order_acquire)) task_yield_noirq(); // if atomic_flag_test_and_set returns true (i.e. m->locked was originally true) then we yield
+    while(atomic_flag_test_and_set_explicit(&m->locked, memory_order_acquire));
+        // task_yield_noirq(); // if atomic_flag_test_and_set returns true (i.e. m->locked was originally true) then we yield
 }
 
 __attribute__((weak)) void mutex_release(mutex_t* m) {

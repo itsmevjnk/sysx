@@ -6,8 +6,6 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-#include <arch/x86cpu/task.h>
-#include <exec/process.h>
 
 /* MMU data types */
 typedef union {
@@ -139,24 +137,24 @@ void vmm_pgmap_small(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 			}
 			memset(pt, 0, 4096); // clear out the newly allocated page table
 			
-			if(task_kernel && va >= kernel_start) {
-				/* propagate kernel pages to all tasks' VMM configs */
-				vmm_pde_t* task_vmm_pd = (vmm_pde_t*) vmm_alloc_map(vmm_current, 0, 4096, (pd_map) ? ((uintptr_t) pt + 4096) : 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW);
-				if(!task_vmm_pd) kerror("cannot map task VMM configurations for page table propagation");
-				else {
-					task_t* task = task_kernel;
-					struct proc* proc = proc_get(task_common(task)->pid);
-					do {
-						if(proc->vmm != vmm) {
-							/* map page directory and copy PD entry over */
-							vmm_set_paddr(vmm_current, (uintptr_t) task_vmm_pd, (uintptr_t) proc->vmm);
-							task_vmm_pd[pde].dword = pd_entry->dword;
-						}
-						task = task->common.next;
-					} while(task != task_kernel);
-					vmm_pgunmap(vmm_current, (uintptr_t) task_vmm_pd, 0);
-				}
-			}
+			// if(task_kernel && va >= kernel_start) {
+			// 	/* propagate kernel pages to all tasks' VMM configs */
+			// 	vmm_pde_t* task_vmm_pd = (vmm_pde_t*) vmm_alloc_map(vmm_current, 0, 4096, (pd_map) ? ((uintptr_t) pt + 4096) : 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW);
+			// 	if(!task_vmm_pd) kerror("cannot map task VMM configurations for page table propagation");
+			// 	else {
+			// 		task_t* task = task_kernel;
+			// 		struct proc* proc = proc_get(task_common(task)->pid);
+			// 		do {
+			// 			if(proc->vmm != vmm) {
+			// 				/* map page directory and copy PD entry over */
+			// 				vmm_set_paddr(vmm_current, (uintptr_t) task_vmm_pd, (uintptr_t) proc->vmm);
+			// 				task_vmm_pd[pde].dword = pd_entry->dword;
+			// 			}
+			// 			task = task->common.next;
+			// 		} while(task != task_kernel);
+			// 		vmm_pgunmap(vmm_current, (uintptr_t) task_vmm_pd, 0);
+			// 	}
+			// }
 		}
 
 		/* remap any PSE pages */
@@ -240,24 +238,24 @@ void vmm_pgmap_huge(void* vmm, uintptr_t pa, uintptr_t va, size_t flags) {
 	pd_entry->entry_pse.accessed = 0; pd_entry->entry_pse.dirty = 0;
 	pd_entry->entry_pse.avail = (flags & VMM_FLAGS_TRAPPED) ? VMM_AVAIL_TRAPPED : 0;
 
-	if(task_kernel && va >= kernel_start) {
-		/* propagate kernel pages to all tasks' VMM configs */
-		vmm_pde_t* task_vmm_pd = (vmm_pde_t*) vmm_alloc_map(vmm_current, 0, 4096, (pd_map) ? ((uintptr_t) pd + 4096) : 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW);
-		if(!task_vmm_pd) kerror("cannot map task VMM configurations for page table propagation");
-		else {
-			task_t* task = task_kernel;
-			struct proc* proc = proc_get(task_common(task)->pid);
-			do {
-				if(proc->vmm != vmm) {
-					/* map page directory and copy PD entry over */
-					vmm_set_paddr(vmm_current, (uintptr_t) task_vmm_pd, (uintptr_t) proc->vmm);
-					task_vmm_pd[pde].dword = pd_entry->dword;
-				}
-				task = task->common.next;
-			} while(task != task_kernel);
-			vmm_pgunmap(vmm_current, (uintptr_t) task_vmm_pd, 0);
-		}
-	}
+	// if(task_kernel && va >= kernel_start) {
+	// 	/* propagate kernel pages to all tasks' VMM configs */
+	// 	vmm_pde_t* task_vmm_pd = (vmm_pde_t*) vmm_alloc_map(vmm_current, 0, 4096, (pd_map) ? ((uintptr_t) pd + 4096) : 0, kernel_start, 0, 0, false, VMM_FLAGS_PRESENT | VMM_FLAGS_RW);
+	// 	if(!task_vmm_pd) kerror("cannot map task VMM configurations for page table propagation");
+	// 	else {
+	// 		task_t* task = task_kernel;
+	// 		struct proc* proc = proc_get(task_common(task)->pid);
+	// 		do {
+	// 			if(proc->vmm != vmm) {
+	// 				/* map page directory and copy PD entry over */
+	// 				vmm_set_paddr(vmm_current, (uintptr_t) task_vmm_pd, (uintptr_t) proc->vmm);
+	// 				task_vmm_pd[pde].dword = pd_entry->dword;
+	// 			}
+	// 			task = task->common.next;
+	// 		} while(task != task_kernel);
+	// 		vmm_pgunmap(vmm_current, (uintptr_t) task_vmm_pd, 0);
+	// 	}
+	// }
 
 	if(invalidate_tlb) {
 		/* invalidate TLB if needed */

@@ -5,7 +5,6 @@
 #include <mm/addr.h>
 #include <drivers/pci.h>
 #include <hal/timer.h>
-#include <exec/task.h>
 
 void laihost_log(int level, const char* msg) {
     switch(level) {
@@ -103,17 +102,17 @@ uint64_t laihost_timer(void) {
 
 // optional TODO: implement laihost_handle_amldebug() and laihost_handle_global_notify()
 
-int laihost_sync_wait(struct lai_sync_state* sync, unsigned int val, int64_t timeout) {
-    timeout = (timeout + 9) / 10; // TODO: is the timeout in 100ns increments (like laihost_timer())?
-    timer_tick_t t_start = timer_tick;
-    do {
-        if(sync->val != val) return 0; // we're good to go
-        task_yield_noirq(); // otherwise, yield to another task
-    } while(timer_tick - t_start < timeout);
-    return (timer_tick - t_start); // timeout exhausted
-}
+// int laihost_sync_wait(struct lai_sync_state* sync, unsigned int val, int64_t timeout) {
+//     timeout = (timeout + 9) / 10; // TODO: is the timeout in 100ns increments (like laihost_timer())?
+//     timer_tick_t t_start = timer_tick;
+//     do {
+//         if(sync->val != val) return 0; // we're good to go
+//         task_yield_noirq(); // otherwise, yield to another task
+//     } while(timer_tick - t_start < timeout);
+//     return (timer_tick - t_start); // timeout exhausted
+// }
 
-void laihost_sync_wake(struct lai_sync_state* sync) {
-    (void) sync; // TODO: proper futex implementation
-    task_yield_noirq();
-}
+// void laihost_sync_wake(struct lai_sync_state* sync) {
+//     (void) sync; // TODO: proper futex implementation
+//     task_yield_noirq();
+// }
