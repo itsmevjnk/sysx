@@ -6,6 +6,42 @@
 
 fbuf_t* fbuf_impl = NULL;
 
+size_t fbuf_bytes_per_pixel(const fbuf_t* impl) {
+    if(!impl) impl = fbuf_impl;
+    switch(impl->type) {
+        case FBUF_15BPP_BGR555:
+            return 2;
+        case FBUF_15BPP_BGR555_RE:
+            return 2;
+        case FBUF_15BPP_RGB555:
+            return 2;
+        case FBUF_15BPP_RGB555_RE:
+            return 2;
+        case FBUF_16BPP_BGR565:
+            return 2;
+        case FBUF_16BPP_BGR565_RE:
+            return 2;
+        case FBUF_16BPP_RGB565:
+            return 2;
+        case FBUF_16BPP_RGB565_RE:
+            return 2;
+        case FBUF_24BPP_BGR888:
+            return 3;
+        case FBUF_24BPP_RGB888:
+            return 3;
+        case FBUF_32BPP_BGR888:
+            return 4;
+        case FBUF_32BPP_BGR888_RE:
+            return 4;
+        case FBUF_32BPP_RGB888:
+            return 4;
+        case FBUF_32BPP_RGB888_RE:
+            return 4;
+        default:
+            return 0;
+    }
+}
+
 size_t fbuf_process_color(uint32_t* color) {
     *color &= 0x00FFFFFF;
     switch(fbuf_impl->type) {
@@ -72,7 +108,7 @@ size_t fbuf_process_color(uint32_t* color) {
     }
 }
 
-static void fbuf_putpixel_stub(void* ptr, size_t x, size_t y, size_t n, uint32_t color, size_t bytes_per_pixel) {
+void fbuf_putpixel_stub(void* ptr, size_t x, size_t y, size_t n, uint32_t color, size_t bytes_per_pixel) {
     ptr = (void*) ((uintptr_t) ptr + y * fbuf_impl->pitch + x * bytes_per_pixel);
     uintptr_t line_offset = fbuf_impl->pitch - fbuf_impl->width * bytes_per_pixel;
 
@@ -129,19 +165,19 @@ void fbuf_putpixel(size_t x, size_t y, size_t n, uint32_t color) {
         fbuf_putpixel_stub(fbuf_impl->framebuffer, x, y, n, color, bytes_per_pixel); // write to front buffer if backbuffer is not available or direct writing is enabled
 }
 
-void fbuf_getpixel(size_t x, size_t y, size_t n, uint32_t* color) {
-    if(!fbuf_impl || !n || x >= fbuf_impl->width || y >= fbuf_impl->height) return;
+void fbuf_getpixel_stub(const fbuf_t* impl, size_t x, size_t y, size_t n, uint32_t* color) {
+    if(!impl || !n || x >= impl->width || y >= impl->height) return;
 
-    size_t bytes_per_pixel = fbuf_process_color(NULL); // find out number of bytes per pixel
+    size_t bytes_per_pixel = fbuf_bytes_per_pixel(impl); // find out number of bytes per pixel
 
-    bool double_buf = (fbuf_impl->backbuffer);
-    void* ptr = (void*) ((uintptr_t)((double_buf) ? fbuf_impl->backbuffer : fbuf_impl->framebuffer) + y * fbuf_impl->pitch + x * bytes_per_pixel); // write to backbuffer if we have one
-    uintptr_t line_offset = fbuf_impl->pitch - fbuf_impl->width * bytes_per_pixel;
+    bool double_buf = (impl->backbuffer);
+    void* ptr = (void*) ((uintptr_t)((double_buf) ? impl->backbuffer : impl->framebuffer) + y * impl->pitch + x * bytes_per_pixel); // write to backbuffer if we have one
+    uintptr_t line_offset = impl->pitch - impl->width * bytes_per_pixel;
     
     /* draw the pixels */
     uint32_t t;
     for(size_t i = 0; i < n; i++) {
-        switch(fbuf_impl->type) {
+        switch(impl->type) {
             case FBUF_15BPP_RGB555:
                 t = *((uint16_t*) ptr);
                 *color = (((t & 0b000000000011111) >> 0) << 3) | (((t & 0b000001111100000) >> 5) << 11) | (((t & 0b111110000000000) >> 10) << 19);
@@ -204,13 +240,17 @@ void fbuf_getpixel(size_t x, size_t y, size_t n, uint32_t* color) {
         ptr = (void*) ((uintptr_t) ptr + bytes_per_pixel);
         color = (uint32_t*) ((uintptr_t) color + 4);
         x++;
-        if(x == fbuf_impl->width) {
+        if(x == impl->width) {
             x = 0;
             y++;
-            if(y == fbuf_impl->height) return;
+            if(y == impl->height) return;
             ptr = (void*) ((uintptr_t) ptr + line_offset);
         }
     }
+}
+
+void fbuf_getpixel(size_t x, size_t y, size_t n, uint32_t* color) {
+    fbuf_getpixel_stub(fbuf_impl, x, y, n, color);
 }
 
 void fbuf_fill_stub(void* ptr, size_t y_start, size_t lines, uint32_t color) {

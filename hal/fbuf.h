@@ -69,6 +69,13 @@ extern term_hook_t fbterm_hook; // framebuffer terminal hooks
 #define FBUF_FLIP_PERIOD                        20000 // framebuffer flipping period (in timer ticks)
 
 /*
+ * size_t fbuf_bytes_per_pixel(const fbuf_t* impl)
+ *  Gets the number of bytes per pixel, given a framebuffer implementation.
+ *  If impl is null, fbuf_impl will be used.
+ */
+size_t fbuf_bytes_per_pixel(const fbuf_t* impl);
+
+/*
  * size_t fbuf_process_color(uint32_t* color)
  *  Translates the given color for the current implementation's color data type
  *  and returns the number of bytes per pixel.
@@ -76,11 +83,24 @@ extern term_hook_t fbterm_hook; // framebuffer terminal hooks
 size_t fbuf_process_color(uint32_t* color);
 
 /*
+ * void fbuf_putpixel_stub(void* ptr, size_t x, size_t y, size_t n, uint32_t color, size_t bytes_per_pixel)
+ *  Stub for fbuf_putpixel, which allows the framebuffer pointer to be specified.
+ */
+void fbuf_putpixel_stub(void* ptr, size_t x, size_t y, size_t n, uint32_t color, size_t bytes_per_pixel);
+
+/*
  * void fbuf_putpixel(size_t x, size_t y, size_t n, uint32_t color)
  *  Draws n pixel(s) on the framebuffer, starting at the specified coordinate.
  *  The pixels will be drawn from left to right, then top to bottom.
  */
 void fbuf_putpixel(size_t x, size_t y, size_t n, uint32_t color);
+
+/*
+ * void fbuf_getpixel_stub(const fbuf_t* impl, size_t x, size_t y, size_t n, uint32_t* color)
+ *  Stub for fbut_getpixel, which allows the framebuffer implementation to be
+ *  specified.
+ */
+void fbuf_getpixel_stub(const fbuf_t* impl, size_t x, size_t y, size_t n, uint32_t* color);
 
 /*
  * void fbuf_getpixel(size_t x, size_t y, size_t n, uint32_t* color)
