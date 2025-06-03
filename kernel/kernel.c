@@ -22,6 +22,7 @@
 
 #include <exec/elf.h>
 #include <exec/syms.h>
+#include <exec/process.h>
 
 #include <drivers/pci.h>
 #include <drivers/acpi.h>
@@ -148,5 +149,16 @@ void kinit() {
         } else kwarn(" - module does not have an init function");
     }
 
+    kinfo("initializing multitasking");
+    proc_init();
+
     kinfo("kernel init finished, current timer tick: %llu", (uint64_t)timer_tick);
+
+    kinfo("testing process creation");
+    size_t pid;
+    struct proc* proc;
+    for(int i = 0; i < 10; i++) {
+        proc = proc_create(vmm_current, &pid);
+        kinfo("created process at 0x%x, PID %u", (uintptr_t)proc, pid);
+    }
 }
